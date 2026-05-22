@@ -77,6 +77,8 @@ def _get_kalender_html() -> str:
     return _html_cache["data"]
 
 
+_NO_CACHE = {"Cache-Control": "no-cache, no-store"}
+
 @kalender_bp.route("/manifest.json")
 def manifest_json():
     return json.dumps({
@@ -84,33 +86,33 @@ def manifest_json():
         "short_name":       "Vereinskalender",
         "start_url":        "/",
         "display":          "standalone",
-        "background_color": "#1c1c1e",
-        "theme_color":      "#1c1c1e",
+        "background_color": "#5B21B6",
+        "theme_color":      "#5B21B6",
         "icons": [
-            {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
-            {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+            {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+            {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
         ],
-    }), 200, {"Content-Type": "application/manifest+json"}
+    }), 200, {"Content-Type": "application/manifest+json", **_NO_CACHE}
 
 
 @kalender_bp.route("/icon-192.png")
 def icon_192():
     if ICON_192_FILE.exists():
-        return ICON_192_FILE.read_bytes(), 200, {"Content-Type": "image/png"}
+        return ICON_192_FILE.read_bytes(), 200, {"Content-Type": "image/png", **_NO_CACHE}
     return "", 404
 
 
 @kalender_bp.route("/icon-512.png")
 def icon_512():
     if ICON_512_FILE.exists():
-        return ICON_512_FILE.read_bytes(), 200, {"Content-Type": "image/png"}
+        return ICON_512_FILE.read_bytes(), 200, {"Content-Type": "image/png", **_NO_CACHE}
     return "", 404
 
 
 @kalender_bp.route("/apple-touch-icon.png")
 def apple_touch_icon():
     if ICON_192_FILE.exists():
-        return ICON_192_FILE.read_bytes(), 200, {"Content-Type": "image/png"}
+        return ICON_192_FILE.read_bytes(), 200, {"Content-Type": "image/png", **_NO_CACHE}
     return "", 404
 
 
@@ -132,13 +134,13 @@ def manifest_admin_json():
         "short_name":       "VKO Admin",
         "start_url":        "/admin",
         "display":          "standalone",
-        "background_color": "#1c1c1e",
-        "theme_color":      "#6D28D9",
+        "background_color": "#5B21B6",
+        "theme_color":      "#5B21B6",
         "icons": [
-            {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
-            {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+            {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+            {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
         ],
-    }), 200, {"Content-Type": "application/manifest+json"}
+    }), 200, {"Content-Type": "application/manifest+json", **_NO_CACHE}
 
 
 @kalender_bp.route("/admin")
