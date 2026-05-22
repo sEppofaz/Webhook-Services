@@ -153,9 +153,9 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
 .srch-input{width:100%;padding:8px 12px 8px 34px;border:1.5px solid var(--border2);border-radius:10px;font-size:14px;background:var(--bg);color:var(--text);outline:none;-webkit-appearance:none}
 .srch-input::placeholder{color:var(--text3)}
 .srch-icon-abs{position:absolute;left:24px;top:17px;font-size:15px;pointer-events:none;color:var(--text3)}
-.srch-dropdown{position:absolute;left:14px;right:14px;background:var(--card);border:1px solid var(--border2);border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.18);z-index:100;max-height:220px;overflow-y:auto;display:none;top:calc(100% - 2px)}
+.srch-dropdown{position:fixed;background:var(--card);border:1px solid var(--border2);border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.18);z-index:1000;max-height:220px;overflow-y:auto;-webkit-overflow-scrolling:touch;display:none}
 .srch-dropdown.open{display:block}
-.srch-item{padding:9px 12px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:8px;color:var(--text);border-bottom:.5px solid var(--border)}
+.srch-item{padding:9px 12px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:8px;color:var(--text);border-bottom:.5px solid var(--border);border-left:none;border-right:none;border-top:none;width:100%;text-align:left;background:none;font-family:inherit;box-sizing:border-box}
 .srch-item:last-child{border-bottom:none}
 .srch-item:active,.srch-item:hover{background:var(--bg2)}
 .srch-item-main{flex:1;min-width:0}
@@ -259,7 +259,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
           <input class="srch-input" id="srch-input" type="search"
                  placeholder="Verein oder Ort suchen&#8230;"
                  oninput="onSearchInput(this.value)"
-                 onfocus="if(this.value.length>=2)document.getElementById('srch-dropdown').classList.add('open')"
+                 onfocus="if(this.value.length>=2){_positionDropdown();document.getElementById('srch-dropdown').classList.add('open')}"
                  autocomplete="off" autocorrect="off" spellcheck="false">
           <div class="srch-dropdown" id="srch-dropdown"></div>
         </div>
@@ -1155,6 +1155,15 @@ function toggleFavorite(idx,ev){
 }
 
 /* ── Search ── */
+function _positionDropdown(){
+  const input=document.getElementById("srch-input");
+  const dd=document.getElementById("srch-dropdown");
+  const r=input.getBoundingClientRect();
+  dd.style.left=r.left+"px";
+  dd.style.top=(r.bottom+2)+"px";
+  dd.style.width=r.width+"px";
+}
+
 function onSearchInput(val){
   const q=val.toLowerCase().trim();
   srchText=q;
@@ -1201,15 +1210,16 @@ function onSearchInput(val){
   const typeLabel={verein:"Verein",ort:"Ort"};
   dd.innerHTML=shown.map((r,i)=>{
     const fav=isFavorite(r);
-    return `<div class="srch-item" onclick="addSearchChip(${i})">
+    return `<button class="srch-item" onclick="addSearchChip(${i})">
       <span>${r.icon}</span>
       <div class="srch-item-main">
         <div class="srch-item-name">${r.label}</div>
       </div>
       <span class="srch-type">${typeLabel[r.type]}</span>
       <span onclick="toggleFavorite(${i},event)" style="font-size:17px;padding:2px 4px;cursor:pointer;opacity:${fav?1:.35}">${fav?"&#11088;":"&#9733;"}</span>
-    </div>`;
+    </button>`;
   }).join("");
+  _positionDropdown();
   dd.classList.add("open");
   updateAllBadges();
   render();
