@@ -89,8 +89,8 @@ def manifest_json():
         "background_color": "#5B21B6",
         "theme_color":      "#5B21B6",
         "icons": [
-            {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
-            {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+            {"src": "/icon-192.png?v=3", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+            {"src": "/icon-512.png?v=3", "sizes": "512x512", "type": "image/png", "purpose": "any"},
         ],
     }), 200, {"Content-Type": "application/manifest+json", **_NO_CACHE}
 
@@ -137,8 +137,8 @@ def manifest_admin_json():
         "background_color": "#5B21B6",
         "theme_color":      "#5B21B6",
         "icons": [
-            {"src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
-            {"src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+            {"src": "/icon-192.png?v=3", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+            {"src": "/icon-512.png?v=3", "sizes": "512x512", "type": "image/png", "purpose": "any"},
         ],
     }), 200, {"Content-Type": "application/manifest+json", **_NO_CACHE}
 
