@@ -383,14 +383,28 @@ def api_admin_stats_chart():
     tv, tu = _count_today_live()
     db_rows[today.isoformat()] = {"datum": today.isoformat(), "views": tv, "unique_visitors": tu}
 
+    # DE-Besucher pro Tag aus page_stats_geo (Cron-Daten, kein heutiger Live-Wert)
+    de_rows: dict = {}
+    try:
+        with db_conn() as conn:
+            rows = conn.execute(
+                "SELECT datum, SUM(besucher) AS n FROM page_stats_geo "
+                "WHERE datum >= ? AND datum <= ? AND land = 'Deutschland' GROUP BY datum",
+                (from_date, to_date),
+            ).fetchall()
+            de_rows = {r["datum"]: (r["n"] or 0) for r in rows}
+    except Exception:
+        pass
+
     result = []
     for i in range(d - 1, -1, -1):
         day = (today - timedelta(days=i)).isoformat()
         r   = db_rows.get(day)
         result.append({
-            "datum":  day,
-            "views":  r["views"]           if r else 0,
-            "unique": r["unique_visitors"]  if r else 0,
+            "datum":     day,
+            "views":     r["views"]           if r else 0,
+            "unique":    r["unique_visitors"]  if r else 0,
+            "unique_de": de_rows.get(day, 0),
         })
 
     return json.dumps({"tage": result}, ensure_ascii=False), 200, {
@@ -596,11 +610,33 @@ def api_admin_stats():
     except Exception:
         pass
 
+    unique_heute_de = 0
+    unique_7d_de    = 0
+    try:
+        from datetime import date as _date
+        _heute_str = _date.today().isoformat()
+        _d7_str    = (_date.today() - timedelta(days=6)).isoformat()
+        with db_conn() as conn:
+            r = conn.execute(
+                "SELECT SUM(besucher) AS n FROM page_stats_geo WHERE datum = ? AND land = 'Deutschland'",
+                (_heute_str,),
+            ).fetchone()
+            unique_heute_de = (r["n"] or 0) if r else 0
+            r = conn.execute(
+                "SELECT SUM(besucher) AS n FROM page_stats_geo WHERE datum >= ? AND land = 'Deutschland'",
+                (_d7_str,),
+            ).fetchone()
+            unique_7d_de = (r["n"] or 0) if r else 0
+    except Exception:
+        pass
+
     return json.dumps({
         "aufrufe_heute":      h_views,
         "aufrufe_7d":         w_views,
         "unique_heute":       h_unique,
         "unique_7d":          w_unique,
+        "unique_heute_de":    unique_heute_de,
+        "unique_7d_de":       unique_7d_de,
         "vereine_gesamt":     vereine_gesamt,
         "vereine_aktiv":      vereine_aktiv,
         "termine_kd":         termine_kd,

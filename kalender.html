@@ -1564,11 +1564,13 @@ async function loadStats(){
           <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Aufrufe heute</div>
           <div style="font-size:38px;font-weight:700;color:var(--tab);line-height:1.1">${data.aufrufe_heute}</div>
           <div style="font-size:12px;color:var(--text3);margin-top:4px">${data.unique_heute} Besucher</div>
+          ${data.unique_heute_de?`<div style="font-size:11px;color:#30d158;margin-top:2px">${data.unique_heute_de} aus 🇩🇪</div>`:''}
         </div>
         <div style="background:var(--card);border:1.5px solid var(--tab);border-radius:12px;padding:16px;text-align:center">
           <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Aufrufe 7 Tage</div>
           <div style="font-size:38px;font-weight:700;color:var(--tab);line-height:1.1">${data.aufrufe_7d}</div>
           <div style="font-size:12px;color:var(--text3);margin-top:4px">${data.unique_7d} Besucher</div>
+          ${data.unique_7d_de?`<div style="font-size:11px;color:#30d158;margin-top:2px">${data.unique_7d_de} aus 🇩🇪</div>`:''}
         </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
@@ -1806,27 +1808,30 @@ function renderChart(el,tage,d){
     const months={};
     tage.forEach(day=>{
       const ym=day.datum.slice(0,7);
-      if(!months[ym])months[ym]={views:0,unique:0,ym};
+      if(!months[ym])months[ym]={views:0,unique:0,unique_de:0,ym};
       months[ym].views+=day.views;
       months[ym].unique+=day.unique;
+      months[ym].unique_de+=(day.unique_de||0);
     });
     bars=Object.values(months).map(m=>({
       label: MO[parseInt(m.ym.slice(5,7))-1]+"'"+m.ym.slice(2,4),
-      tooltip: m.ym+": "+m.views+" Aufrufe, "+m.unique+" Besucher",
-      views: m.views, unique: m.unique
+      tooltip: m.ym+": "+m.views+" Aufrufe, "+m.unique+" Besucher"+(m.unique_de?", "+m.unique_de+" aus DE":""),
+      views: m.views, unique: m.unique, unique_de: m.unique_de
     }));
   } else {
     bars=tage.map(day=>{
       const dt=new Date(day.datum+"T12:00:00");
+      const de=day.unique_de||0;
       return {label:(dt.getDate())+"."+(dt.getMonth()+1)+".",
-              tooltip:day.datum+": "+day.views+" Aufrufe, "+day.unique+" Besucher",
-              views:day.views, unique:day.unique};
+              tooltip:day.datum+": "+day.views+" Aufrufe, "+day.unique+" Besucher"+(de?", "+de+" aus DE":""),
+              views:day.views, unique:day.unique, unique_de:de};
     });
   }
   const rawMax=Math.max(...bars.map(b=>b.views),1);
   const {max:nMax,ticks}=niceScale(rawMax);
   const totalViews=bars.reduce((s,b)=>s+b.views,0);
   const totalUnique=bars.reduce((s,b)=>s+b.unique,0);
+  const totalDe=bars.reduce((s,b)=>s+(b.unique_de||0),0);
   const n=bars.length;
   const showEvery=d===7?1:d===30?5:1;
   const gap=d===365?5:d===30?2:3;
@@ -1844,7 +1849,9 @@ function renderChart(el,tage,d){
 
   const barsHtml=bars.map((b,i)=>{
     const pct=Math.max(Math.round(b.views/nMax*100),b.views>0?1:0);
-    return `<div style="flex:1;background:var(--tab);opacity:.82;height:${pct}%;min-height:${b.views>0?'2px':'0'};border-radius:2px 2px 0 0" title="${b.tooltip}"></div>`;
+    const deH=b.unique_de>0?Math.max(Math.round(b.unique_de/nMax*100),1):0;
+    const dePct=pct>0&&deH>0?Math.min(Math.round(deH/pct*100),100):0;
+    return `<div style="flex:1;background:var(--tab);opacity:.82;height:${pct}%;min-height:${b.views>0?'2px':'0'};border-radius:2px 2px 0 0;position:relative" title="${b.tooltip}">${dePct>0?`<div style="position:absolute;bottom:0;left:0;right:0;height:${dePct}%;background:#30d158;border-radius:0 0 2px 2px"></div>`:''}</div>`;
   }).join('');
 
   const labelsHtml=bars.map((b,i)=>{
@@ -1853,9 +1860,10 @@ function renderChart(el,tage,d){
   }).join('');
 
   el.innerHTML=`
-    <div style="font-size:11px;color:var(--text3);margin-bottom:8px;display:flex;gap:14px">
+    <div style="font-size:11px;color:var(--text3);margin-bottom:6px;display:flex;gap:14px;flex-wrap:wrap">
       <span>Gesamt: <strong style="color:var(--text1)">${totalViews.toLocaleString("de")}</strong> Aufrufe</span>
       <span><strong style="color:var(--text1)">${totalUnique.toLocaleString("de")}</strong> Besucher</span>
+      ${totalDe?`<span><strong style="color:#30d158">${totalDe.toLocaleString("de")}</strong> aus 🇩🇪</span>`:''}
     </div>
     <div style="display:flex;gap:0">
       <div style="width:26px;height:${H}px;position:relative;flex-shrink:0">${yAxisHtml}</div>
@@ -1866,7 +1874,11 @@ function renderChart(el,tage,d){
         </div>
         <div style="display:flex;gap:${gap}px;margin-top:2px">${labelsHtml}</div>
       </div>
-    </div>`;
+    </div>
+    ${totalDe?`<div style="display:flex;gap:12px;margin-top:6px;font-size:10px;color:var(--text3)">
+      <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;background:var(--tab);opacity:.82;border-radius:2px;display:inline-block;flex-shrink:0"></span>Aufrufe gesamt</span>
+      <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;background:#30d158;border-radius:2px;display:inline-block;flex-shrink:0"></span>Besucher aus DE</span>
+    </div>`:''}`;
 }
 
 async function loadPendingVereine(){
