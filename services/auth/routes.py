@@ -744,6 +744,79 @@ def admin_delete_verein(verein_id: int):
 
 
 
+@auth_bp.route("/api/admin/unregistered-keys")
+def admin_unregistered_keys():
+    token = request.headers.get("X-Upload-Token", "")
+    if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
+        return {"error": "Unauthorized"}, 401
+    from shared.kalender_store import KalenderStore
+    data = KalenderStore.read()
+    with db_conn() as conn:
+        registered = {
+            r["verein_key"] for r in conn.execute(
+                "SELECT verein_key FROM vereine_accounts WHERE verein_key IS NOT NULL"
+            ).fetchall()
+        }
+    labels = data.get("_labels", {})
+    result = []
+    for key, termine in data.items():
+        if key.startswith("_") or key in registered or not isinstance(termine, list):
+            continue
+        result.append({"key": key, "label": labels.get(key, key), "n_termine": len(termine)})
+    result.sort(key=lambda x: x["label"])
+    return result
+
+
+@auth_bp.route("/api/admin/verein/<int:verein_id>/transfer-key", methods=["POST"])
+def admin_transfer_key(verein_id: int):
+    token = request.headers.get("X-Upload-Token", "")
+    if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
+        return {"error": "Unauthorized"}, 401
+    body = request.get_json(silent=True) or {}
+    source_key = (body.get("source_key") or "").strip()
+    if not source_key:
+        return {"error": "source_key fehlt"}, 400
+    with db_conn() as conn:
+        row = conn.execute(
+            "SELECT verein_key FROM vereine_accounts WHERE id = ?", (verein_id,)
+        ).fetchone()
+        if not row:
+            return {"error": "Verein nicht gefunden"}, 404
+        target_key = row["verein_key"]
+        if not target_key:
+            return {"error": "Account hat noch keinen verein_key"}, 400
+    if source_key == target_key:
+        return {"error": "source_key und target_key sind identisch"}, 400
+    transferred = 0
+    from shared.kalender_store import KalenderStore
+    def _merge(data):
+        nonlocal transferred
+        source_termine = data.pop(source_key, [])
+        transferred = len(source_termine)
+        existing = data.get(target_key, [])
+        merged = sorted(existing + source_termine,
+                        key=lambda t: (t.get("datum", ""), t.get("bezeichnung", "")))
+        if merged:
+            data[target_key] = merged
+        meta = data.setdefault("_meta", {})
+        if source_key in meta:
+            if target_key not in meta:
+                meta[target_key] = meta.pop(source_key)
+            else:
+                for k, v in meta[source_key].items():
+                    if k not in meta[target_key] or not meta[target_key][k]:
+                        meta[target_key][k] = v
+                del meta[source_key]
+        data.setdefault("_labels", {}).pop(source_key, None)
+    KalenderStore.update(_merge)
+    with db_conn() as conn:
+        conn.execute(
+            "UPDATE tg_subscriptions SET verein_key = ? WHERE verein_key = ?",
+            (target_key, source_key),
+        )
+    return {"ok": True, "transferred": transferred}
+
+
 # ── Session-Status (für Client-JS) ──────────────────────────────────────────
 
 @auth_bp.route("/api/auth/me")

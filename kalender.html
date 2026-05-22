@@ -2044,6 +2044,19 @@ function openVereinEditModal(verein_id,verein_name,vData){
           style="flex:1;padding:10px;border-radius:10px;background:var(--bg2);color:var(--text);border:none;font-weight:600;cursor:pointer;font-size:15px">Abbrechen</button>
       </div>
       <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:6px">Bestehende Termine übertragen</div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <select id="ve-transfer-key" style="flex:1;padding:8px 10px;border:1.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;outline:none">
+            <option value="">Lade…</option>
+          </select>
+          <button onclick="transferTermine(${verein_id})"
+            style="padding:8px 12px;border-radius:8px;background:var(--accent);color:#fff;border:none;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap">
+            &#8644; Übertragen
+          </button>
+        </div>
+        <div id="ve-transfer-msg" style="font-size:12px;margin-top:4px;color:var(--text3)"></div>
+      </div>
+      <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
         <button onclick="deleteVereinAdmin(${verein_id},'${escHtml(vData.verein_name).replace(/'/g,"\\'")}','${escHtml(vData.verein_key||"")}')"
           style="width:100%;padding:9px;border:1.5px solid #ff3b30;border-radius:10px;background:none;color:#ff3b30;font-size:14px;cursor:pointer">
           &#128465; Verein-Account l&ouml;schen
@@ -2052,6 +2065,7 @@ function openVereinEditModal(verein_id,verein_name,vData){
     </div>`;
   document.body.appendChild(modal);
   modal.addEventListener("click",e=>{if(e.target===modal)modal.remove();});
+  loadTransferKeys();
 }
 
 async function saveVereinEdit(verein_id){
@@ -2111,6 +2125,47 @@ async function deleteVereinAdmin(verein_id,verein_name,verein_key){
       loadAllAccounts();
     }else{alert("❌ "+(d.error||"Fehler"));}
   }catch(e){alert("❌ Netzwerkfehler");}
+}
+
+async function loadTransferKeys(){
+  const sel=document.getElementById("ve-transfer-key");
+  if(!sel)return;
+  const token=localStorage.getItem("ut")||"";
+  try{
+    const r=await fetch("/api/admin/unregistered-keys",{headers:{"X-Upload-Token":token}});
+    const list=await r.json();
+    if(!Array.isArray(list)||!list.length){
+      sel.innerHTML='<option value="">Keine nicht-registrierten Keys</option>';
+      return;
+    }
+    sel.innerHTML='<option value="">— Key wählen —</option>'+
+      list.map(k=>`<option value="${escHtml(k.key)}">${escHtml(k.label)} (${k.n_termine} Termine)</option>`).join("");
+  }catch(e){sel.innerHTML='<option value="">Fehler beim Laden</option>';}
+}
+
+async function transferTermine(verein_id){
+  const sel=document.getElementById("ve-transfer-key");
+  const msg=document.getElementById("ve-transfer-msg");
+  const source_key=sel?.value;
+  if(!source_key){if(msg)msg.textContent="Bitte einen Key auswählen.";return;}
+  const label=sel.options[sel.selectedIndex]?.text||source_key;
+  if(!confirm(`Alle Termine von "${label}" zu diesem Account übertragen?\n\nDieser Vorgang kann nicht rückgängig gemacht werden.`))return;
+  const token=localStorage.getItem("ut")||"";
+  if(msg){msg.style.color="var(--text3)";msg.textContent="Übertrage…";}
+  try{
+    const r=await fetch(`/api/admin/verein/${verein_id}/transfer-key`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","X-Upload-Token":token},
+      body:JSON.stringify({source_key}),
+    });
+    const d=await r.json();
+    if(d.ok){
+      if(msg){msg.style.color="green";msg.textContent=`✅ ${d.transferred} Termine übertragen`;}
+      await loadTransferKeys();
+    }else{
+      if(msg){msg.style.color="red";msg.textContent="❌ "+(d.error||"Fehler");}
+    }
+  }catch(e){if(msg){msg.style.color="red";msg.textContent="❌ Netzwerkfehler";}}
 }
 
 /* ── Vereine-Tab (Admin) ── */
