@@ -10,6 +10,7 @@ from services.kalender_bot.routes import kalender_bot_bp
 from services.rename.routes import rename_bp
 from services.telegram.routes import telegram_bp
 from services.verein.routes import verein_bp
+from services.verkehr.routes import verkehr_bp
 
 _SECRET_KEY_FILE = Path("/opt/rename-webhook/flask_secret.key")
 
@@ -37,6 +38,7 @@ def create_app() -> Flask:
     app.register_blueprint(rename_bp)
     app.register_blueprint(telegram_bp)
     app.register_blueprint(verein_bp)
+    app.register_blueprint(verkehr_bp)
     return app
 
 
