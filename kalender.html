@@ -2508,7 +2508,7 @@ async function confirmVerein(uid,key){
   try{
     const r=await fetch(`/api/admin/importe/${uid}/confirm`,{method:"POST",headers:{"Content-Type":"application/json","X-Upload-Token":token},body:JSON.stringify({vereine:[key],geo})});
     const d=await r.json();
-    if(d.ok){if(row)row.remove();await loadImporte();}
+    if(d.ok){if(row)row.remove();await loadImporte();loadVereine();loadTermine();}
     else alert("Fehler: "+(d.error||"unbekannt"));
   }catch(e){alert("Netzwerkfehler: "+e);if(row)row.style.opacity="";}
 }
@@ -2533,7 +2533,7 @@ async function confirmAll(uid){
   try{
     const r=await fetch(`/api/admin/importe/${uid}/confirm`,{method:"POST",headers:{"Content-Type":"application/json","X-Upload-Token":token},body:JSON.stringify({alle:true,geo})});
     const d=await r.json();
-    if(d.ok)await loadImporte();
+    if(d.ok){await loadImporte();loadVereine();loadTermine();}
     else{alert("Fehler: "+(d.error||"unbekannt"));if(card)card.style.opacity="";}
   }catch(e){alert("Netzwerkfehler: "+e);if(card)card.style.opacity="";}
 }
