@@ -1174,6 +1174,12 @@ def _load_pending_meta(f: Path) -> dict | None:
     try:
         data   = json.loads(f.read_text())
         events = data.get("events", [])
+        existing_meta = {}
+        if VEREINSTERMINE_FILE.exists():
+            try:
+                existing_meta = json.loads(VEREINSTERMINE_FILE.read_text()).get("_meta", {})
+            except Exception:
+                pass
         vereine: dict = {}
         for e in events:
             k = e["_verein_key"]
@@ -1182,6 +1188,7 @@ def _load_pending_meta(f: Path) -> dict | None:
                     "key":      k,
                     "label":    e.get("_label", k),
                     "gemeinde": e.get("_gemeinde", ""),
+                    "heimatort_gespeichert": existing_meta.get(k, {}).get("heimatort", ""),
                     "neu":      0,
                     "total":    0,
                 }
@@ -1229,6 +1236,12 @@ def api_admin_importe_detail(uid):
     try:
         data   = json.loads(pf.read_text())
         events = data.get("events", [])
+        existing_meta = {}
+        if VEREINSTERMINE_FILE.exists():
+            try:
+                existing_meta = json.loads(VEREINSTERMINE_FILE.read_text()).get("_meta", {})
+            except Exception:
+                pass
         vereine: dict = {}
         for e in events:
             k = e["_verein_key"]
@@ -1237,6 +1250,7 @@ def api_admin_importe_detail(uid):
                     "key":      k,
                     "label":    e.get("_label", k),
                     "gemeinde": e.get("_gemeinde", ""),
+                    "heimatort_gespeichert": existing_meta.get(k, {}).get("heimatort", ""),
                     "termine":  [],
                     "neu":      0,
                 }

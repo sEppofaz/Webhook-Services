@@ -2446,7 +2446,7 @@ async function loadImporte(){
     el.innerHTML=list.map(imp=>renderImportCard(imp)).join("");
     if(!_impGeo[list[0]?.uid])list.forEach(imp=>{
       _impGeo[imp.uid]={};
-      imp.vereine.forEach(v=>{_impGeo[imp.uid][v.key]={heimatort:"",gemeinde:v.gemeinde||"",landkreis:"Landkreis Landshut"};});
+      imp.vereine.forEach(v=>{_impGeo[imp.uid][v.key]={heimatort:v.heimatort_gespeichert||"",gemeinde:v.gemeinde||"",landkreis:"Landkreis Landshut"};});
     });
   }catch(e){el.innerHTML='<div style="color:#ff3b30;padding:16px">Fehler: '+escHtml(String(e))+'</div>';}
 }
@@ -2470,7 +2470,7 @@ function renderImportCard(imp){
 
 function renderVereinRow(uid,v){
   if(!_impGeo[uid])_impGeo[uid]={};
-  if(!_impGeo[uid][v.key])_impGeo[uid][v.key]={heimatort:"",gemeinde:v.gemeinde||"",landkreis:"Landkreis Landshut"};
+  if(!_impGeo[uid][v.key])_impGeo[uid][v.key]={heimatort:v.heimatort_gespeichert||"",gemeinde:v.gemeinde||"",landkreis:"Landkreis Landshut"};
   const g=_impGeo[uid][v.key];
   const termineHtml=v.termine&&v.termine.length
     ?v.termine.slice(0,8).map(t=>`<div style="font-size:12px;color:var(--text3);padding:2px 0">${t.datum}${t.uhrzeit?" "+t.uhrzeit:""} – ${escHtml(t.bezeichnung)}${t.ort?" · "+escHtml(t.ort):""}</div>`).join("")
@@ -2486,7 +2486,7 @@ function renderVereinRow(uid,v){
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px">
       <div><div style="font-size:10px;color:var(--text3);margin-bottom:2px">Heimatort</div>
-        <input value="${escHtml(g.heimatort)}" oninput="_impGeo['${uid}']['${v.key}'].heimatort=this.value"
+        <input value="${escHtml(g.heimatort)}" placeholder="${escHtml(v.gemeinde||'')}" oninput="_impGeo['${uid}']['${v.key}'].heimatort=this.value"
                style="width:100%;padding:5px 8px;border:1.5px solid var(--border2);border-radius:7px;font-size:12px;background:var(--bg);color:var(--text);outline:none;box-sizing:border-box"></div>
       <div><div style="font-size:10px;color:var(--text3);margin-bottom:2px">Gemeinde</div>
         <input value="${escHtml(g.gemeinde)}" oninput="_impGeo['${uid}']['${v.key}'].gemeinde=this.value"
