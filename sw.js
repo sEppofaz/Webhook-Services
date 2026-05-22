@@ -1,4 +1,4 @@
-const CACHE = 'vko-v2';
+const CACHE = 'vko-v3';
 
 self.addEventListener('install', e => {
   e.waitUntil(
@@ -20,6 +20,9 @@ self.addEventListener('fetch', e => {
   // API immer live – nie cachen
   if (url.pathname.startsWith('/api/')) return;
 
+  // Icons + Manifest immer live – nie cachen
+  if (/\.(png|ico|svg)$/.test(url.pathname) || url.pathname.includes('manifest')) return;
+
   // App-Shell (Navigation): Network-first, Cache-Fallback
   if (e.request.mode === 'navigate' || url.pathname === '/') {
     e.respondWith(
@@ -32,17 +35,4 @@ self.addEventListener('fetch', e => {
     );
     return;
   }
-
-  // Icons, manifest: Cache-first
-  e.respondWith(
-    caches.match(e.request).then(cached => {
-      if (cached) return cached;
-      return fetch(e.request).then(res => {
-        if (res && res.status === 200 && res.type === 'basic') {
-          caches.open(CACHE).then(c => c.put(e.request, res.clone()));
-        }
-        return res;
-      });
-    })
-  );
 });
