@@ -2225,13 +2225,41 @@ function _vereinRow(v){
   </div>`;
 }
 
+const _sfPh={name:"Verein suchen…",heimatort:"Heimatort suchen…",gemeinde:"Gemeinde suchen…",landkreis:"Landkreis suchen…",rubrik:"Rubrik suchen…"};
+
+function _vereinFieldChange(val){
+  _vereinSearchField=val;_vereinSearch="";
+  const i=document.getElementById("ver-srch");
+  if(i){i.value="";i.placeholder=_sfPh[val]||"Suchen…";}
+  _renderVereinResults();
+}
+
 function renderVereine(list){
   const el=document.getElementById("ver-tab-content");
   if(!list||!list.length){el.innerHTML='<div style="color:var(--text3);padding:12px">Keine Vereine</div>';return;}
-  list.sort((a,b)=>a.name.localeCompare(b.name,"de"));
+  _lastVereinList=list;
+  _lastVereinList.sort((a,b)=>a.name.localeCompare(b.name,"de"));
+  if(!document.getElementById("ver-results")){
+    const fieldOpts=[["name","Verein"],["heimatort","Heimatort"],["gemeinde","Gemeinde"],["landkreis","Landkreis"],["rubrik","Rubrik"]].map(([v,l])=>
+      `<option value="${v}"${_vereinSearchField===v?" selected":""}>${l}</option>`).join("");
+    el.innerHTML=`<div style="display:flex;gap:8px;margin-bottom:10px">
+      <input id="ver-srch" type="search" value="${escHtml(_vereinSearch)}" placeholder="${_sfPh[_vereinSearchField]}"
+        oninput="_vereinSearch=this.value;_renderVereinResults()"
+        style="flex:1;padding:8px 11px;border:1.5px solid var(--border2);border-radius:10px;font-size:14px;background:var(--bg);color:var(--text);outline:none">
+      <select id="ver-field" onchange="_vereinFieldChange(this.value)"
+        style="padding:8px 8px;border:1.5px solid var(--border2);border-radius:10px;font-size:13px;background:var(--bg);color:var(--text);cursor:pointer;outline:none">${fieldOpts}</select>
+    </div><div id="ver-results"></div>`;
+  }
+  _renderVereinResults();
+}
 
+function _renderVereinResults(){
+  const el=document.getElementById("ver-results");
+  if(!el)return;
+  const list=_lastVereinList;
+  if(!list||!list.length)return;
   const srch=_vereinSearch.toLowerCase();
-  const _vMatch=(v)=>{
+  const _vMatch=v=>{
     if(!srch)return true;
     if(_vereinSearchField==="heimatort")return(v.heimatort||"").toLowerCase().includes(srch);
     if(_vereinSearchField==="gemeinde")return _stripGem(v.gemeinde||"").toLowerCase().includes(srch);
@@ -2240,41 +2268,24 @@ function renderVereine(list){
     return v.name.toLowerCase().includes(srch);
   };
   const filtered=list.filter(v=>_vMatch(v));
-  const searchActive=!!srch;
-
-  const _sfPlaceholder={name:"Verein suchen…",heimatort:"Heimatort suchen…",gemeinde:"Gemeinde suchen…",landkreis:"Landkreis suchen…",rubrik:"Rubrik suchen…"};
-  const fieldOpts=[["name","Verein"],["heimatort","Heimatort"],["gemeinde","Gemeinde"],["landkreis","Landkreis"],["rubrik","Rubrik"]].map(([v,l])=>
-    `<option value="${v}"${_vereinSearchField===v?" selected":""}>${l}</option>`).join("");
-  const toolbar=`<div style="display:flex;gap:8px;margin-bottom:10px">
-    <input type="search" value="${escHtml(_vereinSearch)}" placeholder="${_sfPlaceholder[_vereinSearchField]||"Suchen…"}"
-      oninput="_vereinSearch=this.value;renderVereine(_lastVereinList)"
-      style="flex:1;padding:8px 11px;border:1.5px solid var(--border2);border-radius:10px;font-size:14px;background:var(--bg);color:var(--text);outline:none">
-    <select onchange="_vereinSearchField=this.value;_vereinSearch='';renderVereine(_lastVereinList)"
-      style="padding:8px 8px;border:1.5px solid var(--border2);border-radius:10px;font-size:13px;background:var(--bg);color:var(--text);cursor:pointer;outline:none">${fieldOpts}</select>
-  </div>`;
-
   const info=`<div style="font-size:12px;color:var(--text3);padding:0 2px 6px">${filtered.length} Vereine</div>`;
-
-  if(searchActive){
+  if(srch){
     const rows=filtered.map(v=>_vereinRow(v)).join("");
-    el.innerHTML=toolbar+info+`<div class="filter-card" style="padding:0;overflow-x:auto">${_VER_HDR}${rows||'<div style="padding:14px;color:var(--text3)">Keine Treffer.</div>'}</div>`;
+    el.innerHTML=info+`<div class="filter-card" style="padding:0;overflow-x:auto">${_VER_HDR}${rows||'<div style="padding:14px;color:var(--text3)">Keine Treffer.</div>'}</div>`;
     return;
   }
-
   const alpha="ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
   const used=new Set(filtered.map(v=>v.name[0]?.toUpperCase()));
   const alphaBar=`<div class="alpha-bar">${alpha.map(l=>
     `<button class="alpha-btn${used.has(l)?"":" inactive"}" onclick="${used.has(l)?`scrollToVereinLetter('${l}')`:""}">${l}</button>`
   ).join("")}</div>`;
-
   const grouped={};
   filtered.forEach(v=>{const l=v.name[0]?.toUpperCase()||"#";if(!grouped[l])grouped[l]=[];grouped[l].push(v);});
   const rows=Object.keys(grouped).sort().map(l=>{
     const items=grouped[l].map(v=>_vereinRow(v)).join("");
     return `<div class="ver-section-hdr" id="ver-letter-${l}" style="min-width:480px;padding:8px 14px 4px">${l}</div>${items}`;
   }).join("");
-
-  el.innerHTML=toolbar+info+alphaBar+`<div class="filter-card" style="padding:0;overflow-x:auto">${_VER_HDR}${rows}</div>`;
+  el.innerHTML=info+alphaBar+`<div class="filter-card" style="padding:0;overflow-x:auto">${_VER_HDR}${rows}</div>`;
 }
 
 function scrollToVereinLetter(l){
