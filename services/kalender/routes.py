@@ -148,8 +148,8 @@ def admin_page():
     if VKO_MAINTENANCE_FILE.exists():
         return _MAINTENANCE_HTML, 503, {"Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store"}
     html = _get_kalender_html().replace(
-        '<link rel="manifest" href="/manifest.json">',
-        '<link rel="manifest" href="/manifest-admin.json">'
+        '<link rel="manifest" href="/manifest.json?v=4">',
+        '<link rel="manifest" href="/manifest-admin.json?v=4">'
     )
     return html, 200, {"Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store"}
 
