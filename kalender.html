@@ -2182,7 +2182,7 @@ async function transferTermine(verein_id){
 
 /* ── Vereine-Tab (Admin) ── */
 const RUBRIKEN_OPT=["Verein","Pfarrei","Kunst und Kultur","Sonstiges"];
-let _lastVereinList=[],_vereinSearch="",_vereinRubrikFilter="",_drawerKey=null,_drawerSV=false;
+let _lastVereinList=[],_vereinSearch="",_vereinSearchField="name",_drawerKey=null,_drawerSV=false;
 
 async function loadVereine(){
   const el=document.getElementById("ver-tab-content");
@@ -2231,20 +2231,26 @@ function renderVereine(list){
   list.sort((a,b)=>a.name.localeCompare(b.name,"de"));
 
   const srch=_vereinSearch.toLowerCase();
-  const filtered=list.filter(v=>
-    (!srch||v.name.toLowerCase().includes(srch))&&
-    (!_vereinRubrikFilter||v.rubrik===_vereinRubrikFilter)
-  );
-  const searchActive=!!srch||!!_vereinRubrikFilter;
+  const _vMatch=(v)=>{
+    if(!srch)return true;
+    if(_vereinSearchField==="heimatort")return(v.heimatort||"").toLowerCase().includes(srch);
+    if(_vereinSearchField==="gemeinde")return _stripGem(v.gemeinde||"").toLowerCase().includes(srch);
+    if(_vereinSearchField==="landkreis")return _stripLk(v.landkreis||"").toLowerCase().includes(srch);
+    if(_vereinSearchField==="rubrik")return(v.rubrik||"").toLowerCase().includes(srch);
+    return v.name.toLowerCase().includes(srch);
+  };
+  const filtered=list.filter(v=>_vMatch(v));
+  const searchActive=!!srch;
 
-  const rubrikOpts=["","Verein","Pfarrei","Kunst und Kultur","Sonstiges"].map(r=>
-    `<option value="${r}"${_vereinRubrikFilter===r?" selected":""}>${r||"Alle Rubriken"}</option>`).join("");
+  const _sfPlaceholder={name:"Verein suchen…",heimatort:"Heimatort suchen…",gemeinde:"Gemeinde suchen…",landkreis:"Landkreis suchen…",rubrik:"Rubrik suchen…"};
+  const fieldOpts=[["name","Verein"],["heimatort","Heimatort"],["gemeinde","Gemeinde"],["landkreis","Landkreis"],["rubrik","Rubrik"]].map(([v,l])=>
+    `<option value="${v}"${_vereinSearchField===v?" selected":""}>${l}</option>`).join("");
   const toolbar=`<div style="display:flex;gap:8px;margin-bottom:10px">
-    <input type="search" value="${escHtml(_vereinSearch)}" placeholder="Verein suchen…"
+    <input type="search" value="${escHtml(_vereinSearch)}" placeholder="${_sfPlaceholder[_vereinSearchField]||"Suchen…"}"
       oninput="_vereinSearch=this.value;renderVereine(_lastVereinList)"
       style="flex:1;padding:8px 11px;border:1.5px solid var(--border2);border-radius:10px;font-size:14px;background:var(--bg);color:var(--text);outline:none">
-    <select onchange="_vereinRubrikFilter=this.value;renderVereine(_lastVereinList)"
-      style="padding:8px 8px;border:1.5px solid var(--border2);border-radius:10px;font-size:13px;background:var(--bg);color:var(--text);cursor:pointer;outline:none">${rubrikOpts}</select>
+    <select onchange="_vereinSearchField=this.value;_vereinSearch='';renderVereine(_lastVereinList)"
+      style="padding:8px 8px;border:1.5px solid var(--border2);border-radius:10px;font-size:13px;background:var(--bg);color:var(--text);cursor:pointer;outline:none">${fieldOpts}</select>
   </div>`;
 
   const info=`<div style="font-size:12px;color:var(--text3);padding:0 2px 6px">${filtered.length} Vereine</div>`;
