@@ -1,4 +1,4 @@
-const CACHE = 'vko-v1';
+const CACHE = 'vko-v2';
 
 self.addEventListener('install', e => {
   e.waitUntil(
