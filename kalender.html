@@ -150,9 +150,11 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
 
 /* ── Search ── */
 .srch-wrap{padding:10px 14px 6px;position:relative}
-.srch-input{width:100%;padding:8px 12px 8px 34px;border:1.5px solid var(--border2);border-radius:10px;font-size:14px;background:var(--bg);color:var(--text);outline:none;-webkit-appearance:none}
+.srch-input{width:100%;padding:8px 34px 8px 34px;border:1.5px solid var(--border2);border-radius:10px;font-size:14px;background:var(--bg);color:var(--text);outline:none;-webkit-appearance:none}
 .srch-input::placeholder{color:var(--text3)}
 .srch-icon-abs{position:absolute;left:24px;top:17px;font-size:15px;pointer-events:none;color:var(--text3)}
+.srch-clear{position:absolute;right:18px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text3);font-size:16px;line-height:1;padding:4px;cursor:pointer;display:none;border-radius:50%;width:24px;height:24px;align-items:center;justify-content:center}
+.srch-clear:hover{color:var(--text);background:var(--bg2)}
 .srch-dropdown{position:fixed;background:var(--card);border:1px solid var(--border2);border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.18);z-index:1000;max-height:220px;overflow-y:auto;-webkit-overflow-scrolling:touch;display:none}
 .srch-dropdown.open{display:block}
 .srch-item{padding:9px 12px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:8px;color:var(--text);border-bottom:.5px solid var(--border);border-left:none;border-right:none;border-top:none;width:100%;text-align:left;background:none;font-family:inherit;box-sizing:border-box}
@@ -261,6 +263,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
                  oninput="onSearchInput(this.value)"
                  onfocus="if(this.value.length>=2){_positionDropdown();document.getElementById('srch-dropdown').classList.add('open')}"
                  autocomplete="off" autocorrect="off" spellcheck="false">
+          <button class="srch-clear" id="srch-clear" onclick="document.getElementById('srch-input').value='';onSearchInput('');" aria-label="Suche leeren">&#10005;</button>
           <div class="srch-dropdown" id="srch-dropdown"></div>
         </div>
         <div class="srch-chips" id="srch-chips" style="display:none"></div>
@@ -835,6 +838,7 @@ function resetAll(){
   }
   document.getElementById("srch-input").value="";
   document.getElementById("srch-dropdown").classList.remove("open");
+  const _clr=document.getElementById("srch-clear");if(_clr)_clr.style.display="none";
   renderSearchChips();
   renderFavBar();
   document.querySelectorAll("[data-z]").forEach(c=>c.classList.toggle("on",c.dataset.z==="zukunft"));
@@ -1169,6 +1173,8 @@ function onSearchInput(val){
   srchText=q;
   const dd=document.getElementById("srch-dropdown");
   const fb=document.getElementById("filter-body");
+  const clr=document.getElementById("srch-clear");
+  if(clr)clr.style.display=q.length>0?"flex":"none";
 
   if(q.length===0){
     dd.classList.remove("open");
@@ -1233,6 +1239,7 @@ function addSearchChip(idx){
   }
   document.getElementById("srch-input").value="";
   document.getElementById("srch-dropdown").classList.remove("open");
+  const _c=document.getElementById("srch-clear");if(_c)_c.style.display="none";
   srchResults=[];
   renderSearchChips();
   updateAllBadges();
