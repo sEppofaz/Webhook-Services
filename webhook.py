@@ -6,7 +6,6 @@ from flask import Flask
 
 from services.auth.routes import auth_bp
 from services.autoquartett.routes import autoquartett_bp
-from services.claude_remote.routes import claude_remote_bp
 from services.kalender.routes import kalender_bp
 from services.kalender_bot.routes import kalender_bot_bp
 from services.rename.routes import rename_bp
@@ -36,7 +35,6 @@ def create_app() -> Flask:
     app.secret_key = _load_secret_key()
     app.register_blueprint(auth_bp)
     app.register_blueprint(autoquartett_bp)
-    app.register_blueprint(claude_remote_bp)
     app.register_blueprint(kalender_bp)
     app.register_blueprint(kalender_bot_bp)
     app.register_blueprint(rename_bp)
