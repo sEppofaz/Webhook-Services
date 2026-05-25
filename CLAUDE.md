@@ -81,6 +81,10 @@ ssh root@89.167.104.145 "/opt/rename-webhook/bin/python3 /opt/rename-webhook/hei
 - **`quelle`/`quelle_url`:** Werden aus Pending-Datei übernommen. `quelle = "heimat-info.de"`
 - **Geo-Schutz in `do_import()`:** Geo-Felder werden nur gesetzt wenn `key not in data["_meta"]`
 - **Borlabs Cookie:** `discover_c_id()` versucht zuerst Base64-Decode, fällt auf Playwright-Intercept zurück
+- **`--run` CLI-Argument nicht implementiert:** `main()` kennt nur `--add`. Alles andere fällt auf `cmd_import()` → alle Gemeinden. Einzelnen Import per Code: `fetch_and_save_pending_for_url("https://...")`
+- **Playwright nach Update:** Browser können fehlen → `playwright install chromium` auf dem Server
+- **`api_admin_importe_confirm` gibt immer `ok: True` zurück** solange kein Exception auftritt – auch wenn `do_import()` „⚠️ Pending-Datei nicht gefunden" meldet
+- **`heimatort_gespeichert`:** Im Pending-Meta-Response enthalten – aus bestehendem `_meta[k].heimatort`. Frontend nutzt das zur Vorausfüllung im Import-Dialog
 
 ---
 
@@ -136,6 +140,8 @@ Alle Jobs als `root`-Crontab. Timezone: `Europe/Berlin`. Logs: `/var/log/pka-*.l
 | `/api/admin/stats/chart` | GET – Tages-Zeitreihe `?d=7|30|365` |
 | `/api/admin/users` | GET – Alle Accounts (Auth) |
 | `/api/admin/verein/<id>` | PATCH/DELETE – Verein-Account |
+| `/api/admin/unregistered-keys` | GET – Keys in vereinstermine.json ohne Account (für Transfer-Dropdown) |
+| `/api/admin/verein/<id>/transfer-key` | POST `{source_key}` – Termine + _meta + _labels + tg_subscriptions übertragen |
 | `/upload` | Superadmin-Upload (PDF/JPG/PNG/HEIC/Excel) |
 | `/#admin` | Admin-PWA (Tabs: Import/Importe/Vereine/Accounts/Termine/Stats) |
 | `/verein/register` | Selbstregistrierung |
@@ -170,6 +176,7 @@ Alle Jobs als `root`-Crontab. Timezone: `Europe/Berlin`. Logs: `/var/log/pka-*.l
 - **Landkreis-Fallback:** Vereine ohne `meta[key].landkreis` → `"Landkreis Landshut"`
 - **Filter-Reihenfolge:** aktVereine → Rubrik → Landkreis → Zeitraum → Suche → Ortschaft → Favoriten
 - **Offline:** `try/catch` um `/api/termine`-Fetch → Meldung „🔇 Keine Internetverbindung"
+- **Suche-Dropdown muss `position:fixed` sein:** `.content{overflow-y:auto}` erstellt in iOS Safari einen eigenen Stacking-Context – ein `position:absolute` Dropdown mit `z-index:100` liegt trotzdem dahinter. Lösung: `position:fixed` + Position per `_positionDropdown()` via `getBoundingClientRect()` berechnen. Dropdown-Items als `<button>` statt `<div>` – `onclick` auf `<div>` ist auf iOS unzuverlässig.
 
 ---
 
