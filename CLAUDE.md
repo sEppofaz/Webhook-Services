@@ -141,6 +141,9 @@ Alle Jobs als `root`-Crontab. Timezone: `Europe/Berlin`. Logs: `/var/log/pka-*.l
 | `/api/admin/users` | GET – Alle Accounts (Auth) |
 | `/api/admin/verein/<id>` | PATCH/DELETE – Verein-Account |
 | `/api/admin/unregistered-keys` | GET – Keys in vereinstermine.json ohne Account (für Transfer-Dropdown) |
+| `/claude-remote/` | Claude Remote PWA (HTTP BasicAuth: htpasswd `/etc/nginx/claude-remote.htpasswd`) |
+| `/api/claude-remote/chat` | POST – Chat-Anfrage + Agentic Loop (BasicAuth) |
+| `/api/claude-remote/confirm-write` | POST – Schreiboperation bestätigen/ablehnen (BasicAuth) |
 | `/api/admin/verein/<id>/transfer-key` | POST `{source_key}` – Termine + _meta + _labels + tg_subscriptions übertragen |
 | `/upload` | Superadmin-Upload (PDF/JPG/PNG/HEIC/Excel) |
 | `/#admin` | Admin-PWA (Tabs: Import/Importe/Vereine/Accounts/Termine/Stats) |
@@ -249,6 +252,18 @@ Endpunkt `/telegram` – nur Josefs Chat-ID. Token = `TOKEN` aus `/etc/pka/secre
 
 - **529-Retry:** `rename_via_claude()` hat 3-Versuche-Retry (15s / 30s Backoff). Ohne Retry: Overload-Fehler wird geloggt, Cursor trotzdem gesetzt → Datei wird nie erneut versucht.
 - **Cursor-Fix nach Stuck:** Datei manuell umbenennen; Cursor lebt weiter.
+
+---
+
+## Claude Remote (services/claude_remote/routes.py)
+
+- **URL:** `https://vereinskalender.online/claude-remote/` (HTTP BasicAuth)
+- **Auth:** `/etc/nginx/claude-remote.htpasswd` – Passwort ändern: `ssh -t root@89.167.104.145 "htpasswd /etc/nginx/claude-remote.htpasswd josef"`
+- **Pfad-Whitelist:** Dropbox `/Apps/Claude/` + Server `/opt/{rename-webhook,kargl-invoice,project-insight,autoquartett}/`
+- **Write-Gate:** `_pending` Dict in-memory – geht bei Service-Neustart verloren → User muss Anfrage neu stellen
+- **Icons:** Liegen auf Server unter `/opt/rename-webhook/services/claude_remote/static/` (NICHT im Repo), bei neuem Deploy neu generieren mit `python3 generate_icons.py` oder manuellem PNG-Script
+- **Pitfall SSH htpasswd:** Immer `ssh -t` verwenden für interaktive Passwort-Eingabe (TTY-Zuweisung für Masking nötig)
+- **Kosten:** ~0,003–0,02 € pro Chat-Anfrage (Claude Sonnet 4.6, je nach Dateigrößen)
 
 ---
 
