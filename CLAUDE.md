@@ -261,7 +261,7 @@ Endpunkt `/telegram` – nur Josefs Chat-ID. Token = `TOKEN` aus `/etc/pka/secre
 - **Auth:** `/etc/nginx/claude-remote.htpasswd` – Passwort ändern: `ssh -t root@89.167.104.145 "htpasswd /etc/nginx/claude-remote.htpasswd josef"`
 - **Pfad-Whitelist:** Dropbox `/Apps/Claude/` + Server `/opt/{rename-webhook,kargl-invoice,project-insight,autoquartett}/`
 - **Write-Gate:** `_pending` Dict in-memory – geht bei Service-Neustart verloren → User muss Anfrage neu stellen
-- **Icons:** Liegen auf Server unter `/opt/rename-webhook/services/claude_remote/static/` (NICHT im Repo), bei neuem Deploy neu generieren mit `python3 generate_icons.py` oder manuellem PNG-Script
+- **Icons:** `icon-192.png` + `icon-512.png` sind im Repo unter `services/claude_remote/static/` – werden bei `git pull` automatisch mitgezogen, kein manuelles Generieren nötig. Script zum Neuerstellen: `python3 services/claude_remote/generate_icons.py` (reine stdlib, kein Pillow).
 - **Pitfall SSH htpasswd:** Immer `ssh -t` verwenden für interaktive Passwort-Eingabe (TTY-Zuweisung für Masking nötig)
 - **Kosten:** ~0,003–0,02 € pro Chat-Anfrage (Claude Sonnet 4.6, je nach Dateigrößen)
 
