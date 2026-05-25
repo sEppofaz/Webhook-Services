@@ -48,13 +48,12 @@
   }
   #header h1 { font-size: 17px; font-weight: 600; color: #fff; letter-spacing: .2px; }
   #btn-info {
-    background: none; border: none; cursor: pointer;
-    width: 36px; height: 36px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    color: rgba(255,255,255,.85); font-size: 20px;
+    background: rgba(255,255,255,.15); border: none; cursor: pointer;
+    height: 34px; padding: 0 12px; border-radius: 9px;
+    color: #fff; font-size: 13px; font-weight: 600; letter-spacing: .3px;
     transition: background .15s;
   }
-  #btn-info:hover { background: rgba(255,255,255,.15); }
+  #btn-info:active { background: rgba(255,255,255,.3); }
 
   /* ── Chat Feed ── */
   #feed {
@@ -217,7 +216,7 @@
 
 <div id="header">
   <h1>Claude Remote</h1>
-  <button id="btn-info" aria-label="Info">ℹ️</button>
+  <button id="btn-info" aria-label="Info">Info</button>
 </div>
 
 <div id="feed">
