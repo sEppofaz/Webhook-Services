@@ -6,6 +6,7 @@ import traceback
 import urllib.parse
 import urllib.request
 import uuid
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -34,6 +35,7 @@ _DROPBOX_INVOICE_APP_SECRET    = os.environ.get("DROPBOX_INVOICE_APP_SECRET", ""
 _TODOS_FILE_PATH               = "/Apps/Claude/Todo-App/Todos.json"
 _GOOGLE_MAPS_API_KEY           = os.environ.get("GOOGLE_MAPS_API_KEY", "")
 _VERKEHR_ORIGIN                = "Hölskofen, Pfeffenhausen, Bayern, Deutschland"
+_TODO_WEBHOOK_SECRET           = os.environ.get("TODO_WEBHOOK_SECRET", "")
 
 
 def _fmt_dauer(sek: int) -> str:
@@ -104,8 +106,10 @@ def _save_todo(text: str, kategorie: str = "pka") -> None:
         data = json.loads(res.content.decode("utf-8"))
     except dropbox.exceptions.ApiError:
         data = {"v": 1, "todos": []}
+    next_nr = max((t.get("nr") or 0 for t in data["todos"]), default=0) + 1
     data["todos"].append({
         "id": str(uuid.uuid4()),
+        "nr": next_nr,
         "datum": datum,
         "aufgabe": text,
         "prio": "niedrig",
@@ -308,6 +312,33 @@ def _collect_alle_termine_30() -> str:
     return "\n".join(zeilen)
 
 
+
+@telegram_bp.route("/webhook/todo", methods=["POST", "GET"])
+def webhook_todo():
+    token = request.headers.get("X-Token", "") or request.args.get("token", "") or (request.get_json(force=True, silent=True) or {}).get("token", "")
+    if not _TODO_WEBHOOK_SECRET or token != _TODO_WEBHOOK_SECRET:
+        return {"error": "Unauthorized"}, 401
+    data = request.get_json(force=True, silent=True) or {}
+    _text_val = next((v for k, v in data.items() if k.lower() == "text"), None)
+    text = (request.args.get("text") or _text_val or "").strip()
+    if not text:
+        return {"error": "No text"}, 400
+    m = re.search(r'#(privat|arbeit)', text, re.IGNORECASE)
+    if m:
+        tag = m.group(1).lower()
+        kategorie = tag
+        todo_text = re.sub(r'#(?:privat|arbeit)\S*', '', text, flags=re.IGNORECASE).strip()
+    else:
+        kategorie, todo_text = "pka", text
+    try:
+        _save_todo(todo_text, kategorie)
+        kat_emoji = {"pka": "\U0001f4bb", "privat": "\U0001f3e0", "arbeit": "\U0001f4bc"}.get(kategorie, "\U0001f4dd")
+        log(f"\U0001f4dd  webhook_todo ({kategorie}): {todo_text[:60]}")
+        return {"ok": True, "kategorie": kategorie, "aufgabe": todo_text, "emoji": kat_emoji}, 200
+    except Exception as e:
+        log(f"\u274c  webhook_todo: {e}")
+        return {"error": str(e)}, 500
+
 @telegram_bp.route("/telegram", methods=["POST"])
 def telegram_webhook():
     data    = request.get_json(silent=True) or {}
@@ -460,12 +491,13 @@ def telegram_webhook():
         threading.Thread(target=lambda: subprocess.run(["sudo", "reboot"], timeout=30), daemon=True).start()
 
     elif text and not text.startswith("/"):
-        # Kategorie per Prefix: #privat oder #arbeit, Default = pka
-        kategorie, todo_text = "pka", text
-        if text.startswith("#privat "):
-            kategorie, todo_text = "privat", text[8:].strip()
-        elif text.startswith("#arbeit "):
-            kategorie, todo_text = "arbeit", text[8:].strip()
+        m = re.search(r'(?:^|\s)(#privat|#arbeit)(?:\s|$)', text, re.IGNORECASE)
+        if m:
+            tag = m.group(1).lower()
+            kategorie = "privat" if tag == "#privat" else "arbeit"
+            todo_text = re.sub(r'\s*#(?:privat|arbeit)\s*', ' ', text, flags=re.IGNORECASE).strip()
+        else:
+            kategorie, todo_text = "pka", text
         kat_emoji = {"pka": "💻", "privat": "🏠", "arbeit": "💼"}.get(kategorie, "📝")
         log(f"📝  Todo ({kategorie}) von Chat {chat_id}: {todo_text[:60]}")
         def _do_todo(t=todo_text, cid=chat_id, k=kategorie, e=kat_emoji):
