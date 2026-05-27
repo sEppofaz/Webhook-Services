@@ -235,6 +235,16 @@ Endpunkt `/telegram` – nur Josefs Chat-ID. Token = `TOKEN` aus `/etc/pka/secre
 **Pitfall – Callback-Guard:** Bei `callback_query`-Updates gibt es kein `message`-Objekt → Guard greift nur wenn `not data.get("callback_query")`.
 **Pitfall – `send_telegram`:** Signatur `send_telegram(chat_id, text)` – nur 2 Argumente!
 
+### Endpoint `/webhook/todo` (Apple Watch / iOS Kurzbefehl)
+
+`POST /webhook/todo?token=...` – erstellt PKA-Todo direkt in `Todos.json` (Dropbox).
+
+**Pitfalls iOS Shortcuts:**
+- Kein `Content-Type: application/json` Header → `request.get_json(force=True, silent=True)` nötig
+- JSON-Keys kommen als `Text` (Großbuchstabe), nicht `text` → case-insensitive Suche via `next((v for k,v in data.items() if k.lower()=="text"), None)`
+- Siri klebt Hashtag an Folgewort: `#privatto-do` statt `#privat` → Regex `#(privat|arbeit)` ohne Whitespace-Pflicht, Strip mit `\S*`
+- Token-Rotation: Bei versehentlicher Sichtbarkeit im Chat → `sed -i 's/^TODO_WEBHOOK_SECRET=.*/TODO_WEBHOOK_SECRET=NEU/' /etc/pka/secrets.env` + Service-Restart + Kurzbefehl-URL aktualisieren
+
 ---
 
 ## Sicherheitsfeatures
