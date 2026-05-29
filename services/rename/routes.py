@@ -23,7 +23,25 @@ from shared.kalender_core import (
     import_pdf_bytes,
     log,
 )
-from services.invoice.db import insert_rechnung
+_RECHNUNGEN_API = "http://127.0.0.1:5003/api/rechnungen"
+_RECHNUNGEN_API_TOKEN = os.environ.get("RECHNUNGEN_API_TOKEN", "")
+
+
+def _notify_rechnungen_api(new_name: str, steuer_kategorie: str | None) -> None:
+    """Neuen Rechnungseintrag per API an den Rechnungen-Service senden (fire-and-forget)."""
+    try:
+        import urllib.request
+        payload = json.dumps({"dateiname": new_name, "steuer_kategorie": steuer_kategorie or "Allgemeines"}).encode()
+        req = urllib.request.Request(
+            _RECHNUNGEN_API,
+            data=payload,
+            headers={"Authorization": f"Bearer {_RECHNUNGEN_API_TOKEN}", "Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=5):
+            pass
+    except Exception as e:
+        log(f"⚠️  Rechnungen-API nicht erreichbar (nicht kritisch): {e}")
 
 rename_bp = Blueprint("rename", __name__)
 
@@ -204,12 +222,7 @@ Regeln:
         dbx.files_move_v2(dropbox_path, new_path, autorename=False)
         log(f"✅  {filename}  →  {new_name}")
 
-        try:
-            row_id = insert_rechnung(new_name, steuer_kategorie)
-            if row_id:
-                log(f"🗄️  Rechnung gespeichert (ID {row_id}, Kategorie: {steuer_kategorie})")
-        except Exception as db_err:
-            log(f"⚠️  DB-Fehler (nicht kritisch): {db_err}")
+        _notify_rechnungen_api(new_name, steuer_kategorie)
 
     finally:
         Path(tmp_path).unlink(missing_ok=True)
