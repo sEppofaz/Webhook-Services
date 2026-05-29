@@ -23,6 +23,7 @@ from shared.kalender_core import (
     import_pdf_bytes,
     log,
 )
+from services.invoice.db import insert_rechnung
 
 rename_bp = Blueprint("rename", __name__)
 
@@ -97,9 +98,16 @@ def rename_via_claude(dbx: dropbox.Dropbox, dropbox_path: str) -> None:
         today     = datetime.now().strftime("%Y-%m-%d")
         media_type = MEDIA_TYPES.get(suffix, "application/octet-stream")
 
-        prompt = f"""Analysiere dieses Dokument und gib ausschließlich den neuen Dateinamen zurück (ohne Pfad, ohne Erklärung, ohne Anführungszeichen).
+        prompt = f"""Analysiere dieses Dokument und antworte ausschließlich mit einem JSON-Objekt (kein Markdown, keine Erklärung):
+{{"dateiname": "<neuer Dateiname>", "steuer_kategorie": "<Kategorie>"}}
 
-Namensschema: YYYY-MM-DD_Kategorie_Firma_Schlagwort_Betrag{suffix}
+Wähle steuer_kategorie aus dieser Liste (exakt so schreiben):
+Allgemeines, Forst- und Landwirtschaft, Gehaltsabrechnungen, Haus und Hof,
+Medikamente-Arzt, Photovoltaik, Steuer und Beratung, Vermietung, Verpachtung,
+Versicherungen, Werbungskosten.
+Hinweis: Dokumente mit Rosengasse-Adresse (Essenbach) → immer "Vermietung".
+
+Namensschema für dateiname: YYYY-MM-DD_Kategorie_Firma_Schlagwort_Betrag{suffix}
 
 Regeln:
 - Datum: Extrahiere das wirksame Datum aus dem Dokument (heute ist {today}).
@@ -161,6 +169,7 @@ Regeln:
 
         client  = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
         new_name = None
+        steuer_kategorie = None
         for attempt in range(1, 4):
             try:
                 message = client.messages.create(
@@ -168,7 +177,15 @@ Regeln:
                     max_tokens=256,
                     messages=[{"role": "user", "content": content}]
                 )
-                new_name = message.content[0].text.strip().strip('"').strip("'")
+                raw = message.content[0].text.strip()
+                raw = re.sub(r"^```(?:json)?\s*", "", raw)
+                raw = re.sub(r"\s*```$", "", raw).strip()
+                try:
+                    parsed = json.loads(raw)
+                    new_name = parsed["dateiname"].strip().strip('"').strip("'")
+                    steuer_kategorie = parsed.get("steuer_kategorie")
+                except (json.JSONDecodeError, KeyError):
+                    new_name = raw.strip('"').strip("'")
                 break
             except anthropic.APIStatusError as e:
                 if e.status_code == 529 and attempt < 3:
@@ -186,6 +203,13 @@ Regeln:
         new_path = f"{folder}/{new_name}"
         dbx.files_move_v2(dropbox_path, new_path, autorename=False)
         log(f"✅  {filename}  →  {new_name}")
+
+        try:
+            row_id = insert_rechnung(new_name, steuer_kategorie)
+            if row_id:
+                log(f"🗄️  Rechnung gespeichert (ID {row_id}, Kategorie: {steuer_kategorie})")
+        except Exception as db_err:
+            log(f"⚠️  DB-Fehler (nicht kritisch): {db_err}")
 
     finally:
         Path(tmp_path).unlink(missing_ok=True)

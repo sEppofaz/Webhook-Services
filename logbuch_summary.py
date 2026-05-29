@@ -1,7 +1,8 @@
 #!/opt/rename-webhook/bin/python3
 """
 logbuch_summary.py
-Liest den gestrigen Logbuch-Eintrag aus Dropbox und sendet ihn per Telegram.
+Liest den gestrigen Logbuch-Eintrag aus Dropbox, fasst ihn via Claude zusammen
+und sendet die Zusammenfassung per Telegram.
 Läuft täglich um 06:30 via Cron – nur wenn ein Eintrag vom Vortag existiert.
 """
 
@@ -53,13 +54,35 @@ def download_logbuch(token: str) -> str:
 
 def extract_entry(content: str, date_str: str) -> str | None:
     """Extrahiert alle Abschnitte fuer YYYY-MM-DD (inkl. Nachtrag-Eintraege)."""
-    # Matcht ## YYYY-MM-DD mit beliebigem Suffix (z.B. " (Nachtrag 3)")
     pattern = rf"^## {re.escape(date_str)}[^\n]*\n(.*?)(?=\n^## |\Z)"
     matches = re.findall(pattern, content, re.DOTALL | re.MULTILINE)
     if not matches:
         return None
     parts = [m.strip() for m in reversed(matches) if m.strip()]
     return "\n\n---\n\n".join(parts) if parts else None
+
+
+def summarize_with_claude(api_key: str, entry: str) -> str:
+    url     = "https://api.anthropic.com/v1/messages"
+    prompt  = (
+        "Hier ist ein PKA-Logbuch-Eintrag von Josef Fischer. "
+        "Fasse die erledigten Aufgaben in maximal 15 kompakten deutschen Stichpunkten zusammen. "
+        "Nur das Wesentliche – keine technischen Details, keine Pfade, keine Code-Snippets. "
+        "Beginne jeden Punkt mit •\n\n"
+        + entry
+    )
+    payload = json.dumps({
+        "model": "claude-haiku-4-5-20251001",
+        "max_tokens": 512,
+        "messages": [{"role": "user", "content": prompt}],
+    }).encode()
+    req = urllib.request.Request(url, data=payload, headers={
+        "Content-Type": "application/json",
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01",
+    })
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return json.loads(r.read())["content"][0]["text"].strip()
 
 
 def send_telegram(token: str, chat_id: str, text: str) -> None:
@@ -92,7 +115,15 @@ def main():
         print(f"Kein Eintrag fuer {yesterday} – nichts gesendet.")
         return
 
-    message = f"📋 PKA-Logbuch {day_german}\n\n{entry}"
+    try:
+        summary = summarize_with_claude(secrets["CLAUDE_API_KEY"], entry)
+        body    = summary
+        print("Claude-Zusammenfassung erstellt")
+    except Exception as e:
+        print(f"Claude-Fehler: {e} – sende gekuerzten Rohtext")
+        body = entry[:3800] + ("\n(…)" if len(entry) > 3800 else "")
+
+    message = f"📋 PKA-Logbuch {day_german}\n\n{body}"
 
     try:
         send_telegram(secrets["TOKEN"], secrets["CHAT_ID"], message)
