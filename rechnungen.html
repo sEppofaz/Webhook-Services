@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#14532d" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#052e16" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Rechnungen">
+  <link rel="apple-touch-icon" href="/rechnungen/apple-touch-icon.png">
+  <link rel="manifest" href="/rechnungen/manifest.json">
+  <title>Rechnungen</title>
+  <style>
+    :root {
+      --bg:      #f0fdf4;
+      --bg2:     #ffffff;
+      --bg3:     #dcfce7;
+      --header:  #14532d;
+      --accent:  #16a34a;
+      --text:    #111827;
+      --muted:   #6b7280;
+      --border:  #e5e7eb;
+      --green:   #16a34a;
+      --red:     #dc2626;
+      --yellow:  #d97706;
+      --chip:    #f3f4f6;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg:     #052e16;
+        --bg2:    #0f1f0f;
+        --bg3:    #14532d;
+        --header: #052e16;
+        --accent: #22c55e;
+        --text:   #f9fafb;
+        --muted:  #9ca3af;
+        --border: #1f2f1f;
+        --green:  #22c55e;
+        --red:    #f87171;
+        --yellow: #fbbf24;
+        --chip:   #1a2e1a;
+      }
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100dvh; }
+
+    /* ── Screens ── */
+    .screen { display: none; min-height: 100dvh; }
+    .screen.active { display: flex; flex-direction: column; }
+
+    /* ── Login / Lock ── */
+    #screen-login, #screen-lock {
+      align-items: center; justify-content: center;
+      background: var(--header);
+      padding: calc(40px + env(safe-area-inset-top)) 24px calc(40px + env(safe-area-inset-bottom));
+    }
+    .login-box {
+      background: var(--bg2); border-radius: 20px; padding: 28px 24px;
+      width: 100%; max-width: 360px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.25);
+    }
+    .login-box h1 { font-size: 1.3rem; font-weight: 700; margin-bottom: 6px; color: var(--text); }
+    .login-box p { font-size: 0.875rem; color: var(--muted); margin-bottom: 20px; }
+    .login-box input[type=password] {
+      width: 100%; padding: 12px 14px; border: 1.5px solid var(--border);
+      border-radius: 10px; font-size: 1rem; background: var(--bg);
+      color: var(--text); outline: none; margin-bottom: 12px;
+    }
+    .login-box input:focus { border-color: var(--accent); }
+    .btn-primary {
+      width: 100%; padding: 13px; background: var(--accent); color: #fff;
+      border: none; border-radius: 10px; font-size: 1rem; font-weight: 600;
+      cursor: pointer; transition: opacity .15s;
+    }
+    .btn-primary:active { opacity: .8; }
+    .btn-primary:disabled { opacity: .4; cursor: default; }
+    .btn-biometric {
+      width: 100%; padding: 13px; background: transparent; color: var(--accent);
+      border: 1.5px solid var(--accent); border-radius: 10px; font-size: 1rem;
+      font-weight: 600; cursor: pointer; margin-top: 10px; transition: background .15s;
+    }
+    .btn-biometric:active { background: var(--bg3); }
+    .lock-icon { font-size: 3rem; text-align: center; margin-bottom: 16px; }
+    .err-msg { color: var(--red); font-size: 0.82rem; margin-top: 8px; min-height: 1.1em; }
+
+    /* ── App Header ── */
+    header {
+      background: var(--header); color: #fff;
+      padding: calc(14px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) 14px calc(16px + env(safe-area-inset-left));
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 50;
+    }
+    header h1 { font-size: 1.15rem; font-weight: 700; }
+    #btn-info { background: rgba(255,255,255,.15); border: none; color: #fff; height: 34px; padding: 0 12px; border-radius: 9px; font-size: 13px; font-weight: 600; letter-spacing: .3px; cursor: pointer; transition: background .15s; }
+    #btn-info:active { background: rgba(255,255,255,.3); }
+
+    /* ── Filter-Bar ── */
+    .filter-bar {
+      background: var(--bg2); border-bottom: 1px solid var(--border);
+      padding: 10px calc(12px + env(safe-area-inset-left)) 10px calc(12px + env(safe-area-inset-right));
+      display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+    }
+    .filter-bar select {
+      padding: 6px 10px; border: 1.5px solid var(--border); border-radius: 8px;
+      background: var(--bg); color: var(--text); font-size: 0.85rem; outline: none;
+    }
+    .filter-bar select:focus { border-color: var(--accent); }
+    .filter-stats { margin-left: auto; font-size: 0.78rem; color: var(--muted); white-space: nowrap; }
+
+    /* ── Pull-to-Refresh ── */
+    .ptr {
+      position: fixed; top: -60px; left: 50%; transform: translateX(-50%);
+      background: var(--bg2); border-radius: 20px; padding: 8px 16px;
+      font-size: 0.85rem; color: var(--muted);
+      display: flex; align-items: center; gap: 8px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+      transition: top 0.2s ease; z-index: 100;
+    }
+    .ptr.show { top: calc(env(safe-area-inset-top) + 60px); }
+    .ptr-spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border); border-top-color: var(--accent); animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Liste ── */
+    main {
+      padding: 0 0 calc(60px + env(safe-area-inset-bottom));
+    }
+    .empty-msg { text-align: center; color: var(--muted); padding: 48px 16px; font-size: 0.9rem; }
+    .row {
+      background: var(--bg2); border-bottom: 1px solid var(--border);
+      padding: 12px calc(12px + env(safe-area-inset-right)) 12px calc(12px + env(safe-area-inset-left));
+      display: flex; align-items: flex-start; gap: 10px;
+    }
+    .row.archived { background: var(--bg); }
+    .row-body { flex: 1; min-width: 0; }
+    .row-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 3px; }
+    .row-datum { font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
+    .row-firma { font-size: 0.9rem; font-weight: 600; color: var(--text); }
+    .row-schlagwort { font-size: 0.78rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .row-bottom { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+    .row-betrag { font-size: 0.9rem; font-weight: 700; white-space: nowrap; }
+    .row-betrag.neg { color: var(--red); }
+    .row-betrag.pos { color: var(--green); }
+    .tag {
+      display: inline-block; padding: 1px 7px; border-radius: 6px;
+      font-size: 0.7rem; font-weight: 600; background: var(--bg3); color: var(--accent);
+    }
+    .tag.archived-tag { background: var(--chip); color: var(--muted); }
+    .roga-tag { background: #fef9c3; color: #854d0e; }
+    @media (prefers-color-scheme: dark) {
+      .roga-tag { background: #1f1800; color: var(--yellow); }
+    }
+    .row-actions { display: flex; gap: 6px; align-items: flex-start; padding-top: 2px; }
+    .btn-icon {
+      width: 34px; height: 34px; border-radius: 8px; border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--bg3); color: var(--accent); font-size: 16px;
+      transition: background .15s;
+    }
+    .btn-icon:active { background: var(--border); }
+    .btn-icon svg { width: 17px; height: 17px; stroke: currentColor; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+    /* ── Preview Modal ── */
+    #modal-preview {
+      display: none; position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,.85); flex-direction: column;
+    }
+    #modal-preview.show { display: flex; }
+    .modal-preview-header {
+      background: #111; color: #fff; padding: 12px 16px;
+      padding-top: calc(12px + env(safe-area-inset-top));
+      display: flex; align-items: center; gap: 10px;
+    }
+    .modal-preview-header span { flex: 1; font-size: 0.8rem; color: #ccc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .btn-close-modal { background: rgba(255,255,255,.15); border: none; color: #fff; padding: 6px 14px; border-radius: 8px; font-size: 0.85rem; cursor: pointer; white-space: nowrap; }
+    #preview-iframe { flex: 1; border: none; width: 100%; background: #222; }
+    #preview-notfound { display: none; flex: 1; align-items: center; justify-content: center; color: #ccc; font-size: 0.9rem; text-align: center; padding: 32px; }
+
+    /* ── Verschieben Bottom-Sheet ── */
+    #overlay-verschieben {
+      display: none; position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,.4);
+    }
+    #overlay-verschieben.show { display: flex; align-items: flex-end; }
+    #sheet-verschieben {
+      background: var(--bg2); border-radius: 20px 20px 0 0; width: 100%;
+      max-height: 85vh; display: flex; flex-direction: column;
+      box-shadow: 0 -4px 20px rgba(0,0,0,.2);
+    }
+    .sheet-hd {
+      padding: 14px 16px 10px; display: flex; justify-content: space-between;
+      align-items: center; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .sheet-hd strong { font-size: 1rem; }
+    .btn-sheet-close { background: var(--chip); border: none; border-radius: 16px; padding: 5px 14px; font-size: 13px; cursor: pointer; color: var(--text); }
+    .sheet-body { overflow-y: auto; padding: 16px 16px calc(20px + env(safe-area-inset-bottom)); -webkit-overflow-scrolling: touch; }
+    .sheet-body label { display: block; font-size: 0.82rem; color: var(--muted); margin-bottom: 4px; margin-top: 14px; font-weight: 600; }
+    .sheet-body label:first-child { margin-top: 0; }
+    .sheet-body select, .sheet-body input {
+      width: 100%; padding: 10px 12px; border: 1.5px solid var(--border);
+      border-radius: 10px; font-size: 0.95rem; background: var(--bg);
+      color: var(--text); outline: none;
+    }
+    .sheet-body select:focus, .sheet-body input:focus { border-color: var(--accent); }
+    #btn-do-verschieben { margin-top: 18px; }
+
+    /* ── Info Overlay ── */
+    #info-overlay { display: none; position: fixed; inset: 0; z-index: 300; background: rgba(0,0,0,.4); }
+    #info-overlay.show { display: flex; align-items: flex-end; }
+    #info-sheet { background: var(--bg2); border-radius: 20px 20px 0 0; width: 100%; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 -4px 20px rgba(0,0,0,.15); }
+    #info-sheet-hd { padding: 14px 16px 10px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    #btn-info-close { background: var(--chip); border: none; border-radius: 16px; padding: 5px 14px; font-size: 13px; cursor: pointer; color: var(--text); }
+    #info-sheet-body { overflow-y: auto; padding: 16px 16px calc(20px + env(safe-area-inset-bottom)); -webkit-overflow-scrolling: touch; line-height: 1.6; font-size: 0.9rem; color: var(--muted); }
+    #info-sheet-body p { margin-bottom: 10px; }
+
+    /* ── Scroll-to-Top ── */
+    .back-top { position: fixed; bottom: calc(24px + env(safe-area-inset-bottom)); right: 16px; width: 40px; height: 40px; border-radius: 50%; background: var(--accent); color: #fff; border: none; font-size: 20px; cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,.25); display: none; align-items: center; justify-content: center; z-index: 49; transition: opacity .2s; }
+    .back-top.vis { display: flex; }
+    .back-top:active { opacity: .7; }
+
+    /* ── WebAuthn Banner ── */
+    #banner-webauthn {
+      display: none; background: var(--accent); color: #fff;
+      padding: 14px 16px; font-size: 0.9rem;
+      align-items: center; gap: 10px; flex-wrap: wrap;
+    }
+    #banner-webauthn.show { display: flex; }
+    #banner-webauthn span { flex: 1; }
+    .btn-banner { background: rgba(255,255,255,.25); border: none; color: #fff; padding: 6px 14px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .btn-banner-no { background: transparent; border: none; color: rgba(255,255,255,.7); padding: 6px 10px; font-size: 0.85rem; cursor: pointer; }
+  </style>
+</head>
+<body>
+<div class="ptr" id="ptr"><div class="ptr-spin"></div> Aktualisiere…</div>
+
+<!-- ── Login ── -->
+<div id="screen-login" class="screen active">
+  <div class="login-box">
+    <h1>Rechnungen</h1>
+    <p>Zugangscode eingeben</p>
+    <input type="password" id="login-token" placeholder="Token" autocomplete="current-password">
+    <button class="btn-primary" id="btn-login">Anmelden</button>
+    <div class="err-msg" id="login-err"></div>
+  </div>
+</div>
+
+<!-- ── Lock ── -->
+<div id="screen-lock" class="screen">
+  <div class="login-box">
+    <div class="lock-icon">🔒</div>
+    <h1>Gesperrt</h1>
+    <p>App wurde im Hintergrund gesperrt</p>
+    <button class="btn-biometric" id="btn-unlock-bio" style="display:none">Face ID / Touch ID</button>
+    <input type="password" id="lock-token" placeholder="Token" autocomplete="current-password" style="margin-top:12px">
+    <button class="btn-primary" id="btn-unlock-token" style="margin-top:8px">Entsperren</button>
+    <div class="err-msg" id="lock-err"></div>
+  </div>
+</div>
+
+<!-- ── App ── -->
+<div id="screen-app" class="screen">
+  <header>
+    <h1>Rechnungen</h1>
+    <button id="btn-info" onclick="document.getElementById('info-overlay').classList.add('show')">Info</button>
+  </header>
+
+  <div id="banner-webauthn">
+    <span>Face ID für nächstes Entsperren aktivieren?</span>
+    <button class="btn-banner" id="btn-enable-bio">Aktivieren</button>
+    <button class="btn-banner-no" id="btn-skip-bio">Nein</button>
+  </div>
+
+  <div class="filter-bar">
+    <select id="filter-jahr"></select>
+    <select id="filter-kat">
+      <option value="">Alle Kategorien</option>
+    </select>
+    <span class="filter-stats" id="filter-stats"></span>
+  </div>
+
+  <main id="liste"></main>
+</div>
+
+<!-- ── Preview Modal ── -->
+<div id="modal-preview">
+  <div class="modal-preview-header">
+    <span id="preview-name"></span>
+    <button class="btn-close-modal" onclick="closePreview()">Schließen</button>
+  </div>
+  <div id="preview-notfound">Datei nicht gefunden oder bereits archiviert</div>
+  <iframe id="preview-iframe" src="about:blank" allowfullscreen></iframe>
+</div>
+
+<!-- ── Verschieben Bottom-Sheet ── -->
+<div id="overlay-verschieben" onclick="if(event.target===this)closeVerschieben()">
+  <div id="sheet-verschieben">
+    <div class="sheet-hd">
+      <strong>Archivieren</strong>
+      <button class="btn-sheet-close" onclick="closeVerschieben()">Schließen</button>
+    </div>
+    <div class="sheet-body">
+      <label>Zielordner</label>
+      <select id="sel-typ" onchange="onTypChange()">
+        <option value="steuerberater">Steuerberater</option>
+        <option value="privat">Private Rechnungen</option>
+      </select>
+      <div id="unterordner-wrap">
+        <label>Unterordner</label>
+        <select id="sel-unterordner"></select>
+      </div>
+      <button class="btn-primary" id="btn-do-verschieben" onclick="doVerschieben()">Verschieben</button>
+      <div class="err-msg" id="verschieben-err"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Info Overlay ── -->
+<div id="info-overlay" onclick="if(event.target===this)this.classList.remove('show')">
+  <div id="info-sheet">
+    <div id="info-sheet-hd">
+      <strong>ℹ️ Info</strong>
+      <button id="btn-info-close" onclick="document.getElementById('info-overlay').classList.remove('show')">Schließen</button>
+    </div>
+    <div id="info-sheet-body">
+      <p><strong>Rechnungen-App</strong> – Übersicht aller automatisch erfassten Rechnungen aus dem Scan-Eingang.</p>
+      <p>🔍 <strong>Filter:</strong> Jahr und Steuer-Kategorie kombinierbar.</p>
+      <p>👁️ <strong>Vorschau:</strong> PDF öffnen (4h-Link via Dropbox).</p>
+      <p>📂 <strong>Archivieren:</strong> Datei in Steuerberater-Unterordner oder Private Rechnungen verschieben.</p>
+      <p>📄 Archivierte Dateien werden grau dargestellt und können erneut verschoben werden.</p>
+    </div>
+  </div>
+</div>
+
+<button class="back-top" id="back-top" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+
+<script>
+const API = '/api/rechnungen';
+let _token = '';
+let _rechnungen = [];
+let _zielordner = { steuerberater: [] };
+let _verschiebenRow = null;
+
+// ── Storage ────────────────────────────────────────────────────────────────
+const LS_TOKEN   = 'rechnungen_token';
+const LS_CRED    = 'rechnungen_webauthn_cred';
+const LS_BIO_OK  = 'rechnungen_bio_enabled';
+const LS_NOBIO   = 'rechnungen_bio_declined';
+
+function getToken()  { return localStorage.getItem(LS_TOKEN) || ''; }
+function saveToken(t){ localStorage.setItem(LS_TOKEN, t); _token = t; }
+function getCredId() { return localStorage.getItem(LS_CRED) || ''; }
+function isBioEnabled() { return !!localStorage.getItem(LS_BIO_OK); }
+function isBioDeclined() { return !!localStorage.getItem(LS_NOBIO); }
+
+// ── Screens ────────────────────────────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// ── Init ────────────────────────────────────────────────────────────────────
+async function init() {
+  const t = getToken();
+  if (!t) { showScreen('screen-login'); return; }
+  _token = t;
+  if (isBioEnabled() && getCredId()) {
+    const ok = await tryBiometric(false);
+    if (ok) { await startApp(); return; }
+  }
+  if (isBioEnabled()) {
+    document.getElementById('btn-unlock-bio').style.display = 'block';
+  }
+  showScreen('screen-lock');
+}
+
+// ── Login ──────────────────────────────────────────────────────────────────
+document.getElementById('btn-login').addEventListener('click', doLogin);
+document.getElementById('login-token').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+
+async function doLogin() {
+  const t = document.getElementById('login-token').value.trim();
+  if (!t) return;
+  document.getElementById('btn-login').disabled = true;
+  document.getElementById('login-err').textContent = '';
+  const ok = await checkToken(t);
+  document.getElementById('btn-login').disabled = false;
+  if (!ok) { document.getElementById('login-err').textContent = 'Ungültiger Zugangscode'; return; }
+  saveToken(t);
+  await startApp();
+  if (!isBioDeclined() && !isBioEnabled() && isWebAuthnAvailable()) {
+    document.getElementById('banner-webauthn').classList.add('show');
+  }
+}
+
+async function checkToken(t) {
+  try {
+    const r = await fetch(API + '?limit=1', { headers: { 'Authorization': 'Bearer ' + t } });
+    return r.ok;
+  } catch { return false; }
+}
+
+// ── Lock / Unlock ──────────────────────────────────────────────────────────
+document.getElementById('btn-unlock-bio').addEventListener('click', async () => {
+  const ok = await tryBiometric(true);
+  if (ok) { document.getElementById('lock-err').textContent = ''; await startApp(); }
+  else { document.getElementById('lock-err').textContent = 'Biometrische Authentifizierung fehlgeschlagen'; }
+});
+
+document.getElementById('btn-unlock-token').addEventListener('click', doUnlockToken);
+document.getElementById('lock-token').addEventListener('keydown', e => { if(e.key==='Enter') doUnlockToken(); });
+
+async function doUnlockToken() {
+  const t = document.getElementById('lock-token').value.trim();
+  if (!t) return;
+  document.getElementById('btn-unlock-token').disabled = true;
+  document.getElementById('lock-err').textContent = '';
+  const ok = await checkToken(t);
+  document.getElementById('btn-unlock-token').disabled = false;
+  if (!ok) { document.getElementById('lock-err').textContent = 'Ungültiger Zugangscode'; return; }
+  saveToken(t);
+  await startApp();
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && document.getElementById('screen-app').classList.contains('active')) {
+    showScreen('screen-lock');
+    if (isBioEnabled() && getCredId()) {
+      document.getElementById('btn-unlock-bio').style.display = 'block';
+    }
+    document.getElementById('lock-err').textContent = '';
+    document.getElementById('lock-token').value = '';
+  }
+});
+
+// ── WebAuthn ───────────────────────────────────────────────────────────────
+function isWebAuthnAvailable() {
+  return window.PublicKeyCredential !== undefined &&
+         typeof navigator.credentials?.create === 'function';
+}
+
+function b64ToArr(b64) {
+  return Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+}
+function arrToB64(arr) {
+  return btoa(String.fromCharCode(...new Uint8Array(arr)));
+}
+
+document.getElementById('btn-enable-bio').addEventListener('click', async () => {
+  document.getElementById('banner-webauthn').classList.remove('show');
+  const ok = await registerBiometric();
+  if (!ok) alert('Face ID / Touch ID konnte nicht aktiviert werden.');
+});
+document.getElementById('btn-skip-bio').addEventListener('click', () => {
+  localStorage.setItem(LS_NOBIO, '1');
+  document.getElementById('banner-webauthn').classList.remove('show');
+});
+
+async function registerBiometric() {
+  try {
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    const cred = await navigator.credentials.create({ publicKey: {
+      challenge,
+      rp: { name: 'Rechnungen', id: location.hostname },
+      user: { id: new TextEncoder().encode('josef'), name: 'Josef', displayName: 'Josef' },
+      pubKeyCredParams: [{ alg: -7, type: 'public-key' }, { alg: -257, type: 'public-key' }],
+      authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required' },
+      timeout: 60000,
+      attestation: 'none',
+    }});
+    localStorage.setItem(LS_CRED, arrToB64(cred.rawId));
+    localStorage.setItem(LS_BIO_OK, '1');
+    localStorage.removeItem(LS_NOBIO);
+    return true;
+  } catch { return false; }
+}
+
+async function tryBiometric(showErr) {
+  const credId = getCredId();
+  if (!credId) return false;
+  try {
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    await navigator.credentials.get({ publicKey: {
+      challenge,
+      allowCredentials: [{ id: b64ToArr(credId), type: 'public-key' }],
+      userVerification: 'required',
+      timeout: 60000,
+      rpId: location.hostname,
+    }});
+    return true;
+  } catch { return false; }
+}
+
+// ── App starten ────────────────────────────────────────────────────────────
+async function startApp() {
+  showScreen('screen-app');
+  await Promise.all([loadRechnungen(), loadZielordner()]);
+  buildFilters();
+  renderList();
+}
+
+// ── API ─────────────────────────────────────────────────────────────────────
+function apiHeaders() {
+  return { 'Authorization': 'Bearer ' + _token, 'Content-Type': 'application/json' };
+}
+
+async function loadRechnungen() {
+  try {
+    const r = await fetch(API + '?limit=500', { headers: apiHeaders() });
+    if (!r.ok) return;
+    _rechnungen = await r.json();
+  } catch {}
+}
+
+async function loadZielordner() {
+  try {
+    const r = await fetch(API + '/zielordner', { headers: apiHeaders() });
+    if (r.ok) _zielordner = await r.json();
+  } catch {}
+}
+
+// ── Filter ──────────────────────────────────────────────────────────────────
+const KATEGORIEN = [
+  'Allgemeines','Forst- und Landwirtschaft','Gehaltsabrechnungen',
+  'Haus und Hof','Medikamente-Arzt','Photovoltaik','Private Rechnung',
+  'Steuer und Beratung','Vermietung','Verpachtung','Versicherungen','Werbungskosten',
+];
+
+function buildFilters() {
+  const jahre = [...new Set(_rechnungen.map(r => (r.datum || '').slice(0,4)).filter(Boolean))].sort().reverse();
+  const jSel = document.getElementById('filter-jahr');
+  const curJahr = jSel.value;
+  jSel.innerHTML = '<option value="">Alle Jahre</option>' +
+    jahre.map(j => `<option value="${j}"${j===curJahr||(!curJahr&&j===String(new Date().getFullYear()))?'selected':''}>${j}</option>`).join('');
+
+  const kSel = document.getElementById('filter-kat');
+  const curKat = kSel.value;
+  kSel.innerHTML = '<option value="">Alle Kategorien</option>' +
+    KATEGORIEN.map(k => `<option value="${k}"${k===curKat?'selected':''}>${k}</option>`).join('');
+}
+
+document.getElementById('filter-jahr').addEventListener('change', renderList);
+document.getElementById('filter-kat').addEventListener('change', renderList);
+
+function renderList() {
+  const jahr = document.getElementById('filter-jahr').value;
+  const kat  = document.getElementById('filter-kat').value;
+
+  let rows = _rechnungen;
+  if (jahr) rows = rows.filter(r => (r.datum || '').startsWith(jahr));
+  if (kat)  rows = rows.filter(r => r.steuer_kategorie === kat);
+
+  const summe = rows.reduce((s, r) => s + (r.betrag || 0), 0);
+  const neg   = rows.filter(r => (r.betrag||0) < 0).reduce((s,r) => s + (r.betrag||0), 0);
+  document.getElementById('filter-stats').textContent =
+    `${rows.length} Einträge · ${neg.toFixed(2).replace('.',',')} €`;
+
+  const liste = document.getElementById('liste');
+  if (!rows.length) { liste.innerHTML = '<div class="empty-msg">Keine Rechnungen gefunden</div>'; return; }
+
+  liste.innerHTML = rows.map(r => rowHTML(r)).join('');
+}
+
+function rowHTML(r) {
+  const betragClass = (r.betrag||0) < 0 ? 'neg' : (r.betrag||0) > 0 ? 'pos' : '';
+  const betragText  = r.betrag_raw || (r.betrag != null ? r.betrag.toFixed(2)+'€' : '');
+  const isArchived  = !!r.dropbox_pfad;
+  return `<div class="row${isArchived?' archived':''}" data-id="${r.id}">
+    <div class="row-body">
+      <div class="row-top">
+        <span class="row-datum">${r.datum||'–'}</span>
+        <span class="row-firma">${esc(r.firma||'–')}</span>
+      </div>
+      <div class="row-schlagwort">${esc(r.schlagwort||'')}</div>
+      <div class="row-bottom">
+        ${betragText ? `<span class="row-betrag ${betragClass}">${esc(betragText)}</span>` : ''}
+        ${r.steuer_kategorie ? `<span class="tag">${esc(r.steuer_kategorie)}</span>` : ''}
+        ${r.roga_kuerzel ? `<span class="tag roga-tag">${esc(r.roga_kuerzel)}</span>` : ''}
+        ${isArchived ? '<span class="tag archived-tag">archiviert</span>' : ''}
+      </div>
+    </div>
+    <div class="row-actions">
+      <button class="btn-icon" onclick="openPreview(${r.id})" title="Vorschau">
+        <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+      <button class="btn-icon" onclick="openVerschieben(${r.id})" title="Archivieren">
+        <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      </button>
+    </div>
+  </div>`;
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Preview ─────────────────────────────────────────────────────────────────
+async function openPreview(id) {
+  const modal = document.getElementById('modal-preview');
+  const iframe = document.getElementById('preview-iframe');
+  const nf = document.getElementById('preview-notfound');
+  const row = _rechnungen.find(r => r.id === id);
+  document.getElementById('preview-name').textContent = row ? row.dateiname : '';
+  iframe.src = 'about:blank';
+  iframe.style.display = 'none';
+  nf.style.display = 'none';
+  modal.classList.add('show');
+  try {
+    const r = await fetch(`${API}/${id}/preview`, { headers: apiHeaders() });
+    if (r.status === 404) { nf.style.display = 'flex'; return; }
+    const data = await r.json();
+    if (!data.url) { nf.style.display = 'flex'; return; }
+    iframe.style.display = 'block';
+    iframe.src = data.url;
+  } catch {
+    nf.style.display = 'flex';
+  }
+}
+
+function closePreview() {
+  document.getElementById('modal-preview').classList.remove('show');
+  document.getElementById('preview-iframe').src = 'about:blank';
+}
+
+// ── Verschieben ─────────────────────────────────────────────────────────────
+function openVerschieben(id) {
+  _verschiebenRow = _rechnungen.find(r => r.id === id);
+  if (!_verschiebenRow) return;
+  document.getElementById('verschieben-err').textContent = '';
+  fillUnterordner();
+  document.getElementById('overlay-verschieben').classList.add('show');
+}
+
+function closeVerschieben() {
+  document.getElementById('overlay-verschieben').classList.remove('show');
+  _verschiebenRow = null;
+}
+
+function onTypChange() {
+  const typ = document.getElementById('sel-typ').value;
+  document.getElementById('unterordner-wrap').style.display = typ === 'steuerberater' ? 'block' : 'none';
+}
+
+function fillUnterordner() {
+  const sel = document.getElementById('sel-unterordner');
+  sel.innerHTML = (_zielordner.steuerberater || []).map(u => `<option value="${esc(u)}">${esc(u)}</option>`).join('');
+  onTypChange();
+}
+
+async function doVerschieben() {
+  if (!_verschiebenRow) return;
+  const typ = document.getElementById('sel-typ').value;
+  const unterordner = document.getElementById('sel-unterordner').value || '';
+  const btn = document.getElementById('btn-do-verschieben');
+  btn.disabled = true;
+  document.getElementById('verschieben-err').textContent = '';
+  try {
+    const r = await fetch(`${API}/${_verschiebenRow.id}/verschieben`, {
+      method: 'POST',
+      headers: apiHeaders(),
+      body: JSON.stringify({ typ, unterordner }),
+    });
+    if (!r.ok) {
+      const d = await r.json();
+      document.getElementById('verschieben-err').textContent = d.error || 'Fehler';
+      return;
+    }
+    const data = await r.json();
+    const idx = _rechnungen.findIndex(r => r.id === _verschiebenRow.id);
+    if (idx >= 0) _rechnungen[idx].dropbox_pfad = data.dropbox_pfad;
+    closeVerschieben();
+    renderList();
+  } catch(e) {
+    document.getElementById('verschieben-err').textContent = 'Netzwerkfehler';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── Pull-to-Refresh ──────────────────────────────────────────────────────────
+const ptrEl = document.getElementById('ptr');
+let ptrStartY = 0, ptrActive = false;
+document.addEventListener('touchstart', e => {
+  if (window.scrollY === 0) { ptrStartY = e.touches[0].clientY; ptrActive = true; }
+}, { passive: true });
+document.addEventListener('touchmove', e => {
+  if (!ptrActive) return;
+  if (e.touches[0].clientY - ptrStartY > 50) ptrEl.classList.add('show');
+}, { passive: true });
+document.addEventListener('touchend', async e => {
+  if (!ptrActive) return;
+  const dy = e.changedTouches[0].clientY - ptrStartY;
+  ptrEl.classList.remove('show');
+  ptrActive = false;
+  if (dy > 80) {
+    await loadRechnungen();
+    buildFilters();
+    renderList();
+  }
+}, { passive: true });
+
+// ── Scroll-to-Top ─────────────────────────────────────────────────────────
+window.addEventListener('scroll', () => {
+  document.getElementById('back-top').classList.toggle('vis', window.scrollY > 300);
+});
+
+// ── Service Worker ────────────────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/rechnungen/sw.js', { scope: '/rechnungen/' })
+    .then(reg => {
+      reg.update();
+      reg.addEventListener('updatefound', () => {
+        reg.installing.addEventListener('statechange', function() {
+          if (this.state === 'activated') location.reload();
+        });
+      });
+    });
+}
+
+init();
+</script>
+</body>
+</html>
