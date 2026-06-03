@@ -36,6 +36,31 @@ API_EXPORT_HEADERS  = {
 
 _org_cache: dict[str, str] = {}
 
+# Prompt-Injection-Schutz: Muster die auf eingebettete KI-Instruktionen hindeuten
+_INJECTION_PATTERNS = [
+    r'\[\s*(?:an\s+claude|system|instruction|assistant|human|ignore)\s*:',
+    r'(?:ignore|forget|disregard)\s+(?:all\s+)?(?:previous|prior|above)\s+instructions',
+    r'(?:du\s+bist|you\s+are)\s+(?:jetzt|now)\s+ein',
+    r'f[uü]hre\s+(?:jetzt\s+)?(?:sofort\s+)?aus\s*:',
+    r'execute\s+(?:now|immediately|this)\s*:',
+    r'(?:^|\n)\s*(?:SYSTEM|INSTRUCTION|PROMPT|OVERRIDE)\s*:',
+    r'\$\([^)]+\)',   # Shell-Kommandosubstitution $(...)
+]
+
+
+def _sanitize_text(value: str, field: str = "?") -> str:
+    """Bereinigt externe Texte von Prompt-Injection-Versuchen.
+    Verdächtige Inhalte werden ersetzt und geloggt."""
+    if not value:
+        return value
+    # Länge begrenzen
+    value = value[:300]
+    for pattern in _INJECTION_PATTERNS:
+        if re.search(pattern, value, re.IGNORECASE):
+            _log(f"  ⚠️ Verdächtiger Inhalt ({field}) gefiltert: {value[:80]!r}")
+            value = re.sub(pattern, "[GEFILTERT]", value, flags=re.IGNORECASE)
+    return value
+
 
 def _slugify(name: str) -> str:
     name = name.lower()
@@ -118,10 +143,10 @@ def _parse_api_events(api_events: list[dict], heute: str) -> list[dict]:
         if datum < heute:
             continue
 
-        bezeichnung = (e.get("title") or "").strip()
-        ort         = (e.get("location") or "").strip()
+        bezeichnung = _sanitize_text((e.get("title") or "").strip(), "titel")
+        ort         = _sanitize_text((e.get("location") or "").strip(), "ort")
         org_id      = e.get("organizationId") or ""
-        verein_name = _fetch_org_name(org_id) if org_id else ""
+        verein_name = _sanitize_text(_fetch_org_name(org_id) if org_id else "", "verein")
 
         if bezeichnung:
             events.append({
