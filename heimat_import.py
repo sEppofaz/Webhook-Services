@@ -36,30 +36,93 @@ API_EXPORT_HEADERS  = {
 
 _org_cache: dict[str, str] = {}
 
-# Prompt-Injection-Schutz: Muster die auf eingebettete KI-Instruktionen hindeuten
-_INJECTION_PATTERNS = [
-    r'\[\s*(?:an\s+claude|system|instruction|assistant|human|ignore)\s*:',
-    r'(?:ignore|forget|disregard)\s+(?:all\s+)?(?:previous|prior|above)\s+instructions',
-    r'(?:du\s+bist|you\s+are)\s+(?:jetzt|now)\s+ein',
-    r'f[uü]hre\s+(?:jetzt\s+)?(?:sofort\s+)?aus\s*:',
-    r'execute\s+(?:now|immediately|this)\s*:',
-    r'(?:^|\n)\s*(?:SYSTEM|INSTRUCTION|PROMPT|OVERRIDE)\s*:',
-    r'\$\([^)]+\)',   # Shell-Kommandosubstitution $(...)
+# (pattern, name, erklaerung)
+_INJECTION_PATTERNS: list[tuple[str, str, str]] = [
+    (
+        r'\[\s*(?:an\s+claude|system|instruction|assistant|human|ignore)\s*:',
+        "KI-Direktinstruktion",
+        "Claude würde die eingebetteten Anweisungen als direkte Befehle interpretieren "
+        "und ausführen – z.B. Dateien löschen, SSH-Befehle absetzen oder Daten manipulieren.",
+    ),
+    (
+        r'(?:ignore|forget|disregard)\s+(?:all\s+)?(?:previous|prior|above)\s+instructions',
+        "Instruktions-Override",
+        "Claude würde alle vorherigen Sicherheitsregeln und Systemanweisungen ignorieren "
+        "und könnte beliebige Befehle des Angreifers ausführen.",
+    ),
+    (
+        r'(?:du\s+bist|you\s+are)\s+(?:jetzt|now)\s+ein',
+        "Identitätsübernahme",
+        "Der Angreifer versucht Claudes Rolle neu zu definieren um Sicherheitsbeschränkungen "
+        "zu umgehen und Claude als anderen Assistenten ohne Regeln agieren zu lassen.",
+    ),
+    (
+        r'f[uü]hre\s+(?:jetzt\s+)?(?:sofort\s+)?aus\s*:',
+        "Befehlsaufruf (deutsch)",
+        "Claude würde den direkt angegebenen Befehl ausführen. Je nach Inhalt könnten "
+        "Dateien gelöscht, verändert oder Daten exfiltriert werden.",
+    ),
+    (
+        r'execute\s+(?:now|immediately|this)\s*:',
+        "Befehlsaufruf (englisch)",
+        "Claude würde den direkt angegebenen Befehl ausführen. Je nach Inhalt könnten "
+        "Dateien gelöscht, verändert oder Daten exfiltriert werden.",
+    ),
+    (
+        r'(?:^|\n)\s*(?:SYSTEM|INSTRUCTION|PROMPT|OVERRIDE)\s*:',
+        "System-Override",
+        "Versucht Claudes Systemkonfiguration zu überschreiben und könnte alle "
+        "Sicherheitsmechanismen deaktivieren.",
+    ),
+    (
+        r'\$\([^)]+\)',
+        "Shell-Kommandosubstitution",
+        "Der Ausdruck $(...) würde bei Ausführung in einer Shell beliebige Systembefehle "
+        "starten – ohne Einschränkung auf bestimmte Aktionen.",
+    ),
 ]
 
+# Sammelt Findings während eines Fetch-Laufs; wird nach cmd_import() geleert
+_injection_findings: list[dict] = []
 
-def _sanitize_text(value: str, field: str = "?") -> str:
+
+def _sanitize_text(value: str, field: str = "?", gemeinde: str = "?") -> str:
     """Bereinigt externe Texte von Prompt-Injection-Versuchen.
-    Verdächtige Inhalte werden ersetzt und geloggt."""
+    Verdächtige Inhalte werden ersetzt, geloggt und in _injection_findings gesammelt."""
     if not value:
         return value
-    # Länge begrenzen
-    value = value[:300]
-    for pattern in _INJECTION_PATTERNS:
+    original = value[:300]
+    value    = original
+    for pattern, name, erklaerung in _INJECTION_PATTERNS:
         if re.search(pattern, value, re.IGNORECASE):
-            _log(f"  ⚠️ Verdächtiger Inhalt ({field}) gefiltert: {value[:80]!r}")
+            _log(f"  ⚠️ Prompt-Injection ({field}, {gemeinde}): {original[:80]!r}")
+            _injection_findings.append({
+                "gemeinde":   gemeinde,
+                "feld":       field,
+                "rohtext":    original,
+                "muster":     name,
+                "erklaerung": erklaerung,
+            })
             value = re.sub(pattern, "[GEFILTERT]", value, flags=re.IGNORECASE)
     return value
+
+
+def _notify_injection(token: str, chat_id: str, findings: list[dict]) -> None:
+    """Sendet eine Telegram-Warnung für alle gefundenen Injection-Versuche."""
+    for f in findings:
+        msg = (
+            f"🚨 PROMPT INJECTION ERKANNT\n\n"
+            f"Quelle: heimat-info.de\n"
+            f"Gemeinde: {f['gemeinde']}\n"
+            f"Feld: {f['feld']}\n\n"
+            f"Roher Inhalt:\n\"{f['rohtext'][:200]}\"\n\n"
+            f"Erkanntes Muster: {f['muster']}\n\n"
+            f"Was hätte passieren können:\n{f['erklaerung']}\n\n"
+            f"→ Inhalt wurde gefiltert und neutralisiert.\n"
+            f"→ Event ist importierbar, enthält aber [GEFILTERT]-Markierung."
+        )
+        send_telegram(token, chat_id, msg)
+        _log(f"🚨 Injection-Alert gesendet: {f['muster']} in {f['gemeinde']}/{f['feld']}")
 
 
 def _slugify(name: str) -> str:
@@ -114,7 +177,7 @@ def _fetch_all_events(c_id: str) -> list[dict]:
     return all_events
 
 
-def _parse_api_events(api_events: list[dict], heute: str) -> list[dict]:
+def _parse_api_events(api_events: list[dict], heute: str, gemeinde_name: str = "?") -> list[dict]:
     """Konvertiert Export-API JSON-Events in internes Format."""
     try:
         from zoneinfo import ZoneInfo
@@ -143,10 +206,10 @@ def _parse_api_events(api_events: list[dict], heute: str) -> list[dict]:
         if datum < heute:
             continue
 
-        bezeichnung = _sanitize_text((e.get("title") or "").strip(), "titel")
-        ort         = _sanitize_text((e.get("location") or "").strip(), "ort")
+        bezeichnung = _sanitize_text((e.get("title") or "").strip(), "titel", gemeinde_name)
+        ort         = _sanitize_text((e.get("location") or "").strip(), "ort", gemeinde_name)
         org_id      = e.get("organizationId") or ""
-        verein_name = _sanitize_text(_fetch_org_name(org_id) if org_id else "", "verein")
+        verein_name = _sanitize_text(_fetch_org_name(org_id) if org_id else "", "verein", gemeinde_name)
 
         if bezeichnung:
             events.append({
@@ -411,7 +474,7 @@ def fetch_and_save_pending(gemeinden_filter: list | None = None) -> dict:
         if not api_events:
             fehler.append(g["name"])
             continue
-        events = _parse_api_events(api_events, heute)
+        events = _parse_api_events(api_events, heute, g["name"])
         for e in events:
             veranst          = e.get("_verein_name", "")
             e["_verein_key"] = _slugify(veranst) or g["verein_key"]
@@ -452,6 +515,9 @@ def cmd_import(secrets: dict) -> None:
     chat_id = secrets["CHAT_ID"]
 
     result = fetch_and_save_pending()
+    if _injection_findings:
+        _notify_injection(token, chat_id, _injection_findings)
+        _injection_findings.clear()
     if "error" in result:
         send_telegram(token, chat_id, f"⚠️ {result['error']}")
         return
