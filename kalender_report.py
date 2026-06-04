@@ -129,9 +129,8 @@ def main():
 
     text = (
         f"📊 <b>Vereinskalender</b> · {jetzt}\n\n"
-        f"📅 <b>{stats['datum']}</b> · Aufrufe: <b>{stats['views']}</b> · Besucher: <b>{stats['unique']}</b>\n"
-        f"🇩🇪 Deutschland verifiziert: <b>{stats['de']}</b>\n"
-        f"📆 7 Tage: <b>{stats['views_7d']}</b> Aufrufe · <b>{stats['unique_7d']}</b> Besucher · <b>{stats['de_7d']}</b> DE\n"
+        f"📅 <b>{stats['datum']}</b> · Aufrufe: <b>{stats['views']}</b> · 🇩🇪 <b>{stats['de']}</b> Besucher\n"
+        f"📆 7 Tage: <b>{stats['views_7d']}</b> Aufrufe · 🇩🇪 <b>{stats['de_7d']}</b> Besucher\n"
         f"🏛 Vereine: <b>{gesamt} gesamt</b>, davon <b>{aktiv} mit künftigen Terminen</b>\n"
         f"📥 Letzter Import: <b>{letzter_import}</b>"
     )
