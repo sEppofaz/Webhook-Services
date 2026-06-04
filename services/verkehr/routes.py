@@ -27,6 +27,7 @@ def _get_route(api_key: str, origin: str, destination: str) -> dict:
         "normal_sek": leg["duration"]["value"],
         "traffic_sek": leg["duration_in_traffic"]["value"],
         "dist_m": leg["distance"]["value"],
+        "overview_polyline": data["routes"][0]["overview_polyline"]["points"],
     }
 
 
@@ -49,6 +50,7 @@ def api_verkehr():
             "delta_min": delta,
             "dist_km": round(d["dist_m"] / 1000, 1),
             "ampel": ampel,
+            "overview_polyline": d["overview_polyline"],
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
