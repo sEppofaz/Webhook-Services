@@ -42,6 +42,10 @@ CRAWLER_UA = {
     "gptbot", "claudebot", "anthropic-ai", "openai",
     "netcraft", "internet-measurement", "netsystemsresearch",
     "expanse", "intrinsec", "censysbot",
+    # Verkleidete Bots / Scanner die echte Browser-UAs imitieren
+    "cms-checker",          # CMS-Checker/1.0
+    "meta-externalagent",   # Facebook/Meta neuer Bot-Name
+    "iphone os 13_2",       # Tencent-Cloud-Scanner (18 verschiedene IPs, identischer UA)
 }
 
 
@@ -122,6 +126,8 @@ def collect_day(target: date, max_files: int = 60) -> tuple[int, int, dict[int, 
                 # User-Agent extrahieren und Crawler filtern
                 parts = line.split('"')
                 ua = parts[-2].lower() if len(parts) >= 2 else ""
+                if ua.startswith("user-agent:"):  # malformed Bot-Header
+                    continue
                 if any(kw in ua for kw in CRAWLER_UA):
                     continue
                 dt = _parse_dt(line)
