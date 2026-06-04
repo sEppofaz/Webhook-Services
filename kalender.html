@@ -1578,16 +1578,14 @@ async function loadStats(){
     el.innerHTML=`
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
         <div style="background:var(--card);border:1.5px solid var(--tab);border-radius:12px;padding:16px;text-align:center">
-          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Aufrufe heute</div>
-          <div style="font-size:38px;font-weight:700;color:var(--tab);line-height:1.1">${data.aufrufe_heute}</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:4px">${data.unique_heute} Besucher</div>
-          ${data.unique_heute_de?`<div style="font-size:11px;color:#30d158;margin-top:2px">${data.unique_heute_de} aus 🇩🇪</div>`:''}
+          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">🇩🇪 Besucher heute</div>
+          <div style="font-size:38px;font-weight:700;color:#30d158;line-height:1.1">${data.unique_heute_de||0}</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:4px">${data.aufrufe_heute} Aufrufe</div>
         </div>
         <div style="background:var(--card);border:1.5px solid var(--tab);border-radius:12px;padding:16px;text-align:center">
-          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Aufrufe 7 Tage</div>
-          <div style="font-size:38px;font-weight:700;color:var(--tab);line-height:1.1">${data.aufrufe_7d}</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:4px">${data.unique_7d} Besucher</div>
-          ${data.unique_7d_de?`<div style="font-size:11px;color:#30d158;margin-top:2px">${data.unique_7d_de} aus 🇩🇪</div>`:''}
+          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">🇩🇪 Besucher 7 Tage</div>
+          <div style="font-size:38px;font-weight:700;color:#30d158;line-height:1.1">${data.unique_7d_de||0}</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:4px">${data.aufrufe_7d} Aufrufe</div>
         </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
