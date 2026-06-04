@@ -2,7 +2,7 @@
 
 ## Kerninfos
 
-- **GitHub (Source of Truth):** `https://github.com/sEppofaz/Vereinskalender`
+- **GitHub (Source of Truth):** `https://github.com/sEppofaz/Webhook-Services`
 - **Lokale Arbeitskopie:** `~/Dropbox/Apps/Claude/Vereinskalender/src/` – hier bearbeiten, dann `git push`
 - **Auf Server:** `/opt/rename-webhook/` – zieht per `git pull` von GitHub
 - **Credentials:** ausschließlich in `/etc/pka/secrets.env` (via EnvironmentFile im Service)
@@ -199,6 +199,8 @@ Alle Jobs als `root`-Crontab. Timezone: `Europe/Berlin`. Logs: `/var/log/pka-*.l
 - Liest nginx-Log, zählt anonymisierte Unique-IPs (/24 IPv4, /48 IPv6), schreibt in `page_stats`
 - **Backfill:** `python3 stats_collector.py --backfill 90`
 - **iCal-Feed-Tracking:** `_track_ical_request()` in `services/kalender/routes.py`
+- **Primäre Metrik:** 🇩🇪 Deutschland-Besucher (aus `page_stats_geo`) – sowohl im Telegram-Report als auch in den Stats-Kacheln der Admin-PWA. Gesamt-Besucher (inkl. Bots mit Browser-UA) wird nicht mehr prominent angezeigt.
+- **Bekannte Bot-Muster (2026-06):** Tencent-Cloud-Scanner nutzt iOS-13.2-UA mit ~18 wechselnden IPs/Tag → `CRAWLER_UA` enthält `"iphone os 13_2"`. Auch `cms-checker` und `meta-externalagent` geblockt. Non-DE-Traffic (USA, NL, SE täglich) ist größtenteils automatisiert – kein Handlungsbedarf solange DE-Zahlen plausibel.
 
 ### GeoIP-Herkunftsstatistik
 
