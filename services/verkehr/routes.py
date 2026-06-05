@@ -1,4 +1,5 @@
 import json
+import re
 import urllib.parse
 import urllib.request
 
@@ -7,6 +8,21 @@ from flask import Blueprint, jsonify, request
 from shared.secrets import load_secrets
 
 verkehr_bp = Blueprint("verkehr", __name__)
+
+_LANDMARK_RE = re.compile(r'(?:in\s+[Rr]ichtung|toward)\s+<b>([^<]+)</b>')
+
+
+def _extract_landmarks(steps):
+    seen = set()
+    landmarks = []
+    for step in steps:
+        for name in _LANDMARK_RE.findall(step.get("html_instructions", "")):
+            name = name.strip()
+            if name and name not in seen:
+                seen.add(name)
+                loc = step["start_location"]
+                landmarks.append({"name": name, "lat": loc["lat"], "lng": loc["lng"]})
+    return landmarks
 
 
 def _get_route(api_key: str, origin: str, destination: str) -> dict:
@@ -28,6 +44,7 @@ def _get_route(api_key: str, origin: str, destination: str) -> dict:
         "traffic_sek": leg["duration_in_traffic"]["value"],
         "dist_m": leg["distance"]["value"],
         "overview_polyline": data["routes"][0]["overview_polyline"]["points"],
+        "landmarks": _extract_landmarks(leg["steps"]),
     }
 
 
@@ -51,6 +68,7 @@ def api_verkehr():
             "dist_km": round(d["dist_m"] / 1000, 1),
             "ampel": ampel,
             "overview_polyline": d["overview_polyline"],
+            "landmarks": d["landmarks"],
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
