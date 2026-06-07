@@ -99,11 +99,14 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
 .ev-badge{display:inline-block;font-size:11px;font-weight:600;border-radius:8px;padding:2px 7px;margin-top:5px}
 .fav-star{background:none;border:none;cursor:pointer;font-size:12px;padding:0 1px;filter:grayscale(1) opacity(.5);transition:filter .15s;line-height:1;vertical-align:middle}
 .fav-star.on{filter:none}
-.ev-fav{filter:grayscale(1) opacity(.5);transition:filter .15s}
-.ev-fav.on{filter:none}
+.ev-icon-btn{position:absolute;top:10px;background:none;border:none;cursor:pointer;padding:6px;border-radius:7px;line-height:1;opacity:.55;color:var(--text);transition:opacity .15s,color .15s}
+.ev-icon-btn:active{opacity:1;background:var(--bg3)}
+.ev-cal{right:10px}
+.ev-fav{right:50px}
+.ev-fav.on{opacity:1;color:#ff3b30}
+.ev-fav.on svg path{fill:currentColor}
+.ev-flyer{right:90px}
 .ev-empty{text-align:center;padding:60px 20px;color:var(--text3)}
-.ev-cal{position:absolute;top:10px;right:10px;background:none;border:none;font-size:20px;cursor:pointer;padding:6px;border-radius:7px;line-height:1;opacity:.55;transition:opacity .15s}
-.ev-cal:active{opacity:1;background:var(--bg3)}
 .ev-empty p{font-size:32px;margin-bottom:8px}
 .ev-empty small{font-size:14px}
 
@@ -1043,7 +1046,10 @@ function toggleFavVerein(k,l){
   }
   saveFavorites();
   const isFav=favorites.some(f=>f.type==="verein"&&f.key===k);
-  document.querySelectorAll(`[data-favk="${k}"]`).forEach(s=>{s.textContent="⭐";s.style.filter=isFav?"none":"";s.classList.toggle("on",isFav);});
+  document.querySelectorAll(`[data-favk="${k}"]`).forEach(s=>{
+    if(s.classList.contains("fav-star")){s.textContent="⭐";s.style.filter=isFav?"none":"";}
+    s.classList.toggle("on",isFav);
+  });
   renderFavBar();
   updateAllBadges();
   render();
@@ -1420,11 +1426,14 @@ function render(){
     const sep=t.datum!==_lastDatum?`<div class="ev-date-sep">${fmt(t.datum)}</div>`:"";
     _lastDatum=t.datum;
     const isPast=t.datum===todayStr&&!!t.uhrzeit&&(()=>{const[hh,mm]=(t.uhrzeit).split(":").map(Number);return hh*60+mm<nowMin;})();
+    const flyerBtn=t.flyer_url?`<button class="ev-icon-btn ev-flyer js-ev-flyer-btn" data-flyer-url="${escHtml(t.flyer_url)}" title="Flyer öffnen"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></button>`:"";
+    const titlePadding=t.flyer_url?"114px":"74px";
     return sep+`<div class="ev-card${isPast?" ev-card--past":""}" style="border-left-color:${col}">
-      <button class="ev-cal" onclick="exportICS(${idx})" title="Zum Kalender hinzufügen">&#128197;</button>
-      <button class="ev-fav js-ev-fav-btn${isFav?' on':''}" data-favk="${escHtml(t.verein)}" data-fav-key="${escHtml(t.verein)}" data-fav-label="${escHtml(labels[t.verein]||t.verein)}" title="Verein als Favorit" style="position:absolute;top:10px;right:50px;background:none;border:none;font-size:15px;cursor:pointer;padding:4px;line-height:1">⭐</button>
+      <button class="ev-icon-btn ev-cal" onclick="exportICS(${idx})" title="Zum Kalender hinzufügen"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M12 14v4"/><path d="M10 16h4"/></svg></button>
+      <button class="ev-icon-btn ev-fav js-ev-fav-btn${isFav?' on':''}" data-favk="${escHtml(t.verein)}" data-fav-key="${escHtml(t.verein)}" data-fav-label="${escHtml(labels[t.verein]||t.verein)}" title="Verein als Favorit"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button>
+      ${flyerBtn}
       ${uz?`<div class="ev-date">&#128336; ${uz}</div>`:""}
-      <div class="ev-title" style="padding-right:74px">${escHtml(t.bezeichnung)}</div>
+      <div class="ev-title" style="padding-right:${titlePadding}">${escHtml(t.bezeichnung)}</div>
       ${ort}${badge}
     </div>`;
   }).join("")+
@@ -1607,14 +1616,18 @@ document.addEventListener("click",e=>{
     document.getElementById("srch-dropdown").classList.remove("open");
 });
 
-/* ── Event-Delegation: Favoriten-Button auf Terminkarren ── */
+/* ── Event-Delegation: Favoriten- und Flyer-Button auf Terminkarren ── */
 document.addEventListener("click",e=>{
-  const btn=e.target.closest(".js-ev-fav-btn");
-  if(btn){
-    toggleFavVerein(btn.dataset.favKey,btn.dataset.favLabel);
-    const isFavNow=favorites.some(f=>f.type==="verein"&&f.key===btn.dataset.favKey);
-    btn.classList.toggle("on",isFavNow);
-    btn.style.filter=isFavNow?"none":"";
+  const favBtn=e.target.closest(".js-ev-fav-btn");
+  if(favBtn){
+    toggleFavVerein(favBtn.dataset.favKey,favBtn.dataset.favLabel);
+    const isFavNow=favorites.some(f=>f.type==="verein"&&f.key===favBtn.dataset.favKey);
+    favBtn.classList.toggle("on",isFavNow);
+    return;
+  }
+  const flyerBtn=e.target.closest(".js-ev-flyer-btn");
+  if(flyerBtn){
+    window.open(flyerBtn.dataset.flyerUrl,"_blank","noopener");
   }
 });
 

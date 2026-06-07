@@ -14,6 +14,7 @@ from shared.kalender_core import (
     VEREINSTERMINE_FILE, _HEIC_SUPPORTED, _do_save_import,
     cleanup_stale_pending, import_pdf_bytes, lookup_plz, parse_excel_bytes,
 )
+from shared.flyer_store import upload_flyer, delete_flyer
 from shared.csrf import csrf_field, get_csrf_token, validate_csrf
 from shared.vk_db import (
     db_conn, get_session_user, log_audit,
@@ -177,35 +178,47 @@ def termin_neu(user):
         elif not re.match(r"^\d{4}-\d{2}-\d{2}$", datum):
             error = "Datum muss im Format YYYY-MM-DD sein."
         else:
-            termin_id = str(uuid.uuid4())[:8]
-            neuer_termin = {
-                "id": termin_id,
-                "datum": datum,
-                "uhrzeit": uhrzeit,
-                "bezeichnung": bezeichnung,
-                "ort": ort,
-                "erstellt_von": user["email"],
-                "erstellt_am": datetime.utcnow().isoformat()[:19],
-            }
-            verein_key = user["verein_key"]
+            flyer_url = ""
+            flyer_path = ""
+            flyer_file = request.files.get("flyer")
+            if flyer_file and flyer_file.filename:
+                try:
+                    flyer_url, flyer_path = upload_flyer(flyer_file.read())
+                except ValueError as e:
+                    error = str(e)
+            if not error:
+                termin_id = str(uuid.uuid4())[:8]
+                neuer_termin = {
+                    "id": termin_id,
+                    "datum": datum,
+                    "uhrzeit": uhrzeit,
+                    "bezeichnung": bezeichnung,
+                    "ort": ort,
+                    "erstellt_von": user["email"],
+                    "erstellt_am": datetime.utcnow().isoformat()[:19],
+                }
+                if flyer_url:
+                    neuer_termin["flyer_url"] = flyer_url
+                    neuer_termin["flyer_path"] = flyer_path
+                verein_key = user["verein_key"]
 
-            def updater(data):
-                if verein_key not in data:
-                    data[verein_key] = []
-                    data["_labels"] = data.get("_labels", {})
-                    data["_labels"][verein_key] = user["verein_name"]
-                data[verein_key].append(neuer_termin)
-                data.setdefault("_meta", {}).setdefault(verein_key, {})["selbstverwaltung"] = True
-                return data
+                def updater(data):
+                    if verein_key not in data:
+                        data[verein_key] = []
+                        data["_labels"] = data.get("_labels", {})
+                        data["_labels"][verein_key] = user["verein_name"]
+                    data[verein_key].append(neuer_termin)
+                    data.setdefault("_meta", {}).setdefault(verein_key, {})["selbstverwaltung"] = True
+                    return data
 
-            KalenderStore.update(updater)
-            log_audit("erstellt", termin_id, verein_key, user["id"])
-            return redirect("/verein/dashboard")
+                KalenderStore.update(updater)
+                log_audit("erstellt", termin_id, verein_key, user["id"])
+                return redirect("/verein/dashboard")
 
     tok = get_csrf_token()
     form = f"""
 {'<p class="err">'+error+'</p>' if error else ''}
-<form method="post" autocomplete="off">
+<form method="post" enctype="multipart/form-data" autocomplete="off">
   {csrf_field(tok)}
   <label>Datum *</label>
   <input name="datum" type="date" required value="{date.today().isoformat()}">
@@ -215,6 +228,8 @@ def termin_neu(user):
   <input name="bezeichnung" type="text" required placeholder="z.B. Jahreshauptversammlung">
   <label>Ort / Veranstaltungsort</label>
   <input name="ort" type="text" placeholder="z.B. Gasthaus zur Post">
+  <label>Flyer (optional, PDF/JPG/PNG/WebP, max. 8 MB)</label>
+  <input name="flyer" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp">
   <button class="btn" type="submit">Termin speichern</button>
 </form>
 {_BACK_DASH}"""
@@ -252,12 +267,35 @@ def termin_edit(user, termin_id):
             KalenderStore.update(del_updater)
             log_audit("geloescht", termin_id, verein_key, user["id"])
             return redirect("/verein/dashboard")
+        elif aktion == "flyer_entfernen":
+            alter_pfad = termin.get("flyer_path", "")
+            if alter_pfad:
+                delete_flyer(alter_pfad)
+            def flyer_del_updater(d):
+                for t in d.get(verein_key, []):
+                    if t.get("id") == termin_id:
+                        t.pop("flyer_url", None)
+                        t.pop("flyer_path", None)
+                return d
+            KalenderStore.update(flyer_del_updater)
+            log_audit("flyer_entfernt", termin_id, verein_key, user["id"])
+            return redirect(f"/verein/termine/{termin_id}")
         else:
             datum = request.form.get("datum", "").strip()
             uhrzeit = request.form.get("uhrzeit", "").strip()
             bezeichnung = request.form.get("bezeichnung", "").strip()
             ort = request.form.get("ort", "").strip()
-            if datum and bezeichnung and re.match(r"^\d{4}-\d{2}-\d{2}$", datum):
+            edit_error = ""
+            new_flyer_url = ""
+            new_flyer_path = ""
+            flyer_file = request.files.get("flyer")
+            if flyer_file and flyer_file.filename:
+                try:
+                    new_flyer_url, new_flyer_path = upload_flyer(flyer_file.read())
+                except ValueError as e:
+                    edit_error = str(e)
+            if not edit_error and datum and bezeichnung and re.match(r"^\d{4}-\d{2}-\d{2}$", datum):
+                alter_pfad = termin.get("flyer_path", "") if new_flyer_url else ""
                 def edit_updater(d):
                     for t in d.get(verein_key, []):
                         if t.get("id") == termin_id:
@@ -267,14 +305,32 @@ def termin_edit(user, termin_id):
                             t["ort"] = ort
                             t["geaendert_von"] = user["email"]
                             t["geaendert_am"] = datetime.utcnow().isoformat()[:19]
+                            if new_flyer_url:
+                                t["flyer_url"] = new_flyer_url
+                                t["flyer_path"] = new_flyer_path
                     return d
                 KalenderStore.update(edit_updater)
+                if alter_pfad:
+                    delete_flyer(alter_pfad)
                 log_audit("geaendert", termin_id, verein_key, user["id"])
                 return redirect("/verein/dashboard")
 
     tok = get_csrf_token()
+    flyer_url = termin.get("flyer_url", "")
+    flyer_section = ""
+    if flyer_url:
+        flyer_section = f"""<div style="margin-bottom:.75rem">
+  <label>Aktueller Flyer</label>
+  <div style="display:flex;gap:8px;align-items:center">
+    <a href="{html.escape(flyer_url)}" target="_blank" rel="noopener" class="btn btn-sec" style="font-size:13px">Flyer öffnen</a>
+    <form method="post" style="margin:0" onsubmit="return confirm('Flyer wirklich entfernen?')">
+      {csrf_field(tok)}
+      <button class="btn btn-danger" type="submit" name="aktion" value="flyer_entfernen" style="font-size:13px">Entfernen</button>
+    </form>
+  </div>
+</div>"""
     form = f"""
-<form method="post">
+<form method="post" enctype="multipart/form-data">
   {csrf_field(tok)}
   <label>Datum</label>
   <input name="datum" type="date" required value="{termin.get('datum','')}">
@@ -284,6 +340,9 @@ def termin_edit(user, termin_id):
   <input name="bezeichnung" type="text" required value="{termin.get('bezeichnung','')}">
   <label>Ort</label>
   <input name="ort" type="text" value="{termin.get('ort','')}">
+  {flyer_section}
+  <label>{'Flyer ersetzen' if flyer_url else 'Flyer hochladen'} (PDF/JPG/PNG/WebP, max. 8 MB)</label>
+  <input name="flyer" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp">
   <button class="btn" type="submit" name="aktion" value="speichern">Änderungen speichern</button>
 </form>
 <hr>
