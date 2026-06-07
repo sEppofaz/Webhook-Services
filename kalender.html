@@ -139,6 +139,14 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
 .back-top.vis{display:flex}
 .back-top:active{opacity:.7}
 
+/* ── Skeleton Loader ── */
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.sk-line{border-radius:4px;background:linear-gradient(90deg,var(--bg3) 25%,var(--bg2) 50%,var(--bg3) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite}
+.sk-date{height:.85em;width:40%;margin-bottom:8px}
+.sk-title{height:1.1em;width:75%;margin-bottom:6px}
+.sk-ort{height:.8em;width:35%}
+.sk-card{border-left-color:var(--bg3)!important;pointer-events:none}
+
 /* ── Disclaimer ── */
 .disclaimer{font-size:11px;color:var(--text3);text-align:center;padding:6px 16px 20px;line-height:1.6}
 
@@ -240,7 +248,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
 </header>
 
 <div id="welcome-banner" style="display:none;background:var(--hdr);color:#fff;padding:10px 16px 12px;font-size:13px;line-height:1.5;position:relative">
-  Alle Vereins- und Veranstaltungstermine deiner Region &ndash; kostenlos und werbefrei.
+  Alle Vereins- und Veranstaltungstermine unserer Region &ndash; kostenlos und werbefrei.
   Fehlt dein Verein? Einfach <a href="/verein/register" style="color:#fff;font-weight:600;text-decoration:underline">registrieren</a> und Termine selbst pflegen.
   <button onclick="dismissWelcome()" style="position:absolute;top:8px;right:12px;background:none;border:none;color:rgba(255,255,255,.7);font-size:20px;cursor:pointer;line-height:1;padding:0">&times;</button>
 </div>
@@ -347,7 +355,11 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
     <p class="disclaimer" style="margin-bottom:10px">Alle Angaben ohne Gew&#228;hr. Ma&#223;geblich sind die offiziellen Ank&#252;ndigungen der jeweiligen Vereine.<br>&#9888;&#65039; <strong>Beta-Version</strong> &ndash; Diese Seite befindet sich noch im Aufbau. Es k&#246;nnen Fehler und unvollst&#228;ndige Daten auftreten.</p>
 
     <div class="ev-list" id="ev-list">
-      <div class="ev-empty"><p>&#128197;</p><small>Lade Termine&#8230;</small></div>
+      <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title"></div><div class="sk-line sk-ort"></div></div>
+      <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title" style="width:60%"></div><div class="sk-line sk-ort" style="width:25%"></div></div>
+      <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title" style="width:85%"></div><div class="sk-line sk-ort" style="width:45%"></div></div>
+      <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title" style="width:55%"></div><div class="sk-line sk-ort"></div></div>
+      <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title"></div><div class="sk-line sk-ort" style="width:30%"></div></div>
     </div>
     <p class="version">Vereinskalender &middot; v1.8</p>
     <p style="font-size:11px;color:var(--text3);text-align:center;padding:0 0 24px;line-height:2">&#127807; Hosting in Finnland mit &Ouml;kostrom &middot; Werbefrei &middot; DSGVO-konform</p>
