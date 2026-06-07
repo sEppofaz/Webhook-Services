@@ -1121,7 +1121,7 @@ function renderFavBar(){
     const on=activeFavs.has(id);
     const key=String(f.key).replace(/"/g,"&quot;").replace(/'/g,"&#39;");
     const rmBtn=`<span onclick="event.stopPropagation();removeFavorite('${f.type}','${key}')" style="margin-left:4px;opacity:.55;font-size:11px;line-height:1">✕</span>`;
-    return `<span class="chip${on?" on":""}" data-ftype="${f.type}" data-fkey="${key}">${escHtml(f.icon||"")} ${escHtml(f.label)}${rmBtn}</span>`;
+    return `<span class="chip${on?" on":""}" data-ftype="${f.type}" data-fkey="${key}">${f.icon||""} ${escHtml(f.label)}${rmBtn}</span>`;
   }).join("");
 }
 
