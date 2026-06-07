@@ -77,6 +77,9 @@ hr{border:none;border-top:1px solid #3a3a3c;margin:1.5rem 0}
 .chk label{margin:0;font-size:.9rem;color:#f2f2f7}
 .field-err{border-color:#ff453a!important;outline:none!important}
 .chk.field-err{outline:1.5px solid #ff453a!important;border-radius:.5rem;padding:.5rem}
+.pw-wrap{position:relative}
+.pw-wrap input{padding-right:2.8rem}
+.pw-toggle{position:absolute;right:.6rem;top:50%;transform:translateY(-50%);background:none;border:none;color:#8e8e93;cursor:pointer;padding:.25rem;display:flex;align-items:center;line-height:1}
 </style>
 """
 
@@ -260,9 +263,15 @@ Danach prüft der Administrator deine Anfrage (in der Regel innerhalb eines Tage
   <label>Telefon Ansprechpartner</label>
   <input name="telefon" type="tel" required autocomplete="tel" placeholder="z.B. 0172 1234567" value="{html.escape(form_data.get('telefon', ''))}">
   <label>Passwort <span class="hint">(mind. 8 Zeichen)</span></label>
-  <input name="password" type="password" required autocomplete="new-password">
+  <div class="pw-wrap">
+    <input name="password" type="password" required autocomplete="new-password">
+    <button type="button" class="pw-toggle" onclick="togglePw(this)" tabindex="-1" aria-label="Passwort anzeigen"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button>
+  </div>
   <label>Passwort wiederholen</label>
-  <input name="password2" type="password" required autocomplete="new-password">
+  <div class="pw-wrap">
+    <input name="password2" type="password" required autocomplete="new-password">
+    <button type="button" class="pw-toggle" onclick="togglePw(this)" tabindex="-1" aria-label="Passwort anzeigen"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button>
+  </div>
   <div class="chk">
     <input type="checkbox" name="selbstverpflichtung" id="sv">
     <label for="sv">Ich bestätige, dass ich befugter Vertreter des genannten Vereins bin (gewählter Vorstand oder schriftlich bevollmächtigtes Mitglied) und berechtigt bin, im Namen des Vereins Termine zu veröffentlichen. Ich übernehme die Verantwortung für die Richtigkeit der eingetragenen Daten.</label>
@@ -288,6 +297,14 @@ document.querySelector('form').addEventListener('submit',function(e){{
   if(sv&&!sv.checked){{sv.closest('.chk').classList.add('field-err');if(!first)first=sv;}}
   if(first){{e.preventDefault();first.scrollIntoView({{behavior:'smooth',block:'center'}});first.focus();}}
 }});
+function togglePw(btn){{
+  const inp=btn.closest('.pw-wrap').querySelector('input');
+  const show=inp.type==='password';
+  inp.type=show?'text':'password';
+  const eye='<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>';
+  const eyeOff='<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+  btn.innerHTML=show?eyeOff:eye;
+}}
 </script>"""
     return _page("Verein registrieren", form)
 
