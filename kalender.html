@@ -67,7 +67,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
 .f-toggle{width:100%;background:none;border:none;padding:12px 14px;display:flex;align-items:center;justify-content:flex-start;gap:8px;cursor:pointer;color:var(--text);font-size:14px;font-weight:500;text-align:left}
 .f-name{display:flex;align-items:center;gap:8px}
 .f-badge{font-size:12px;font-weight:600;color:var(--tab)}
-.f-arrow{font-size:10px;color:var(--tab);transition:transform .2s;flex-shrink:0}
+.f-arrow{color:var(--tab);transition:transform .2s;flex-shrink:0;display:flex;align-items:center}
 .f-arrow.open{transform:rotate(90deg)}
 .f-content{display:none;padding:0 14px 13px}
 .f-content.open{display:block}
@@ -164,7 +164,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
 .srch-wrap{padding:10px 14px 6px;position:relative}
 .srch-input{width:100%;padding:8px 34px 8px 34px;border:1.5px solid var(--border2);border-radius:10px;font-size:14px;background:var(--bg);color:var(--text);outline:none;-webkit-appearance:none}
 .srch-input::placeholder{color:var(--text3)}
-.srch-icon-abs{position:absolute;left:24px;top:17px;font-size:15px;pointer-events:none;color:var(--text3)}
+.srch-icon-abs{position:absolute;left:24px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--text3);display:flex;align-items:center}
 .srch-clear{position:absolute;right:18px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text3);font-size:16px;line-height:1;padding:4px;cursor:pointer;display:none;border-radius:50%;width:24px;height:24px;align-items:center;justify-content:center}
 .srch-clear:hover{color:var(--text);background:var(--bg2)}
 .srch-dropdown{position:fixed;background:var(--card);border:1px solid var(--border2);border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.18);z-index:1000;max-height:220px;overflow-y:auto;-webkit-overflow-scrolling:touch;display:none}
@@ -242,8 +242,8 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
       <span style="font-size:9px;color:rgba(255,255,255,.28);letter-spacing:.2px;line-height:1">a sEpp-App</span>
     </div>
     <button class="refresh-btn" onclick="showInfoModal()" title="Info" style="font-size:13px;font-weight:600;letter-spacing:.3px">Info</button>
-    <button class="refresh-btn" id="admin-import-btn" onclick="toggleImport()" title="Import" style="display:none">&#128229;</button>
-    <a class="refresh-btn" id="verein-admin-btn" href="/verein/dashboard" title="Mein Verein" style="display:none;text-decoration:none">&#9998;</a>
+    <button class="refresh-btn" id="admin-import-btn" onclick="toggleImport()" title="Import" style="display:none"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
+    <a class="refresh-btn" id="verein-admin-btn" href="/verein/dashboard" title="Mein Verein" style="display:none;text-decoration:none"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></a>
   </div>
 </header>
 
@@ -261,7 +261,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
     <div class="filter-card">
       <div class="filter-hdr" id="filter-hdr" onclick="toggleFilterCard()" style="cursor:pointer">
         <span class="filter-title" style="display:flex;align-items:center;gap:8px">
-          <span id="fc-arrow" style="font-size:13px;color:var(--tab);transition:transform .2s;display:inline-block">&#9654;</span>
+          <span id="fc-arrow" style="font-size:13px;color:var(--tab);transition:transform .2s;display:inline-block"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:block"><polyline points="9 18 15 12 9 6"/></svg></span>
           Filter
         </span>
         <button class="reset-btn" id="reset-btn" onclick="event.stopPropagation();resetAll()" style="display:none">&#10005; Zur&#252;cksetzen</button>
@@ -269,7 +269,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
       <!-- Suche: immer sichtbar -->
       <div id="srch-section" style="border-bottom:.5px solid var(--border)">
         <div class="srch-wrap">
-          <span class="srch-icon-abs">&#128269;</span>
+          <span class="srch-icon-abs"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span>
           <input class="srch-input" id="srch-input" type="search"
                  placeholder="Verein oder Ort suchen&#8230;"
                  oninput="onSearchInput(this.value)"
@@ -287,7 +287,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
       <!-- Zeitraum -->
       <div class="f-section">
         <button class="f-toggle" onclick="toggleSection('zeit')">
-          <span class="f-arrow" id="zeit-arrow">&#9654;</span>
+          <span class="f-arrow" id="zeit-arrow"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:block"><polyline points="9 18 15 12 9 6"/></svg></span>
           <span class="f-name">Zeitraum <span class="f-badge" id="zeit-badge">K&#252;nftig</span></span>
         </button>
         <div class="f-content" id="zeit-content">
@@ -304,7 +304,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
       <!-- Landkreis/Region (dynamisch) -->
       <div class="f-section" id="lk-section" style="display:none">
         <button class="f-toggle" onclick="toggleSection('lk')">
-          <span class="f-arrow" id="lk-arrow">&#9654;</span>
+          <span class="f-arrow" id="lk-arrow"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:block"><polyline points="9 18 15 12 9 6"/></svg></span>
           <span class="f-name">Region <span class="f-badge" id="lk-badge">Alle</span></span>
         </button>
         <div class="f-content" id="lk-content">
@@ -315,7 +315,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
       <!-- Gemeinde (dynamisch) -->
       <div class="f-section" id="gem-section" style="display:none">
         <button class="f-toggle" onclick="toggleSection('gem')">
-          <span class="f-arrow" id="gem-arrow">&#9654;</span>
+          <span class="f-arrow" id="gem-arrow"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:block"><polyline points="9 18 15 12 9 6"/></svg></span>
           <span class="f-name">Gemeinde <span class="f-badge" id="gem-badge">Alle</span></span>
         </button>
         <div class="f-content" id="gem-content">
@@ -326,7 +326,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
       <!-- Ortschaft (dynamisch) -->
       <div class="f-section" id="ort-section" style="display:none">
         <button class="f-toggle" onclick="toggleSection('ort')">
-          <span class="f-arrow" id="ort-arrow">&#9654;</span>
+          <span class="f-arrow" id="ort-arrow"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:block"><polyline points="9 18 15 12 9 6"/></svg></span>
           <span class="f-name">Ortschaft <span class="f-badge" id="ort-badge">Alle</span></span>
         </button>
         <div class="f-content" id="ort-content">
@@ -337,7 +337,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
       <!-- Verein -->
       <div class="f-section">
         <button class="f-toggle" onclick="toggleSection('ver')">
-          <span class="f-arrow" id="ver-arrow">&#9654;</span>
+          <span class="f-arrow" id="ver-arrow"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:block"><polyline points="9 18 15 12 9 6"/></svg></span>
           <span class="f-name">Verein <span class="f-badge" id="ver-badge">Alle</span></span>
         </button>
         <div class="f-content" id="ver-content">
@@ -347,7 +347,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
       </div>
 
       <div style="padding:8px 14px;text-align:center;border-top:.5px solid var(--border)">
-        <button onclick="toggleFilterCard()" style="background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:4px 16px;border-radius:8px">&#9650; einklappen</button>
+        <button onclick="toggleFilterCard()" style="background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:4px 16px;border-radius:8px;display:inline-flex;align-items:center;gap:4px"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg> einklappen</button>
       </div>
       </div><!-- filter-body -->
     </div>
