@@ -185,8 +185,10 @@ def register():
             error = "Bitte eine gültige Rubrik auswählen."
         elif not heimatort or len(heimatort) < 2:
             error = "Bitte den Heimatort des Vereins angeben."
-        elif plz and not re.match(r"^\d{5}$", plz):
+        elif not plz or not re.match(r"^\d{5}$", plz):
             error = "PLZ muss 5 Ziffern haben (z.B. 83308)."
+        elif not telefon:
+            error = "Bitte eine Telefonnummer für Rückfragen angeben."
         elif len(pw) < 8:
             error = "Passwort muss mindestens 8 Zeichen haben."
         elif pw != pw2:
@@ -195,10 +197,9 @@ def register():
             error = "Bitte die Selbstverpflichtungserklärung bestätigen."
         else:
             gemeinde = landkreis = ""
-            if plz:
-                geo = lookup_plz(plz)
-                gemeinde  = geo.get("gemeinde", "")
-                landkreis = geo.get("landkreis", "")
+            geo = lookup_plz(plz)
+            gemeinde  = geo.get("gemeinde", "")
+            landkreis = geo.get("landkreis", "")
             with db_conn() as conn:
                 verein_row = conn.execute(
                     """INSERT INTO vereine_accounts
@@ -250,12 +251,12 @@ Danach prüft der Administrator deine Anfrage (in der Regel innerhalb eines Tage
   </select>
   <label>Heimatort</label>
   <input name="heimatort" type="text" required placeholder="z.B. Musterdorf" value="{html.escape(form_data.get('heimatort', ''))}">
-  <label>PLZ <span class="hint">(optional – für automatische Ortszuordnung)</span></label>
-  <input name="plz" type="text" inputmode="numeric" maxlength="5" placeholder="z.B. 83308" value="{html.escape(form_data.get('plz', ''))}">
+  <label>PLZ</label>
+  <input name="plz" type="text" inputmode="numeric" maxlength="5" required placeholder="z.B. 83308" value="{html.escape(form_data.get('plz', ''))}">
   <label>E-Mail (Ansprechpartner)</label>
   <input name="email" type="text" inputmode="email" autocorrect="off" autocapitalize="none" required autocomplete="email" placeholder="vorstand@beispiel.de" value="{html.escape(form_data.get('email', ''))}">
-  <label>Telefon Ansprechpartner <span class="hint">(optional – für Rückfragen bei der Freigabe)</span></label>
-  <input name="telefon" type="tel" autocomplete="tel" placeholder="z.B. 0172 1234567" value="{html.escape(form_data.get('telefon', ''))}">
+  <label>Telefon Ansprechpartner</label>
+  <input name="telefon" type="tel" required autocomplete="tel" placeholder="z.B. 0172 1234567" value="{html.escape(form_data.get('telefon', ''))}">
   <label>Passwort <span class="hint">(mind. 8 Zeichen)</span></label>
   <input name="password" type="password" required autocomplete="new-password">
   <label>Passwort wiederholen</label>

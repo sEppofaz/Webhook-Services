@@ -1432,7 +1432,11 @@ function render(){
   // Scroll zum ersten nicht-vergangenen Termin (nur beim initialen Render des heutigen Tages)
   requestAnimationFrame(()=>{
     const firstComing=el.querySelector('.ev-card:not(.ev-card--past)');
-    if(firstComing)firstComing.scrollIntoView({behavior:'instant',block:'start'});
+    if(firstComing){
+      let sep=firstComing.previousElementSibling;
+      while(sep&&!sep.classList.contains('ev-date-sep'))sep=sep.previousElementSibling;
+      (sep||firstComing).scrollIntoView({behavior:'instant',block:'start'});
+    }
   });
   saveState();
 }
