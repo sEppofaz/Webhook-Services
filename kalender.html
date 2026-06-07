@@ -139,6 +139,11 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
 .back-top.vis{display:flex}
 .back-top:active{opacity:.7}
 
+/* ── Active Filter Pills ── */
+.act-pill{display:inline-flex;align-items:center;gap:4px;background:var(--accent);color:#fff;border-radius:16px;padding:4px 8px 4px 10px;font-size:12px;font-weight:500;cursor:pointer;user-select:none;transition:opacity .15s}
+.act-pill:active{opacity:.7}
+.act-pill-x{opacity:.75;font-size:14px;line-height:1}
+
 /* ── Skeleton Loader ── */
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .sk-line{border-radius:4px;background:linear-gradient(90deg,var(--bg3) 25%,var(--bg2) 50%,var(--bg3) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite}
@@ -283,6 +288,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
         </div>
         <div class="srch-chips" id="srch-chips" style="display:none"></div>
       </div>
+      <div id="active-pills" style="display:none;flex-wrap:wrap;gap:6px;padding:6px 14px;border-bottom:.5px solid var(--border)"></div>
       <div id="fav-bar" style="display:none;flex-wrap:wrap;gap:6px;padding:8px 14px 6px;border-bottom:.5px solid var(--border)"></div>
       <div id="rubrik-bar" class="rubrik-bar" style="display:none"></div>
       <div id="filter-body" style="display:none">
@@ -573,7 +579,7 @@ const ZEIT_LBL={"zukunft":"Künftig","30":"30 Tage","90":"3 Monate","365":"1 Jah
 
 let allT=[],labels={},colors={},meta={},allOrteAll={},rubriken={};
 let zeitraum="zukunft",aktOrte=new Set(),aktVereine=new Set(),aktLandkreis=null,aktGemeinden=new Set(),ready=false;
-let searchChips=[],srchResults=[];
+let searchChips=[],srchResults=[],_activePillActions=[];
 const secOpen={zeit:false,lk:false,gem:false,ort:false,ver:false,hlp:false};
 const FAV_KEY="vk_favorites";
 const ACTIVE_FAV_KEY="vk_active_favs";
@@ -699,6 +705,10 @@ async function load(){
   document.getElementById("fav-bar").addEventListener("click",e=>{
     const c=e.target.closest("[data-ftype]");
     if(c)toggleFavChip(c.dataset.ftype,c.dataset.fkey);
+  });
+  document.getElementById("active-pills").addEventListener("click",e=>{
+    const p=e.target.closest("[data-pi]");
+    if(p){const fn=_activePillActions[parseInt(p.dataset.pi)];if(fn)fn();}
   });
 
   ready=true;
@@ -836,6 +846,24 @@ function updateAllBadges(){
   document.getElementById("ver-badge").textContent=act===tot?"Alle":act+"/"+tot;
   const active=zeitraum!=="zukunft"||aktOrte.size>0||aktGemeinden.size>0||act!==tot||aktLandkreis!==null||searchChips.length>0||srchText.length>0||activeFavs.size>0||aktRubrikSet.size>0;
   document.getElementById("reset-btn").style.display=active?"":"none";
+  renderActiveFilterPills();
+}
+
+function renderActiveFilterPills(){
+  const el=document.getElementById("active-pills");
+  if(!el)return;
+  const pills=[];
+  if(zeitraum!=="zukunft")pills.push({label:ZEIT_LBL[zeitraum],fn:()=>{zeitraum="zukunft";document.querySelectorAll("[data-z]").forEach(c=>c.classList.toggle("on",c.dataset.z==="zukunft"));updateAllBadges();render();}});
+  if(aktLandkreis)pills.push({label:aktLandkreis.replace(/^Landkreis\s+/,""),fn:()=>selectLandkreis(aktLandkreis)});
+  aktGemeinden.forEach(g=>pills.push({label:g.replace(/^(?:Gemeinde|Markt)\s+/,""),fn:()=>toggleGemeinde(g)}));
+  aktOrte.forEach(o=>pills.push({label:o,fn:()=>toggleOrt(o)}));
+  aktRubrikSet.forEach(r=>pills.push({label:r,fn:()=>setRubrik(r)}));
+  const tot=Object.keys(labels).length;
+  if(aktVereine.size<tot)pills.push({label:aktVereine.size+"/"+tot+" Vereine",fn:()=>selectAllVereine(true)});
+  _activePillActions=pills.map(p=>p.fn);
+  if(!pills.length){el.style.display="none";return;}
+  el.style.display="flex";
+  el.innerHTML=pills.map((p,i)=>`<span class="act-pill" data-pi="${i}">${escHtml(p.label)}<span class="act-pill-x"> ×</span></span>`).join("");
 }
 
 /* ── Reset all filters ── */
