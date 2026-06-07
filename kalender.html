@@ -87,6 +87,8 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
 /* ── Event cards ── */
 .ev-list{display:flex;flex-direction:column;gap:8px}
 .ev-card{background:var(--card);border-radius:var(--radius);padding:14px 16px;border-left:4px solid #999;box-shadow:0 2px 6px rgba(0,0,0,.08);position:relative}
+.ev-card--past{opacity:.42}
+.ev-card--past::after{content:'';position:absolute;inset:0;background:rgba(180,180,180,.15);backdrop-filter:blur(1.8px);-webkit-backdrop-filter:blur(1.8px);border-radius:var(--radius);pointer-events:none}
 .ev-date{font-size:12px;color:var(--text2);margin-bottom:2px}
 .ev-date-sep{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;padding:20px 2px 6px;display:block}
 .ev-date-sep:first-child{padding-top:6px}
@@ -1276,6 +1278,9 @@ function _termMatchFav(t,f){
 function render(){
   if(!ready)return;
   const h=new Date();h.setHours(0,0,0,0);
+  const _now=new Date();
+  const todayStr=_now.toISOString().slice(0,10);
+  const nowMin=_now.getHours()*60+_now.getMinutes();
   const hasFavs=activeFavs.size>0;
 
   let out=allT.filter(t=>{
@@ -1361,7 +1366,8 @@ function render(){
     const isFav=favorites.some(f=>f.type==="verein"&&f.key===t.verein);
     const sep=t.datum!==_lastDatum?`<div class="ev-date-sep">${fmt(t.datum)}</div>`:"";
     _lastDatum=t.datum;
-    return sep+`<div class="ev-card" style="border-left-color:${col}">
+    const isPast=t.datum===todayStr&&!!t.uhrzeit&&(()=>{const[hh,mm]=(t.uhrzeit).split(":").map(Number);return hh*60+mm<nowMin;})();
+    return sep+`<div class="ev-card${isPast?" ev-card--past":""}" style="border-left-color:${col}">
       <button class="ev-cal" onclick="exportICS(${idx})" title="Zum Kalender hinzufügen">&#128197;</button>
       <button class="ev-fav js-ev-fav-btn${isFav?' on':''}" data-favk="${escHtml(t.verein)}" data-fav-key="${escHtml(t.verein)}" data-fav-label="${escHtml(labels[t.verein]||t.verein)}" title="Verein als Favorit" style="position:absolute;top:10px;right:50px;background:none;border:none;font-size:15px;cursor:pointer;padding:4px;line-height:1">⭐</button>
       ${uz?`<div class="ev-date">&#128336; ${uz}</div>`:""}
@@ -1370,6 +1376,11 @@ function render(){
     </div>`;
   }).join("")+
   `<div class="cta-card" style="margin-top:8px">Hast du die gesuchten Termine gefunden? Falls Termine fehlen &ndash; <a href="mailto:Vereinskalender@icloud.com" style="color:var(--accent)">einfach schreiben</a> oder als Verantwortlicher <a href="/verein/register" style="color:var(--accent)">registrieren</a> und selbst aktualisieren.</div>`;
+  // Scroll zum ersten nicht-vergangenen Termin (nur beim initialen Render des heutigen Tages)
+  requestAnimationFrame(()=>{
+    const firstComing=el.querySelector('.ev-card:not(.ev-card--past)');
+    if(firstComing)firstComing.scrollIntoView({behavior:'instant',block:'start'});
+  });
   saveState();
 }
 
