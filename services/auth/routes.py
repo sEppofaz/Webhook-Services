@@ -75,6 +75,8 @@ hr{border:none;border-top:1px solid #3a3a3c;margin:1.5rem 0}
 .chk{display:flex;gap:.75rem;align-items:flex-start;margin:.75rem 0}
 .chk input{width:1.2rem;height:1.2rem;flex-shrink:0;margin-top:.15rem}
 .chk label{margin:0;font-size:.9rem;color:#f2f2f7}
+.field-err{border-color:#ff453a!important;outline:none!important}
+.chk.field-err{outline:1.5px solid #ff453a!important;border-radius:.5rem;padding:.5rem}
 </style>
 """
 
@@ -270,7 +272,23 @@ Danach prüft der Administrator deine Anfrage (in der Regel innerhalb eines Tage
 <a class="btn btn-sec" href="/verein/login" style="margin-top:.5rem">← Abbrechen</a>
 <hr>
 <p class="hint">Bereits registriert? <a href="/verein/login">Zum Login</a></p>
-<p class="hint"><a href="/verein/datenschutz">Datenschutzerklärung</a> · <a href="/verein/nutzungsbedingungen">Nutzungsbedingungen</a></p>"""
+<p class="hint"><a href="/verein/datenschutz">Datenschutzerklärung</a> · <a href="/verein/nutzungsbedingungen">Nutzungsbedingungen</a></p>
+<script>
+document.querySelector('form').addEventListener('submit',function(e){{
+  this.querySelectorAll('.field-err').forEach(f=>f.classList.remove('field-err'));
+  let first=null;
+  this.querySelectorAll('input[required]:not([type=checkbox]),select[required]').forEach(f=>{{
+    let bad=!f.value.trim();
+    if(!bad&&f.name==='plz')bad=!/^\d{{5}}$/.test(f.value.trim());
+    if(!bad&&f.name==='email')bad=!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.value.trim());
+    if(!bad&&f.name==='password2'){{const p=this.querySelector('[name=password]');if(p)bad=f.value!==p.value;}}
+    if(bad){{f.classList.add('field-err');if(!first)first=f;}}
+  }});
+  const sv=this.querySelector('[name=selbstverpflichtung]');
+  if(sv&&!sv.checked){{sv.closest('.chk').classList.add('field-err');if(!first)first=sv;}}
+  if(first){{e.preventDefault();first.scrollIntoView({{behavior:'smooth',block:'center'}});first.focus();}}
+}});
+</script>"""
     return _page("Verein registrieren", form)
 
 
