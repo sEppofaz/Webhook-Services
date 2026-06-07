@@ -108,7 +108,9 @@ Alle Jobs als `root`-Crontab. Timezone: `Europe/Berlin`. Logs: `/var/log/pka-*.l
 
 ## nginx-Konfiguration
 
-- **Config:** `/etc/nginx/sites-available/vereinskalender` → Domain `vereinskalender.online`
+- **Config:** `/etc/nginx/sites-available/vereinskalender` → Domains: `vereinskalender.online`, `www.vereinskalender.online`, `veranstaltungen.website`, `www.veranstaltungen.website` (alle zeigen denselben Inhalt, kein Redirect)
+- **SSL-Cert:** deckt alle 4 Domains ab, läuft bis 2026-09-05, Auto-Renewal aktiv
+- **PWA-Titel domain-abhängig:** `manifest_json()` prüft `request.host` → `name: "Veranstaltungen"` bei `veranstaltungen.website`, sonst `"Vereinskalender"`. Gleich auch in `<title>` + `apple-mobile-web-app-title` per JS in kalender.html.
 - `location = /` → `proxy_pass http://127.0.0.1:5000/kalender` + `Cache-Control: no-store`
 - `location = /admin` → `proxy_pass http://127.0.0.1:5000` + `Cache-Control: no-store`
 - `location = /sw.js` → `Cache-Control: no-cache, no-store` + `Service-Worker-Allowed: /`
@@ -170,6 +172,21 @@ Alle Jobs als `root`-Crontab. Timezone: `Europe/Berlin`. Logs: `/var/log/pka-*.l
 - `_gemeindeForOrt(o)` → Gemeinde-String für Ortschaft
 
 ---
+
+## UI-Komponenten kalender.html (Stand 2026-06-07)
+
+- **Skeleton Loader:** 5 `.sk-card`-Divs im `#ev-list` als Initialzustand. CSS-Shimmer via `background:linear-gradient` + Animation, kein JS.
+- **Lucide Icons:** Alle UI-Icons als inline SVG (kein CDN). Filter-Chevrons: `<span class="f-arrow">` enthält SVG, `transform:rotate(90deg)` per CSS-Klasse `.f-arrow.open` animiert sie.
+- **Aktive Filter Pills:** `renderActiveFilterPills()` baut `#active-pills`-Bar. Aktionen in `_activePillActions[]` (Module-Level). Aufruf aus `updateAllBadges()`. Click-Handler in `load()`.
+- **Accordion-Transitions:** `.f-content` nutzt `max-height:0/1000px` + `overflow:hidden` – KEIN `display:none/block` mehr. Pitfall: Wenn neue Sections hinzugefügt werden, kein `display:none` im CSS setzen.
+- **Scroll zu Datum:** Beim Render scrollt die App zum `.ev-date-sep` vor dem ersten kommenden Termin (rückwärts durch `previousElementSibling` bis zur Klasse `ev-date-sep`).
+
+## Registrierungsform `/verein/register` – Pitfalls (Stand 2026-06-07)
+
+- **Pflichtfelder:** `plz` + `telefon` sind serverseitig required. Validierung: PLZ muss `^\d{5}$`, Telefon non-empty.
+- **Neue Checkbox `zugangsdaten_notiert`:** Pflicht, serverseitig geprüft (`elif not zn:`). Wird in `form_data` NICHT zurückgegeben (kein Preserve nötig – ist nach Submit weg).
+- **Client-Validierung:** JS in `<script>`-Tag am Ende des Formulars. f-String → `{{` für JS-Objekte, `\d{{5}}` für Regex. Checkbox-Fehler highlightet `.chk`-Wrapper (nicht das Input selbst).
+- **Passwort-Toggle:** `.pw-wrap` wrapper + `.pw-toggle` Button mit Eye/EyeOff SVG. `tabindex="-1"` damit Tab-Reihenfolge unberührt bleibt.
 
 ## Filterlogik kalender.html – wichtige Pitfalls
 
