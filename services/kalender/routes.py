@@ -81,9 +81,10 @@ _NO_CACHE = {"Cache-Control": "no-cache, no-store"}
 
 @kalender_bp.route("/manifest.json")
 def manifest_json():
+    app_name = "Veranstaltungen" if "veranstaltungen.website" in request.host else "Vereinskalender"
     return json.dumps({
-        "name":             "Vereinskalender",
-        "short_name":       "Vereinskalender",
+        "name":             app_name,
+        "short_name":       app_name,
         "start_url":        "/",
         "display":          "standalone",
         "background_color": "#ffffff",
