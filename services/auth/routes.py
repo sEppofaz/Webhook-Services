@@ -175,6 +175,7 @@ def register():
         pw          = request.form.get("password", "")
         pw2         = request.form.get("password2", "")
         sv          = request.form.get("selbstverpflichtung", "")
+        zn          = request.form.get("zugangsdaten_notiert", "")
         rubrik      = request.form.get("rubrik", "").strip()
         heimatort   = request.form.get("heimatort", "").strip()
         plz         = request.form.get("plz", "").strip()
@@ -200,6 +201,8 @@ def register():
             error = "Passwörter stimmen nicht überein."
         elif not sv:
             error = "Bitte die Selbstverpflichtungserklärung bestätigen."
+        elif not zn:
+            error = "Bitte bestätigen, dass die Zugangsdaten notiert wurden."
         else:
             gemeinde = landkreis = ""
             geo = lookup_plz(plz)
@@ -247,7 +250,7 @@ Danach prüft der Administrator deine Anfrage (in der Regel innerhalb eines Tage
 {'<p class="err">'+error+'</p>' if error else ''}
 <form method="post" autocomplete="on">
   {csrf_field(tok)}
-  <label>Vereinsname</label>
+  <label>Vereinsname <span class="hint">(Euer Login-Name)</span></label>
   <input name="verein_name" type="text" required autocomplete="organization" placeholder="z.B. FF Musterdorf" value="{html.escape(form_data.get('verein_name', ''))}">
   <label>Rubrik</label>
   <select name="rubrik" required>
@@ -276,6 +279,10 @@ Danach prüft der Administrator deine Anfrage (in der Regel innerhalb eines Tage
     <input type="checkbox" name="selbstverpflichtung" id="sv">
     <label for="sv">Ich bestätige, dass ich befugter Vertreter des genannten Vereins bin (gewählter Vorstand oder schriftlich bevollmächtigtes Mitglied) und berechtigt bin, im Namen des Vereins Termine zu veröffentlichen. Ich übernehme die Verantwortung für die Richtigkeit der eingetragenen Daten.</label>
   </div>
+  <div class="chk">
+    <input type="checkbox" name="zugangsdaten_notiert" id="zn" required>
+    <label for="zn">Ich habe die Zugangsdaten (Vereinsname + Passwort) notiert.</label>
+  </div>
   <button class="btn" type="submit">Registrieren</button>
 </form>
 <a class="btn btn-sec" href="/verein/login" style="margin-top:.5rem">← Abbrechen</a>
@@ -295,6 +302,8 @@ document.querySelector('form').addEventListener('submit',function(e){{
   }});
   const sv=this.querySelector('[name=selbstverpflichtung]');
   if(sv&&!sv.checked){{sv.closest('.chk').classList.add('field-err');if(!first)first=sv;}}
+  const zn=this.querySelector('[name=zugangsdaten_notiert]');
+  if(zn&&!zn.checked){{zn.closest('.chk').classList.add('field-err');if(!first)first=zn;}}
   if(first){{e.preventDefault();first.scrollIntoView({{behavior:'smooth',block:'center'}});first.focus();}}
 }});
 function togglePw(btn){{
