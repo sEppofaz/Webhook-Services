@@ -138,6 +138,8 @@ Regeln:
   Ausgaben (er zahlt) → -70.00€ · Einnahmen/Erstattungen (er bekommt Geld) → +12.50€. Kein Betrag → weglassen.
   Wichtig: „Nachzahlung" = Ausgabe (−), „Erstattung" = Einnahme (+) – unabhängig davon, wie der Betrag
   intern im Dokument dargestellt ist (dort erscheint eine Erstattung oft als negativer Betrag).
+  Einspeisevergütung / PV-Einspeisung ist IMMER eine Einnahme (+), auch wenn das Dokument den Betrag
+  mit Minuszeichen zeigt (Netzbetreiber-Sicht). Ebenso: Gutschriften → immer positiv.
 - Kontoauszug – statt Betrag schreibe: Konto_<Kontonummer>
   Kontonummer ermitteln (zwei Wege, bevorzuge Weg 1):
   Weg 1: Die Kontonummer steht oft direkt im Dokument, z.B. "Giro Online 998087, DE90 ..." oder "Geldmarktkonto 4458532, DE27 ...".
