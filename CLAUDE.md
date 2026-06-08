@@ -165,6 +165,7 @@ Alle Jobs als `root`-Crontab. Timezone: `Europe/Berlin`. Logs: `/var/log/pka-*.l
 - **`_ortschaften`**: `{gemeinde_map: {...}}` – Mapping Ortschaft→Gemeinde
 - **`ortschaft`**: Pro Termin – Veranstaltungsort
 - **`quelle`** / **`quelle_url`**: Pro Termin – Herkunft (heimat-info oder Vereinsadmin)
+- **`flyer_url`** / **`flyer_path`** (optional, Stand 2026-06-07): Pro Termin – Dropbox-Link (`?raw=1` für Browser-Anzeige) + Dropbox-Pfad zum Löschen. Modul: `shared/flyer_store.py`. Upload-Ordner: `/Dokumente/Vereinskalender/flyer/`. Nur PDF/JPG/PNG/WebP, max. 8 MB, Magic-Bytes-geprüft, UUID-Dateiname.
 
 **Ortschaft-Hierarchie:** `Landkreis → Gemeinde → Ortschaft (Vereinsheimat) → Verein → Termin`
 - Ortschaft-Chips = Heimatort des Vereins, NICHT Veranstaltungsort
@@ -180,6 +181,10 @@ Alle Jobs als `root`-Crontab. Timezone: `Europe/Berlin`. Logs: `/var/log/pka-*.l
 - **Aktive Filter Pills:** `renderActiveFilterPills()` baut `#active-pills`-Bar. Aktionen in `_activePillActions[]` (Module-Level). Aufruf aus `updateAllBadges()`. Click-Handler in `load()`.
 - **Accordion-Transitions:** `.f-content` nutzt `max-height:0/1000px` + `overflow:hidden` – KEIN `display:none/block` mehr. Pitfall: Wenn neue Sections hinzugefügt werden, kein `display:none` im CSS setzen.
 - **Scroll zu Datum:** Beim Render scrollt die App zum `.ev-date-sep` vor dem ersten kommenden Termin (rückwärts durch `previousElementSibling` bis zur Klasse `ev-date-sep`).
+- **Event-Card Icons (Stand 2026-06-07):** Alle drei Buttons nutzen gemeinsame CSS-Klasse `.ev-icon-btn` (position absolute, top:10px). Positionen: `.ev-cal` right:10px, `.ev-fav` right:50px, `.ev-flyer` right:90px. Icons als Lucide SVG inline.
+- **Favoriten-Herz:** `.ev-fav.on` → `color:#ff3b30` + `svg path { fill:currentColor }` per CSS. Kein JS-`style.filter` mehr. `toggleFavVerein` setzt `textContent="⭐"` nur für `.fav-star`-Elemente (nicht für `.ev-fav` mit SVG).
+- **Favoriten-Pills Icon-Pitfall:** `f.icon` enthält HTML-Entities (z.B. `&#127968;`). Diese **direkt** in `innerHTML` einfügen – NICHT durch `escHtml()` jagen, sonst wird `&amp;#127968;` gerendert und das Emoji erscheint als Rohtext.
+- **Flyer-Button:** Nur gerendert wenn `t.flyer_url` gesetzt. `titlePadding` dynamisch: 74px (ohne Flyer) / 114px (mit Flyer). Click via Event-Delegation `.js-ev-flyer-btn` → `window.open(dataset.flyerUrl, '_blank', 'noopener')`.
 
 ## Registrierungsform `/verein/register` – Pitfalls (Stand 2026-06-07)
 

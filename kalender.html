@@ -97,8 +97,8 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
 .ev-title{font-weight:600;font-size:15px;color:var(--text);line-height:1.3;padding-right:32px}
 .ev-ort{font-size:12px;color:var(--text3);margin-top:3px}
 .ev-badge{display:inline-block;font-size:11px;font-weight:600;border-radius:8px;padding:2px 7px;margin-top:5px}
-.fav-star{background:none;border:none;cursor:pointer;font-size:12px;padding:0 1px;filter:grayscale(1) opacity(.5);transition:filter .15s;line-height:1;vertical-align:middle}
-.fav-star.on{filter:none}
+.fav-star{background:none;border:none;cursor:pointer;padding:0 1px;opacity:.35;display:inline-flex;align-items:center;transition:opacity .15s,color .15s;vertical-align:middle}
+.fav-star.on{opacity:1;color:#ff3b30}
 .ev-icon-btn{position:absolute;top:10px;background:none;border:none;cursor:pointer;padding:6px;border-radius:7px;line-height:1;opacity:.55;color:var(--text);transition:opacity .15s,color .15s}
 .ev-icon-btn:active{opacity:1;background:var(--bg3)}
 .ev-cal{right:10px}
@@ -163,7 +163,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
 .help-card h3{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;padding:12px 16px 4px}
 .help-row{display:flex;gap:12px;align-items:flex-start;padding:10px 16px;border-bottom:.5px solid var(--border)}
 .help-row:last-child{border-bottom:none}
-.help-icon{font-size:20px;flex-shrink:0;width:26px;text-align:center;margin-top:1px}
+.help-icon{display:flex;align-items:center;justify-content:center;flex-shrink:0;width:26px;margin-top:1px;color:var(--text2)}
 .help-row strong{display:block;font-size:14px;font-weight:600;color:var(--text);margin-bottom:2px}
 .help-row span{font-size:13px;color:var(--text2);line-height:1.4}
 .version{font-size:12px;color:var(--text3);text-align:center;padding:20px 0 8px;border-top:.5px solid var(--border);margin-top:8px}
@@ -224,7 +224,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
 .cta-card strong{color:var(--text);display:block;margin-bottom:4px;font-size:14px;font-weight:600}
 /* ── Rubrik-Tab-Leiste ── */
 .rubrik-bar{display:flex;gap:6px;padding:7px 14px 6px;border-bottom:.5px solid var(--border);flex-wrap:wrap}
-.rubrik-chip{padding:7px 14px;border-radius:20px;font-size:13px;font-weight:500;cursor:pointer;border:1.5px solid var(--border2);background:var(--bg);color:var(--text2);transition:all .15s;white-space:nowrap}
+.rubrik-chip{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:20px;font-size:13px;font-weight:500;cursor:pointer;border:1.5px solid var(--border2);background:var(--bg);color:var(--text2);transition:all .15s;white-space:nowrap}
 .rubrik-chip.on{background:var(--accent);color:#fff;border-color:var(--accent)}
 </style>
 </head>
@@ -396,20 +396,20 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
     <!-- Upload-Inhalt (nach Authentifizierung) -->
     <div id="imp-content" style="display:none">
     <div class="adm-tabs">
-      <button class="adm-tab on" id="admbtn-upload" onclick="switchAdmTab('upload')">&#128229; Import</button>
-      <button class="adm-tab" id="admbtn-imp" onclick="switchAdmTab('imp')">&#127969; Importe<span id="imp-pending-badge" style="display:none;background:#ff9500;color:#fff;border-radius:8px;padding:0 5px;font-size:10px;margin-left:4px;vertical-align:middle;line-height:16px"></span></button>
-<button class="adm-tab" id="admbtn-ver" onclick="switchAdmTab('ver')">&#127974; Vereine</button>
-      <button class="adm-tab" id="admbtn-acc" onclick="switchAdmTab('acc')">&#128101; Accounts<span id="acc-pending-badge" style="display:none;background:#ff3b30;color:#fff;border-radius:8px;padding:0 5px;font-size:10px;margin-left:4px;vertical-align:middle;line-height:16px"></span></button>
-      <button class="adm-tab" id="admbtn-trm" onclick="switchAdmTab('trm')">&#128197; Termine</button>
-      <button class="adm-tab" id="admbtn-sta" onclick="switchAdmTab('sta')">&#128202; Stats</button>
-      <button class="adm-tab" onclick="adminLogout()" title="Abmelden" style="margin-left:auto;color:#ff3b30">&#128275;</button>
+      <button class="adm-tab on" id="admbtn-upload" onclick="switchAdmTab('upload')" style="display:flex;align-items:center;gap:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Import</button>
+      <button class="adm-tab" id="admbtn-imp" onclick="switchAdmTab('imp')" style="display:flex;align-items:center;gap:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg> Importe<span id="imp-pending-badge" style="display:none;background:#ff9500;color:#fff;border-radius:8px;padding:0 5px;font-size:10px;margin-left:4px;vertical-align:middle;line-height:16px"></span></button>
+<button class="adm-tab" id="admbtn-ver" onclick="switchAdmTab('ver')" style="display:flex;align-items:center;gap:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg> Vereine</button>
+      <button class="adm-tab" id="admbtn-acc" onclick="switchAdmTab('acc')" style="display:flex;align-items:center;gap:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Accounts<span id="acc-pending-badge" style="display:none;background:#ff3b30;color:#fff;border-radius:8px;padding:0 5px;font-size:10px;margin-left:4px;vertical-align:middle;line-height:16px"></span></button>
+      <button class="adm-tab" id="admbtn-trm" onclick="switchAdmTab('trm')" style="display:flex;align-items:center;gap:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Termine</button>
+      <button class="adm-tab" id="admbtn-sta" onclick="switchAdmTab('sta')" style="display:flex;align-items:center;gap:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg> Stats</button>
+      <button class="adm-tab" onclick="adminLogout()" title="Abmelden" style="margin-left:auto;color:#ff3b30;display:flex;align-items:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
     </div>
 
     <!-- Tab 1: Upload -->
     <div id="adm-tab-upload">
     <div class="filter-card" style="margin-bottom:12px">
       <div class="f-toggle" style="cursor:default">
-        <span class="f-name">&#128205; Region (PLZ)</span>
+        <span class="f-name" style="display:flex;align-items:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> Region (PLZ)</span>
       </div>
       <div style="padding:0 14px 13px">
         <input type="text" id="upload-plz" maxlength="5" inputmode="numeric" pattern="\d{5}"
@@ -439,13 +439,13 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
     <div class="imp-result" id="imp-result"></div>
     <div class="help-card">
       <div class="help-row">
-        <span class="help-icon">&#128161;</span>
+        <span class="help-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg></span>
         <div><strong>Wie funktioniert der Import?</strong>
           <span>PDF-Kalender hochladen &#8594; Claude liest alle Vereine und Termine automatisch &#8594; sofort im Kalender sichtbar.</span>
         </div>
       </div>
       <div class="help-row">
-        <span class="help-icon">&#128203;</span>
+        <span class="help-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg></span>
         <div><strong>Unterst&#252;tzte Formate</strong>
           <span>PDF, Foto oder Scan (JPG, PNG, HEIC) – Jahresprogramme einzelner Vereine oder Veranstaltungskalender der Gemeinde. Direkt mit der Kamera fotografieren oder Datei ausw&#228;hlen.</span>
         </div>
@@ -579,6 +579,38 @@ const COLORS=["#e74c3c","#27ae60","#2980b9","#9b59b6","#f39c12","#1abc9c","#e67e
 const WD=["So","Mo","Di","Mi","Do","Fr","Sa"];
 const MO=["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
 const ZEIT_LBL={"zukunft":"Künftig","30":"30 Tage","90":"3 Monate","365":"1 Jahr","alle":"Alle"};
+const ICON_PATHS={
+  house:`<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`,
+  mail:`<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>`,
+  calendarPlus:`<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M12 14v4"/><path d="M10 16h4"/>`,
+  calendarCheck:`<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/>`,
+  calendar:`<rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>`,
+  smartphone:`<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>`,
+  send:`<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>`,
+  heart:`<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>`,
+  search:`<circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>`,
+  clock:`<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>`,
+  map:`<polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/>`,
+  mapPin:`<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>`,
+  users:`<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`,
+  paperclip:`<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>`,
+  scale:`<path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21H17"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>`,
+  barChart:`<line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/>`,
+  church:`<path d="m18 7 4 2v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9l4-2"/><path d="M14 22v-4a2 2 0 0 0-4 0v4"/><path d="M18 22V5l-6-3-6 3v17"/><path d="M12 7v5"/><path d="M10 9h4"/>`,
+  palette:`<circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>`,
+  info:`<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>`,
+  userPlus:`<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/>`,
+  lightbulb:`<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/>`,
+  fileText:`<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>`,
+  download:`<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>`,
+  trendingUp:`<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>`,
+  globe:`<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>`,
+  logOut:`<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>`,
+};
+function icon(name,size=18,filled=false){
+  const p=ICON_PATHS[name]||"";
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="${filled?"currentColor":"none"}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+}
 
 let allT=[],labels={},colors={},meta={},allOrteAll={},rubriken={};
 let zeitraum="zukunft",aktOrte=new Set(),aktVereine=new Set(),aktLandkreis=null,aktGemeinden=new Set(),ready=false;
@@ -757,7 +789,7 @@ function buildLandkreisFilter(){
     c.className="chip"+(aktLandkreis===lk?" on":"");c.dataset.lk=lk;
     c.appendChild(document.createTextNode(lkLabel+" "));
     const star=document.createElement("button");
-    star.className="fav-star"+(isFav?" on":"");star.textContent="⭐";
+    star.className="fav-star"+(isFav?" on":"");star.innerHTML=icon("heart",14);
     star.title="Als Favorit speichern";
     star.onclick=ev=>{ev.stopPropagation();toggleFavRegion(lk);};
     c.appendChild(star);
@@ -792,7 +824,7 @@ function buildGemeindeFilter(){
     c.className="chip"+(aktGemeinden.has(g)?" on":"");c.dataset.gem=g;
     c.appendChild(document.createTextNode(g.replace(/^(?:Gemeinde|Markt)\s+/,"")+" "));
     const star=document.createElement("button");
-    star.className="fav-star"+(isFav?" on":"");star.textContent="⭐";
+    star.className="fav-star"+(isFav?" on":"");star.innerHTML=icon("heart",14);
     star.title="Als Favorit speichern";
     star.onclick=ev=>{ev.stopPropagation();toggleFavGemeinde(g);};
     c.appendChild(star);
@@ -934,7 +966,7 @@ function buildOrtFilter(){
     c.className="chip"+(aktOrte.has(o)?" on":"");c.dataset.o=o;
     c.appendChild(document.createTextNode(o+" "));
     const star=document.createElement("button");
-    star.className="fav-star"+(isFav?" on":"");star.textContent="⭐";
+    star.className="fav-star"+(isFav?" on":"");star.innerHTML=icon("heart",14);
     star.title="Als Favorit speichern";
     star.onclick=ev=>{ev.stopPropagation();toggleFavOrtschaft(o);};
     c.appendChild(star);
@@ -1011,8 +1043,9 @@ function buildVereinFilter(){
     const star=document.createElement("button");
     star.className="v-check-star";
     star.dataset.favk=k;
-    star.textContent="⭐";
+    star.innerHTML=icon("heart",14);
     star.style.opacity=isFav?"1":"0.35";
+    if(isFav)star.style.color="#ff3b30";
     star.title="Favorit";
     star.onclick=(ev)=>{ev.preventDefault();ev.stopPropagation();toggleFavVerein(k,l);};
     lbl.appendChild(star);
@@ -1035,7 +1068,7 @@ function selectAllVereine(all){
 }
 
 function toggleFavVerein(k,l){
-  const r={type:"verein",key:k,label:l,icon:"&#127974;"};
+  const r={type:"verein",key:k,label:l,icon:icon("house")};
   const fi=favorites.findIndex(f=>f.type==="verein"&&f.key===k);
   if(fi>=0){
     favorites.splice(fi,1);
@@ -1047,7 +1080,7 @@ function toggleFavVerein(k,l){
   saveFavorites();
   const isFav=favorites.some(f=>f.type==="verein"&&f.key===k);
   document.querySelectorAll(`[data-favk="${k}"]`).forEach(s=>{
-    if(s.classList.contains("fav-star")){s.textContent="⭐";s.style.filter=isFav?"none":"";}
+    if(s.classList.contains("fav-star")){s.innerHTML=icon("heart",14);s.style.opacity=isFav?"1":"0.35";s.style.color=isFav?"#ff3b30":"";}
     s.classList.toggle("on",isFav);
   });
   renderFavBar();
@@ -1063,7 +1096,7 @@ function renderRubrikBar(){
   const reihenfolge=["Verein","Pfarrei","Kunst und Kultur"];
   const extra=[...vorh].filter(r=>!reihenfolge.includes(r)).sort();
   const tabs=[...reihenfolge.filter(r=>vorh.has(r)),...extra];
-  const icons={"Verein":"&#127974; Vereine","Pfarrei":"&#9962; Pfarreien","Kunst und Kultur":"&#127914; Kunst &amp; Kultur"};
+  const icons={"Verein":icon("house",14)+" Vereine","Pfarrei":icon("church",14)+" Pfarreien","Kunst und Kultur":icon("palette",14)+" Kunst &amp; Kultur"};
   bar.style.display="flex";
   bar.innerHTML=tabs.map(r=>{
     const on=aktRubrikSet.has(r);
@@ -1150,7 +1183,7 @@ function toggleFavChip(type,key){
 function toggleFavOrtschaft(o){
   const fi=favorites.findIndex(f=>f.type==="ortschaft"&&f.key===o);
   if(fi>=0){favorites.splice(fi,1);activeFavs.delete("ortschaft:"+o);}
-  else{favorites.push({type:"ortschaft",key:o,label:o,icon:"📍"});activeFavs.add("ortschaft:"+o);}
+  else{favorites.push({type:"ortschaft",key:o,label:o,icon:icon("mapPin")});activeFavs.add("ortschaft:"+o);}
   saveFavorites();saveActiveFavs();
   renderFavBar();updateAllBadges();render();
   buildOrtFilter();applyStateToUI();
@@ -1160,7 +1193,7 @@ function toggleFavRegion(lk){
   const lkLabel=lk.replace(/^Landkreis\s+/,"");
   const fi=favorites.findIndex(f=>f.type==="region"&&f.key===lk);
   if(fi>=0){favorites.splice(fi,1);activeFavs.delete("region:"+lk);}
-  else{favorites.push({type:"region",key:lk,label:lkLabel,icon:"🗺"});activeFavs.add("region:"+lk);}
+  else{favorites.push({type:"region",key:lk,label:lkLabel,icon:icon("map")});activeFavs.add("region:"+lk);}
   saveFavorites();saveActiveFavs();
   renderFavBar();updateAllBadges();render();
   buildLandkreisFilter();applyStateToUI();
@@ -1170,7 +1203,7 @@ function toggleFavGemeinde(g){
   const gLabel=g.replace(/^(?:Gemeinde|Markt)\s+/,"");
   const fi=favorites.findIndex(f=>f.type==="gemeinde"&&f.key===g);
   if(fi>=0){favorites.splice(fi,1);activeFavs.delete("gemeinde:"+g);}
-  else{favorites.push({type:"gemeinde",key:g,label:gLabel,icon:"🏘"});activeFavs.add("gemeinde:"+g);}
+  else{favorites.push({type:"gemeinde",key:g,label:gLabel,icon:icon("mapPin")});activeFavs.add("gemeinde:"+g);}
   saveFavorites();saveActiveFavs();
   renderFavBar();updateAllBadges();render();
   buildGemeindeFilter();applyStateToUI();
@@ -1189,7 +1222,7 @@ function openFavIcalFeed(){
       Object.entries(meta).forEach(([k,m])=>{if(m.gemeinde===f.key)keys.add(k);});
     }
   });
-  if(keys.size===0){alert("Noch keine Favoriten gespeichert.\nBitte erst Vereine oder Ortschaften mit ⭐ markieren.");return;}
+  if(keys.size===0){alert("Noch keine Favoriten gespeichert.\nBitte erst Vereine oder Ortschaften mit dem Herz-Symbol markieren.");return;}
   window.location.href=base+"?v="+encodeURIComponent([...keys].join(","));
 }
 
@@ -1257,12 +1290,12 @@ function onSearchInput(val){
   // Dropdown: nur Vereine + Ortschaften (keine Termine)
   Object.entries(labels).forEach(([k,l])=>{
     if(l.toLowerCase().includes(q)&&!searchChips.find(c=>c.type==="verein"&&c.key===k))
-      srchResults.push({type:"verein",key:k,label:l,icon:"&#127974;"});
+      srchResults.push({type:"verein",key:k,label:l,icon:icon("house")});
   });
 
   Object.keys(allOrteAll).sort().forEach(ort=>{
     if(ort.toLowerCase().includes(q)&&!searchChips.find(c=>c.type==="ort"&&c.key===ort))
-      srchResults.push({type:"ort",key:ort,label:ort,icon:"&#127968;"});
+      srchResults.push({type:"ort",key:ort,label:ort,icon:icon("mapPin")});
   });
 
   if(!srchResults.length){dd.classList.remove("open");updateAllBadges();render();return;}
@@ -1277,7 +1310,7 @@ function onSearchInput(val){
         <div class="srch-item-name">${r.label}</div>
       </div>
       <span class="srch-type">${typeLabel[r.type]}</span>
-      <span onclick="toggleFavorite(${i},event)" style="font-size:17px;padding:2px 4px;cursor:pointer;opacity:${fav?1:.35}">${fav?"&#11088;":"&#9733;"}</span>
+      <span onclick="toggleFavorite(${i},event)" style="display:flex;padding:2px 4px;cursor:pointer;opacity:${fav?1:.35};color:${fav?"#ff3b30":"currentColor"}">${icon("heart",16,fav)}</span>
     </button>`;
   }).join("");
   _positionDropdown();
@@ -1400,7 +1433,7 @@ function render(){
     let ctxMsg="Keine Termine gefunden.";
     if(aktOrte.size===1)ctxMsg=`Keine Termine f&uuml;r <strong>${[...aktOrte][0]}</strong> gefunden.`;
     else if(srchText.length>=2)ctxMsg=`Keine Treffer f&uuml;r &bdquo;${srchText}&ldquo;.`;
-    el.innerHTML=`<div class="ev-empty"><p>&#128197;</p><small>${ctxMsg}</small></div>`+
+    el.innerHTML=`<div class="ev-empty"><p style="display:flex;justify-content:center;color:var(--text3)">${icon("calendar",32)}</p><small>${ctxMsg}</small></div>`+
       `<div class="cta-card" style="margin-top:12px"><strong>Termine fehlen?</strong>Jahresprogramm als PDF an <a href="mailto:Vereinskalender@icloud.com">Vereinskalender@icloud.com</a> &ndash; wir k&uuml;mmern uns zeitnah.</div>`;
     return;
   }
@@ -1408,7 +1441,7 @@ function render(){
   el.innerHTML=out.map(t=>{
     const col=colors[t.verein]||"#777";
     const uz=t.uhrzeit?`${escHtml(t.uhrzeit)} Uhr`:"";
-    const ort=t.ort?`<div class="ev-ort">&#128205; ${escHtml(t.ort)}</div>`:"";
+    const ort=t.ort?`<div class="ev-ort" style="display:flex;align-items:center;gap:4px">${icon("mapPin",13)} ${escHtml(t.ort)}</div>`:"";
     const veranstLabel=escHtml(t.veranstalter||labels[t.verein]||t.verein);
     const ortBadgeTxt=(t.ortschaft&&t.ortschaft.trim())?escHtml(t.ortschaft.trim()):null;
     const lk=(meta[t.verein]||{}).landkreis||"Landkreis Landshut";
@@ -1426,13 +1459,13 @@ function render(){
     const sep=t.datum!==_lastDatum?`<div class="ev-date-sep">${fmt(t.datum)}</div>`:"";
     _lastDatum=t.datum;
     const isPast=t.datum===todayStr&&!!t.uhrzeit&&(()=>{const[hh,mm]=(t.uhrzeit).split(":").map(Number);return hh*60+mm<nowMin;})();
-    const flyerBtn=t.flyer_url?`<button class="ev-icon-btn ev-flyer js-ev-flyer-btn" data-flyer-url="${escHtml(t.flyer_url)}" title="Flyer öffnen"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></button>`:"";
+    const flyerBtn=t.flyer_url?`<button class="ev-icon-btn ev-flyer js-ev-flyer-btn" data-flyer-url="${escHtml(t.flyer_url)}" title="Flyer öffnen">${icon("paperclip",20)}</button>`:"";
     const titlePadding=t.flyer_url?"114px":"74px";
     return sep+`<div class="ev-card${isPast?" ev-card--past":""}" style="border-left-color:${col}">
-      <button class="ev-icon-btn ev-cal" onclick="exportICS(${idx})" title="Zum Kalender hinzufügen"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M12 14v4"/><path d="M10 16h4"/></svg></button>
-      <button class="ev-icon-btn ev-fav js-ev-fav-btn${isFav?' on':''}" data-favk="${escHtml(t.verein)}" data-fav-key="${escHtml(t.verein)}" data-fav-label="${escHtml(labels[t.verein]||t.verein)}" title="Verein als Favorit"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></button>
+      <button class="ev-icon-btn ev-cal" onclick="exportICS(${idx})" title="Zum Kalender hinzufügen">${icon("calendarPlus",20)}</button>
+      <button class="ev-icon-btn ev-fav js-ev-fav-btn${isFav?' on':''}" data-favk="${escHtml(t.verein)}" data-fav-key="${escHtml(t.verein)}" data-fav-label="${escHtml(labels[t.verein]||t.verein)}" title="Verein als Favorit">${icon("heart",18)}</button>
       ${flyerBtn}
-      ${uz?`<div class="ev-date">&#128336; ${uz}</div>`:""}
+      ${uz?`<div class="ev-date" style="display:flex;align-items:center;gap:4px">${icon("clock",13)} ${uz}</div>`:""}
       <div class="ev-title" style="padding-right:${titlePadding}">${escHtml(t.bezeichnung)}</div>
       ${ort}${badge}
     </div>`;
@@ -1653,7 +1686,7 @@ let _chartPeriod=30;
 async function loadStats(){
   const el=document.getElementById("sta-tab-content");
   const token=localStorage.getItem("ut")||"";
-  el.innerHTML='<div style="text-align:center;padding:40px 20px;color:var(--text3)">&#128202; Lade&hellip;</div>';
+  el.innerHTML=`<div style="text-align:center;padding:40px 20px;color:var(--text3)">${icon("barChart",24)} Lade&hellip;</div>`;
   try{
     const data=await(await fetch("/api/admin/stats",{headers:{"X-Upload-Token":token}})).json();
     el.innerHTML=`
@@ -1671,12 +1704,12 @@ async function loadStats(){
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
         <div style="background:var(--card);border:1.5px solid var(--border2);border-radius:12px;padding:14px;text-align:center">
-          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">&#128242; Telegram-Abos</div>
+          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;display:flex;align-items:center;justify-content:center;gap:4px">${icon("send",12)} Telegram-Abos</div>
           <div style="font-size:28px;font-weight:700;color:#0088cc">${data.tg_subscribers??'–'}</div>
           <div style="font-size:11px;color:var(--text3);margin-top:2px">aktive Abonnenten</div>
         </div>
         <div style="background:var(--card);border:1.5px solid var(--border2);border-radius:12px;padding:14px;text-align:center">
-          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">&#128197; Kalender-Feed</div>
+          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;display:flex;align-items:center;justify-content:center;gap:4px">${icon("calendarCheck",12)} Kalender-Feed</div>
           <div style="font-size:28px;font-weight:700;color:#34c759">${data.ical_7d??'–'}</div>
           <div style="font-size:11px;color:var(--text3);margin-top:2px">${data.ical_30d??'–'} unique (30&nbsp;Tage)</div>
         </div>
@@ -1684,7 +1717,7 @@ async function loadStats(){
       ${data.tg_ranking&&data.tg_ranking.length?`
       <div style="background:var(--card);border:1.5px solid var(--border2);border-radius:12px;padding:14px;margin-bottom:12px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-          <span style="font-weight:600;color:var(--text1);font-size:14px">&#128242; Telegram-Abos nach Verein</span>
+          <span style="font-weight:600;color:var(--text1);font-size:14px;display:flex;align-items:center;gap:6px">${icon("send",14)} Telegram-Abos nach Verein</span>
           <span style="font-size:12px;color:var(--text3)">${data.tg_vereine_count??0} Vereine abonniert</span>
         </div>
         ${(()=>{
@@ -1701,7 +1734,7 @@ async function loadStats(){
       </div>`:''}
       <div style="background:var(--card);border:1.5px solid var(--border2);border-radius:12px;padding:14px;margin-bottom:12px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-          <span style="font-weight:600;color:var(--text1);font-size:14px">&#128197; Kalender-Feed nach Verein <span style="font-size:11px;font-weight:400;color:var(--text3)">(7&nbsp;Tage)</span></span>
+          <span style="font-weight:600;color:var(--text1);font-size:14px;display:flex;align-items:center;gap:6px">${icon("calendarCheck",14)} Kalender-Feed nach Verein <span style="font-size:11px;font-weight:400;color:var(--text3)">(7&nbsp;Tage)</span></span>
           <span style="font-size:12px;color:var(--text3)">${data.ical_vereine_count??0} Vereine abonniert</span>
         </div>
         ${data.ical_ranking&&data.ical_ranking.length?(()=>{
@@ -1718,7 +1751,7 @@ async function loadStats(){
       </div>
       <div style="background:var(--card);border:1.5px solid var(--border2);border-radius:12px;padding:14px;margin-bottom:12px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-          <span style="font-weight:600;color:var(--text1);font-size:14px">&#128200; Besucherverlauf</span>
+          <span style="font-weight:600;color:var(--text1);font-size:14px;display:flex;align-items:center;gap:6px">${icon("trendingUp",14)} Besucherverlauf</span>
           <div style="display:flex;gap:4px">
             <button id="chart-btn-7"   onclick="loadChart(7)"   style="padding:3px 9px;border:1.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text3);font-size:12px;cursor:pointer">7T</button>
             <button id="chart-btn-30"  onclick="loadChart(30)"  style="padding:3px 9px;border:1.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text3);font-size:12px;cursor:pointer">30T</button>
@@ -1729,13 +1762,13 @@ async function loadStats(){
       </div>
       <div style="background:var(--card);border:1.5px solid var(--border2);border-radius:12px;padding:14px;margin-bottom:12px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-          <span style="font-weight:600;color:var(--text1);font-size:14px">&#128336; Tageszeit (letzte 30&nbsp;Tage)</span>
+          <span style="font-weight:600;color:var(--text1);font-size:14px;display:flex;align-items:center;gap:6px">${icon("clock",14)} Tageszeit (letzte 30&nbsp;Tage)</span>
         </div>
         <div id="sta-hourly"><div style="text-align:center;padding:20px 0;color:var(--text3);font-size:12px">Lade&#8230;</div></div>
       </div>
       <div id="sta-geo-wrap" style="background:var(--card);border:1.5px solid var(--border2);border-radius:12px;padding:14px;margin-bottom:12px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-          <span style="font-weight:600;color:var(--text1);font-size:14px">&#127758; Besucher nach Herkunft</span>
+          <span style="font-weight:600;color:var(--text1);font-size:14px;display:flex;align-items:center;gap:6px">${icon("globe",14)} Besucher nach Herkunft</span>
           <div style="display:flex;gap:4px">
             <button id="geo-btn-7"   onclick="loadGeo(7)"   style="padding:3px 9px;border:1.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text3);font-size:12px;cursor:pointer">7T</button>
             <button id="geo-btn-30"  onclick="loadGeo(30)"  style="padding:3px 9px;border:1.5px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text3);font-size:12px;cursor:pointer">30T</button>
@@ -1746,15 +1779,15 @@ async function loadStats(){
       </div>
       <div style="background:var(--card);border:1.5px solid var(--border2);border-radius:12px;padding:14px;margin-bottom:12px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)">
-          <span style="color:var(--text2);font-size:14px">&#127974; Vereine</span>
+          <span style="color:var(--text2);font-size:14px;display:flex;align-items:center;gap:6px">${icon("house",14)} Vereine</span>
           <span style="font-weight:600">${data.vereine_aktiv} aktiv / ${data.vereine_gesamt} gesamt</span>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)">
-          <span style="color:var(--text2);font-size:14px">&#128197; K&uuml;nftige Termine</span>
+          <span style="color:var(--text2);font-size:14px;display:flex;align-items:center;gap:6px">${icon("calendar",14)} K&uuml;nftige Termine</span>
           <span style="font-weight:600">${data.termine_kd}</span>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <span style="color:var(--text2);font-size:14px">&#128229; Letzter Import</span>
+          <span style="color:var(--text2);font-size:14px;display:flex;align-items:center;gap:6px">${icon("download",14)} Letzter Import</span>
           <span style="font-weight:600;font-size:13px;text-align:right;max-width:55%">${escHtml(data.letzter_import)}</span>
         </div>
       </div>
@@ -2979,59 +3012,67 @@ function showInfoModal(){
   m.innerHTML=`
     <div class="modal-sheet" style="max-height:88dvh;overflow-y:auto">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div class="modal-title" style="margin-bottom:0">&#8505; Info &amp; Hilfe</div>
+        <div class="modal-title" style="margin-bottom:0;display:flex;align-items:center;gap:6px">${icon("info",18)} Info &amp; Hilfe</div>
         <button onclick="document.getElementById('info-modal').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text2);line-height:1;padding:0 2px">&times;</button>
       </div>
       <div class="help-row" style="padding:8px 0 12px;border-bottom:1.5px solid var(--border);margin-bottom:4px">
-        <span class="help-icon">&#127974;</span>
+        <span class="help-icon">${icon("userPlus",20)}</span>
         <div><strong><a href="/verein/register" style="color:var(--accent);text-decoration:none">Euren Verein eintragen</a></strong><span>Termine selbst eintragen und verwalten &ndash; kostenlos, direkt, ohne Wartezeit. <a href="/verein/register" style="color:var(--accent);font-weight:600">Jetzt registrieren &rarr;</a><br><span style="color:var(--text3);font-size:.9em">Bereits registriert? <a href="/verein/login" style="color:var(--accent)">Zum Login &rarr;</a></span></span></div>
       </div>
       <div class="help-row" style="padding:8px 0 12px;border-bottom:1.5px solid var(--border);margin-bottom:4px">
-        <span class="help-icon">&#128231;</span>
+        <span class="help-icon">${icon("mail",20)}</span>
         <div><strong>Eure Termine eintragen lassen</strong><span>Jahresprogramm als PDF mit PLZ an <a href="mailto:Vereinskalender@icloud.com" style="color:var(--accent);text-decoration:none;font-weight:600">Vereinskalender@icloud.com</a> schicken &ndash; wir k&uuml;mmern uns zeitnah. Auch Pfarrbriefe m&ouml;glich.</span></div>
       </div>
       <div class="help-row" style="padding:8px 0">
-        <span class="help-icon">&#128197;</span>
-        <div><strong>Kalender-Import</strong><span>Jeden Termin per &#128197;-Symbol direkt in den eigenen Kalender &ndash; iPhone, Android, Outlook.</span></div>
+        <span class="help-icon">${icon("calendarPlus",20)}</span>
+        <div><strong>Kalender-Import</strong><span>Jeden Termin per ${icon("calendarPlus",14)}-Symbol direkt in den eigenen Kalender &ndash; iPhone, Android, Outlook.</span></div>
       </div>
       <div class="help-row" style="padding:8px 0">
-        <span class="help-icon">&#8987;&#xFE0F;</span>
+        <span class="help-icon">${icon("calendarCheck",20)}</span>
         <div><strong>Kalender-Abo</strong><span>Aktualisiert sich alle 6&nbsp;Stunden. iPhone, Android, Smartwatch, Google&nbsp;Kalender, Outlook.<br><br>
-        <a href="webcal://vereinskalender.online/api/ical/feed" style="color:var(--accent);text-decoration:none;font-weight:600">&#127775; Alle Termine abonnieren</a><br>
-        <a href="#" onclick="openFavIcalFeed();document.getElementById('info-modal')?.remove();return false;" style="color:var(--accent);text-decoration:none;font-weight:600">&#11088; Nur meine Favoriten abonnieren</a></span></div>
+        <a href="webcal://vereinskalender.online/api/ical/feed" style="color:var(--accent);text-decoration:none;font-weight:600;display:inline-flex;align-items:center;gap:4px">${icon("calendarCheck",14)} Alle Termine abonnieren</a><br>
+        <a href="#" onclick="openFavIcalFeed();document.getElementById('info-modal')?.remove();return false;" style="color:var(--accent);text-decoration:none;font-weight:600;display:inline-flex;align-items:center;gap:4px">${icon("heart",14)} Nur meine Favoriten abonnieren</a></span></div>
       </div>
       <div class="help-row" style="padding:8px 0">
-        <span class="help-icon">&#128241;</span>
+        <span class="help-icon">${icon("heart",20)}</span>
+        <div><strong>Favoriten</strong><span>Vereine oder Ortschaften mit ${icon("heart",14)}-Symbol als Favorit markieren &ndash; f&uuml;r Kalender-Abo und Telegram-Erinnerungen.</span></div>
+      </div>
+      <div class="help-row" style="padding:8px 0">
+        <span class="help-icon">${icon("paperclip",20)}</span>
+        <div><strong>Flyer</strong><span>Wenn ein Verein einen Flyer hinterlegt hat, erscheint das ${icon("paperclip",14)}-Symbol &ndash; antippen zum &Ouml;ffnen.</span></div>
+      </div>
+      <div class="help-row" style="padding:8px 0">
+        <span class="help-icon">${icon("smartphone",20)}</span>
         <div><strong>Als App auf den Homebildschirm</strong><span>Safari &rarr; Teilen &rarr; &bdquo;Zum Home-Bildschirm&ldquo; &ndash; dann wie eine richtige App &ouml;ffnen. Aktualisiert sich automatisch beim &Ouml;ffnen (Internetverbindung n&ouml;tig). Ohne Netz erscheint eine Meldung.</span></div>
       </div>
       <div class="help-row" style="padding:8px 0">
-        <span class="help-icon">&#128172;</span>
+        <span class="help-icon">${icon("send",20)}</span>
         <div><strong>Terminerinnerungen per Telegram</strong><span>T&auml;glich 18:00 Uhr &ndash; wenn ein Favorit-Verein morgen Termin hat.<br><br>
-        <a href="https://t.me/Vereinskalender_bot" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;font-weight:600">&#128172; Jetzt abonnieren &rarr;</a><br><br>
+        <a href="https://t.me/Vereinskalender_bot" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;font-weight:600;display:inline-flex;align-items:center;gap:4px">${icon("send",14)} Jetzt abonnieren &rarr;</a><br><br>
         Im Bot <em>/abo</em> tippen, Verein w&auml;hlen &ndash; fertig. Abmelden mit <em>/stop</em>.</span></div>
       </div>
       <div class="help-row" style="padding:8px 0">
-        <span class="help-icon">&#128269;</span>
+        <span class="help-icon">${icon("search",20)}</span>
         <div><strong>Suche</strong><span>Verein oder Ort eintippen &ndash; filtert live. Vorschlag antippen f&uuml;r Chip-Filter.</span></div>
       </div>
       <div class="help-row" style="padding:8px 0">
-        <span class="help-icon">&#8987;</span>
+        <span class="help-icon">${icon("clock",20)}</span>
         <div><strong>Zeitraum</strong><span><strong>K&uuml;nftig</strong> ab heute &middot; <strong>30T/3M/1J</strong> begrenzt &middot; <strong>Alle</strong> inkl. vergangene Termine.</span></div>
       </div>
       <div class="help-row" style="padding:8px 0">
-        <span class="help-icon">&#128507;</span>
+        <span class="help-icon">${icon("map",20)}</span>
         <div><strong>Region</strong><span>Erscheint bei mehreren Landkreisen &ndash; zeigt nur Vereine des gew&auml;hlten Landkreises.</span></div>
       </div>
       <div class="help-row" style="padding:8px 0">
-        <span class="help-icon">&#127968;</span>
+        <span class="help-icon">${icon("mapPin",20)}</span>
         <div><strong>Ortschaft</strong><span>Mehrfachauswahl m&ouml;glich. Erscheint wenn mehrere Vereine einer Ortschaft vorhanden sind.</span></div>
       </div>
       <div class="help-row" style="padding:8px 0;border-bottom:none">
-        <span class="help-icon">&#127974;</span>
+        <span class="help-icon">${icon("users",20)}</span>
         <div><strong>Verein</strong><span>Einzelne Vereine gezielt ein- oder ausblenden.</span></div>
       </div>
       <div class="help-row" style="padding:12px 0 8px;border-top:1.5px solid var(--border);margin-top:4px;border-bottom:none">
-        <span class="help-icon">&#9878;</span>
+        <span class="help-icon">${icon("scale",20)}</span>
         <div><strong>Impressum</strong><span>Josef Fischer &middot; H&ouml;lskofen 13 &middot; 84092 Bayerbach b. Ergoldsbach<br><a href="mailto:Vereinskalender@icloud.com" style="color:var(--accent);text-decoration:none">Vereinskalender@icloud.com</a></span></div>
       </div>
       <button onclick="document.getElementById('info-modal').remove()" style="width:100%;margin-top:16px;padding:12px;background:none;border:1.5px solid var(--border2);border-radius:12px;font-size:14px;color:var(--text2);cursor:pointer">Schlie&szlig;en</button>
