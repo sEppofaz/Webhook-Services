@@ -1315,10 +1315,11 @@ def api_admin_importe_confirm(uid):
     token = request.headers.get("X-Upload-Token", "")
     if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
         return json.dumps({"error": "Nicht autorisiert"}), 401, {"Content-Type": "application/json"}
-    body        = request.get_json(silent=True) or {}
-    alle        = body.get("alle", False)
-    verein_keys = body.get("vereine") if not alle else None
-    geo         = body.get("geo", {})  # {key: {heimatort, gemeinde, landkreis}}
+    body             = request.get_json(silent=True) or {}
+    alle             = body.get("alle", False)
+    verein_keys      = body.get("vereine") if not alle else None
+    geo              = body.get("geo", {})  # {key: {heimatort, gemeinde, landkreis}}
+    excluded_events  = body.get("excluded_events") or None  # [{verein_key, datum, uhrzeit, bezeichnung}]
 
     # Geo-Overrides vorab in _meta schreiben (Admin-Entscheidung, immer maßgeblich)
     if geo:
@@ -1343,7 +1344,7 @@ def api_admin_importe_confirm(uid):
         spec = _ilu.spec_from_file_location("heimat_import", "/opt/rename-webhook/heimat_import.py")
         mod  = _ilu.module_from_spec(spec)
         spec.loader.exec_module(mod)
-        result = mod.do_import(uid, verein_keys)
+        result = mod.do_import(uid, verein_keys, excluded_events)
         log(f"✅  Admin-Import uid={uid}: {result}")
         return json.dumps({"ok": True, "message": result}, ensure_ascii=False), 200, {
             "Content-Type": "application/json; charset=utf-8"}

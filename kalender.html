@@ -2720,8 +2720,14 @@ function renderVereinRow(uid,v){
   if(!_impGeo[uid][v.key])_impGeo[uid][v.key]={heimatort:v.heimatort_gespeichert||"",gemeinde:v.gemeinde||"",landkreis:"Landkreis Landshut"};
   const g=_impGeo[uid][v.key];
   const termineHtml=v.termine&&v.termine.length
-    ?v.termine.slice(0,8).map(t=>`<div style="font-size:12px;color:var(--text3);padding:2px 0">${t.datum}${t.uhrzeit?" "+t.uhrzeit:""} – ${escHtml(t.bezeichnung)}${t.ort?" · "+escHtml(t.ort):""}</div>`).join("")
-      +(v.termine.length>8?`<div style="font-size:12px;color:var(--text3)">… +${v.termine.length-8} weitere</div>`:"")
+    ?v.termine.map((t,i)=>{
+        const eid=`imp-chk-${uid}-${escHtml(v.key)}-${i}`;
+        const val=JSON.stringify({verein_key:v.key,datum:t.datum,uhrzeit:t.uhrzeit||"",bezeichnung:t.bezeichnung});
+        return `<label style="display:flex;gap:6px;align-items:baseline;font-size:12px;color:var(--text2);padding:3px 0;cursor:pointer">
+          <input type="checkbox" id="${eid}" data-imp-term='${val.replace(/'/g,"&#39;")}' checked style="margin-top:1px;flex-shrink:0">
+          <span>${escHtml(t.datum)}${t.uhrzeit?" "+escHtml(t.uhrzeit):""} – ${escHtml(t.bezeichnung)}${t.ort?" · <span style='color:var(--text3)'>"+escHtml(t.ort)+"</span>":""}</span>
+        </label>`;
+      }).join("")
     :'<div style="font-size:12px;color:var(--text3)">Keine neuen Termine.</div>';
   return `<div style="padding:10px 14px;border-bottom:1px solid var(--border)" id="imp-row-${uid}-${v.key}">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
@@ -2746,17 +2752,40 @@ function renderVereinRow(uid,v){
   </div>`;
 }
 
+function _collectExcluded(uid,key){
+  const row=document.getElementById(`imp-row-${uid}-${key}`);
+  if(!row)return[];
+  const excluded=[];
+  row.querySelectorAll(`input[type=checkbox][data-imp-term]`).forEach(cb=>{
+    if(!cb.checked)try{excluded.push(JSON.parse(cb.dataset.impTerm));}catch(e){}
+  });
+  return excluded;
+}
+
+function _cleanupAfterRowAction(uid,key){
+  const row=document.getElementById(`imp-row-${uid}-${key}`);
+  if(row)row.remove();
+  const card=document.getElementById(`imp-card-${uid}`);
+  if(card&&!card.querySelector('[id^="imp-row-"]'))card.remove();
+  const badge=document.getElementById("imp-pending-badge");
+  const remaining=document.querySelectorAll('[id^="imp-card-"]').length;
+  if(badge){if(remaining){badge.textContent=remaining;badge.style.display="";}else{badge.style.display="none";}}
+  if(!remaining)document.getElementById("imp-pending-list").innerHTML=
+    '<div style="text-align:center;padding:40px 20px;color:var(--text3)">Keine offenen Importe.</div>';
+}
+
 async function confirmVerein(uid,key){
   const token=localStorage.getItem("ut")||"";
   const geo={};
   if(_impGeo[uid]&&_impGeo[uid][key])geo[key]=_impGeo[uid][key];
+  const excluded_events=_collectExcluded(uid,key);
   const row=document.getElementById(`imp-row-${uid}-${key}`);
   if(row)row.style.opacity="0.5";
   try{
-    const r=await fetch(`/api/admin/importe/${uid}/confirm`,{method:"POST",headers:{"Content-Type":"application/json","X-Upload-Token":token},body:JSON.stringify({vereine:[key],geo})});
+    const r=await fetch(`/api/admin/importe/${uid}/confirm`,{method:"POST",headers:{"Content-Type":"application/json","X-Upload-Token":token},body:JSON.stringify({vereine:[key],geo,excluded_events})});
     const d=await r.json();
-    if(d.ok){if(row)row.remove();await loadImporte();loadVereine();loadTermine();}
-    else alert("Fehler: "+(d.error||"unbekannt"));
+    if(d.ok){_cleanupAfterRowAction(uid,key);loadVereine();loadTermine();}
+    else{if(row)row.style.opacity="";alert("Fehler: "+(d.error||"unbekannt"));}
   }catch(e){alert("Netzwerkfehler: "+e);if(row)row.style.opacity="";}
 }
 
@@ -2767,8 +2796,8 @@ async function rejectVerein(uid,key){
   try{
     const r=await fetch(`/api/admin/importe/${uid}/reject`,{method:"POST",headers:{"Content-Type":"application/json","X-Upload-Token":token},body:JSON.stringify({vereine:[key]})});
     const d=await r.json();
-    if(d.ok){if(row)row.remove();await loadImporte();}
-    else alert("Fehler: "+(d.error||"unbekannt"));
+    if(d.ok){_cleanupAfterRowAction(uid,key);}
+    else{if(row)row.style.opacity="";alert("Fehler: "+(d.error||"unbekannt"));}
   }catch(e){alert("Netzwerkfehler: "+e);if(row)row.style.opacity="";}
 }
 

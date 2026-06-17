@@ -317,10 +317,12 @@ def _is_duplicate(datum: str, uhrzeit: str, bezeichnung: str,
     return False
 
 
-def do_import(uid: str, verein_keys: list | None = None) -> str:
+def do_import(uid: str, verein_keys: list | None = None,
+              excluded_events: list | None = None) -> str:
     """Schreibt bestätigte Events in vereinstermine.json.
     verein_keys=None: alle Events importieren.
     verein_keys=[...]: nur diese Vereine importieren; Pending-Datei bleibt mit Rest.
+    excluded_events: Liste von {verein_key, datum, uhrzeit, bezeichnung} – diese Termine überspringen.
     Löscht zuerst alte Gemeinde-Keys (Migration auf per-Veranstalter-Keys)."""
     pending_file = PENDING_DIR / f"heimat_pending_{uid}.json"
     if not pending_file.exists():
@@ -334,6 +336,15 @@ def do_import(uid: str, verein_keys: list | None = None) -> str:
     pending  = json.loads(pending_file.read_text())
     events   = pending["events"]
     filter_keys = set(verein_keys) if verein_keys is not None else None
+    excluded_set: set[tuple] = set()
+    if excluded_events:
+        for ex in excluded_events:
+            excluded_set.add((
+                ex.get("verein_key", ""),
+                ex.get("datum", ""),
+                ex.get("uhrzeit", ""),
+                ex.get("bezeichnung", "").strip().lower(),
+            ))
     data     = json.loads(VEREINSTERMINE_FILE.read_text()) if VEREINSTERMINE_FILE.exists() else {}
     if "_labels" not in data:
         data["_labels"] = {}
@@ -359,6 +370,11 @@ def do_import(uid: str, verein_keys: list | None = None) -> str:
 
     for e in events:
         if filter_keys is not None and e["_verein_key"] not in filter_keys:
+            continue
+        if excluded_set and (
+            e["_verein_key"], e["datum"], e.get("uhrzeit", ""),
+            e["bezeichnung"].strip().lower()
+        ) in excluded_set:
             continue
         if not e.get("_neu", True):
             duplikat += 1
