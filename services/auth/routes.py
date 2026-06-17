@@ -296,10 +296,32 @@ def register():
             ).start()
             body = f"""
 <p class="ok">✅ Registrierung eingegangen!</p>
-<p>Wir haben dir eine E-Mail an <strong>{html.escape(email)}</strong> geschickt. Bitte bestätige deine Adresse.
-Danach prüft der Administrator deine Anfrage (in der Regel innerhalb eines Tages).</p>
-<div class="spam-hint">📬 Keine E-Mail erhalten? Bitte auch im <strong>Spam-Ordner</strong> nachsehen.</div>
-<a class="btn btn-sec" href="/" style="margin-top:.5rem">← Zurück zum Kalender</a>"""
+<p style="color:#aeaeb2;font-size:.9rem;margin-bottom:1.25rem">So geht es weiter:</p>
+<div style="display:flex;flex-direction:column;gap:.75rem;margin-bottom:1.25rem">
+  <div style="display:flex;gap:.75rem;align-items:flex-start">
+    <span style="background:#0a84ff;color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0;margin-top:.1rem">1</span>
+    <div>
+      <div style="font-weight:600;font-size:.9rem">E-Mail bestätigen</div>
+      <div style="color:#aeaeb2;font-size:.85rem">Wir haben eine E-Mail an <strong style="color:#f2f2f7">{html.escape(email)}</strong> geschickt. Bitte auf den Bestätigungslink klicken.</div>
+    </div>
+  </div>
+  <div style="display:flex;gap:.75rem;align-items:flex-start">
+    <span style="background:#636366;color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0;margin-top:.1rem">2</span>
+    <div>
+      <div style="font-weight:600;font-size:.9rem">Administrator prüft die Anfrage</div>
+      <div style="color:#aeaeb2;font-size:.85rem">In der Regel innerhalb eines Tages. Du erhältst danach eine Bestätigungsmail. Falls dein Verein bereits Termine im Kalender hat, werden diese automatisch deinem Account zugeordnet.</div>
+    </div>
+  </div>
+  <div style="display:flex;gap:.75rem;align-items:flex-start">
+    <span style="background:#636366;color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0;margin-top:.1rem">3</span>
+    <div>
+      <div style="font-weight:600;font-size:.9rem">Einloggen und Termine verwalten</div>
+      <div style="color:#aeaeb2;font-size:.85rem">Nach der Freigabe kannst du dich unter <a href="/verein/login" style="color:#0a84ff">/verein/login</a> einloggen und Termine eintragen oder hochladen.</div>
+    </div>
+  </div>
+</div>
+<div class="spam-hint">📬 Keine E-Mail erhalten? Bitte auch im <strong>Spam-Ordner</strong> nachsehen. Der Bestätigungslink ist 24 Stunden gültig.</div>
+<a class="btn btn-sec" href="/" style="margin-top:1rem">← Zurück zum Kalender</a>"""
             return _page("Registrierung eingegangen", body)
 
     rubrik_opts = "".join(
