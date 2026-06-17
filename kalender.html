@@ -402,6 +402,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
       <button class="adm-tab" id="admbtn-acc" onclick="switchAdmTab('acc')" style="display:flex;align-items:center;gap:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Accounts<span id="acc-pending-badge" style="display:none;background:#ff3b30;color:#fff;border-radius:8px;padding:0 5px;font-size:10px;margin-left:4px;vertical-align:middle;line-height:16px"></span></button>
       <button class="adm-tab" id="admbtn-trm" onclick="switchAdmTab('trm')" style="display:flex;align-items:center;gap:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Termine</button>
       <button class="adm-tab" id="admbtn-sta" onclick="switchAdmTab('sta')" style="display:flex;align-items:center;gap:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg> Stats</button>
+      <button class="adm-tab" id="admbtn-lnk" onclick="switchAdmTab('lnk')" style="display:flex;align-items:center;gap:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Verknüpfen<span id="lnk-badge" style="display:none;background:#ff9500;color:#fff;border-radius:8px;padding:0 5px;font-size:10px;margin-left:4px;vertical-align:middle;line-height:16px"></span></button>
       <button class="adm-tab" onclick="adminLogout()" title="Abmelden" style="margin-left:auto;color:#ff3b30;display:flex;align-items:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
     </div>
 
@@ -508,6 +509,13 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
     <div id="adm-tab-sta" style="display:none">
       <div id="sta-tab-content">
         <div style="text-align:center;padding:40px 20px;color:var(--text3)"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg> Lade&#8230;</div>
+      </div>
+    </div>
+
+    <!-- Tab 7: Verknüpfungen -->
+    <div id="adm-tab-lnk" style="display:none">
+      <div id="lnk-tab-content">
+        <div style="text-align:center;padding:40px 20px;color:var(--text3)">Lade&#8230;</div>
       </div>
     </div>
 
@@ -1571,6 +1579,7 @@ async function checkPassword(){
       document.getElementById("imp-content").style.display="";
       loadPendingVereine();
       _loadImporteBadge();
+      _loadLnkBadge();
     } else {
       err.textContent="Falsches Passwort.";
       document.getElementById("pw-input").select();
@@ -1681,7 +1690,7 @@ document.querySelector(".content").addEventListener("scroll",function(){
 
 /* ── Admin-Tabs ── */
 function switchAdmTab(tab){
-  ["upload","imp","ver","acc","trm","sta"].forEach(t=>{
+  ["upload","imp","ver","acc","trm","sta","lnk"].forEach(t=>{
     document.getElementById("adm-tab-"+t).style.display=t===tab?"":"none";
     document.getElementById("admbtn-"+t).classList.toggle("on",t===tab);
   });
@@ -1690,6 +1699,66 @@ function switchAdmTab(tab){
   if(tab==="acc"){loadPendingVereine();loadAllAccounts();}
   if(tab==="trm")loadTermine();
   if(tab==="sta")loadStats();
+  if(tab==="lnk")loadVerknuepfungen();
+}
+
+async function loadVerknuepfungen(){
+  const el=document.getElementById("lnk-tab-content");
+  const token=localStorage.getItem("ut")||"";
+  el.innerHTML='<div style="text-align:center;padding:30px;color:var(--text3)">Lade&#8230;</div>';
+  try{
+    const [keysRes,accRes]=await Promise.all([
+      fetch("/api/admin/unregistered-keys",{headers:{"X-Upload-Token":token}}),
+      fetch("/api/admin/users",{headers:{"X-Upload-Token":token}}),
+    ]);
+    const keys=await keysRes.json();
+    const accs=await accRes.json();
+    const badge=document.getElementById("lnk-badge");
+    if(badge){if(keys.length){badge.style.display="";badge.textContent=keys.length;}else{badge.style.display="none";}}
+    if(!Array.isArray(keys)||!keys.length){
+      el.innerHTML='<div style="padding:20px;color:var(--text3);text-align:center">✅ Alle Keys sind einem Verein-Account zugeordnet.</div>';
+      return;
+    }
+    const accOpts=Array.isArray(accs)?accs.filter(a=>a.verein_key).map(a=>`<option value="${a.id}|${escHtml(a.verein_key)}">${escHtml(a.verein_name)}</option>`).join(""):"";
+    const rows=keys.map(k=>`
+<div style="background:var(--card);border:1.5px solid var(--border2);border-radius:12px;padding:14px;margin-bottom:10px">
+  <div style="font-weight:600;font-size:.95rem;margin-bottom:4px">${escHtml(k.label)}</div>
+  <div style="font-size:.8rem;color:var(--text3);margin-bottom:10px">Key: <code style="background:var(--bg2);padding:1px 5px;border-radius:4px">${escHtml(k.key)}</code> &nbsp;·&nbsp; ${k.n_termine} Termine</div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <select id="lnk-sel-${escHtml(k.key)}" style="flex:1;min-width:160px;padding:.5rem;border-radius:.5rem;border:1px solid var(--border2);background:var(--card);color:var(--text);font-size:.85rem">
+      <option value="">— Verein-Account wählen —</option>
+      ${accOpts}
+    </select>
+    <button onclick="doVerknuepfen('${escHtml(k.key)}')" style="padding:.5rem .875rem;border-radius:.5rem;border:none;background:#0a84ff;color:#fff;font-size:.85rem;font-weight:600;cursor:pointer">Verknüpfen</button>
+  </div>
+  <div id="lnk-msg-${escHtml(k.key)}" style="font-size:.82rem;margin-top:6px"></div>
+</div>`).join("");
+    el.innerHTML=`<div style="padding:12px 0"><div style="font-size:.85rem;color:var(--text3);margin-bottom:12px">${keys.length} JSON-Key(s) ohne Verein-Account:</div>${rows}</div>`;
+  }catch(e){el.innerHTML='<div style="color:#ff3b30;padding:12px">Fehler beim Laden</div>';}
+}
+
+async function doVerknuepfen(sourceKey){
+  const sel=document.getElementById("lnk-sel-"+sourceKey);
+  const msg=document.getElementById("lnk-msg-"+sourceKey);
+  const val=sel?.value;
+  if(!val){if(msg){msg.style.color="var(--text3)";msg.textContent="Bitte Verein-Account wählen.";}return;}
+  const [verein_id,target_key]=val.split("|");
+  const label=sel.options[sel.selectedIndex]?.text||target_key;
+  if(!confirm(`Alle Termine von "${sourceKey}" zu "${label}" übertragen?\n\nNicht rückgängig machbar.`))return;
+  const token=localStorage.getItem("ut")||"";
+  if(msg){msg.style.color="var(--text3)";msg.textContent="Übertrage…";}
+  try{
+    const r=await fetch(`/api/admin/verein/${verein_id}/transfer-key`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","X-Upload-Token":token},
+      body:JSON.stringify({source_key:sourceKey}),
+    });
+    const d=await r.json();
+    if(d.ok){
+      if(msg){msg.style.color="green";msg.textContent=`✅ ${d.transferred} Termine übertragen`;}
+      setTimeout(()=>loadVerknuepfungen(),1200);
+    }else{if(msg){msg.style.color="#ff3b30";msg.textContent=d.error||"Fehler";}}
+  }catch(e){if(msg){msg.style.color="#ff3b30";msg.textContent="Netzwerkfehler";}}
 }
 
 let _chartPeriod=30;
@@ -2596,6 +2665,15 @@ async function _loadImporteBadge(){
     const badge=document.getElementById("imp-pending-badge");
     if(list.length){badge.textContent=list.length;badge.style.display="";}
     else badge.style.display="none";
+  }catch(e){}
+}
+
+async function _loadLnkBadge(){
+  try{
+    const token=localStorage.getItem("ut")||"";
+    const list=await(await fetch("/api/admin/unregistered-keys",{headers:{"X-Upload-Token":token}})).json();
+    const badge=document.getElementById("lnk-badge");
+    if(badge){if(list.length){badge.textContent=list.length;badge.style.display="";}else{badge.style.display="none";}}
   }catch(e){}
 }
 

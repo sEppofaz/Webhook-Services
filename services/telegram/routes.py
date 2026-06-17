@@ -576,6 +576,61 @@ def telegram_webhook():
                 answer_telegram_callback(cb_id, "🗑 Verworfen")
                 send_telegram(TELEGRAM_CHAT_ID, "🗑 heimat-info Import verworfen.")
 
+        elif cb_data.startswith("vk_link:") or cb_data.startswith("vk_ignore:"):
+            parts = cb_data.split(":", 2)
+            if len(parts) < 3:
+                answer_telegram_callback(cb_id, "❌ Ungültige Daten")
+            elif cb_data.startswith("vk_ignore:"):
+                answer_telegram_callback(cb_id, "⏭ Ignoriert")
+            else:
+                try:
+                    from shared.vk_db import db_conn as _db_conn
+                    from shared.kalender_store import KalenderStore
+                    verein_id  = int(parts[1])
+                    source_key = parts[2]
+                    with _db_conn() as conn:
+                        row = conn.execute(
+                            "SELECT verein_key, verein_name FROM vereine_accounts WHERE id=?",
+                            (verein_id,),
+                        ).fetchone()
+                    if not row:
+                        answer_telegram_callback(cb_id, "❌ Verein nicht gefunden")
+                    else:
+                        target_key  = row["verein_key"]
+                        verein_name = row["verein_name"]
+                        transferred = 0
+                        def _merge(data, sk=source_key, tk=target_key):
+                            nonlocal transferred
+                            src      = data.pop(sk, [])
+                            transferred = len(src)
+                            existing = data.get(tk, [])
+                            merged   = sorted(existing + src,
+                                              key=lambda t: (t.get("datum", ""), t.get("bezeichnung", "")))
+                            if merged:
+                                data[tk] = merged
+                            meta = data.setdefault("_meta", {})
+                            if sk in meta:
+                                if tk not in meta:
+                                    meta[tk] = meta.pop(sk)
+                                else:
+                                    for k, v in meta[sk].items():
+                                        if k not in meta[tk] or not meta[tk][k]:
+                                            meta[tk][k] = v
+                                    del meta[sk]
+                            data.setdefault("_labels", {}).pop(sk, None)
+                        KalenderStore.update(_merge)
+                        with _db_conn() as conn:
+                            conn.execute(
+                                "UPDATE tg_subscriptions SET verein_key=? WHERE verein_key=?",
+                                (target_key, source_key),
+                            )
+                        answer_telegram_callback(cb_id, f"✅ {transferred} Termine übertragen")
+                        send_telegram(TELEGRAM_CHAT_ID,
+                            f"✅ Verknüpft: {source_key} → {verein_name}\n"
+                            f"{transferred} Termine übertragen.")
+                except Exception as e:
+                    answer_telegram_callback(cb_id, f"❌ Fehler: {e}")
+
         elif cb_data.startswith("verein_approve:") or cb_data.startswith("verein_reject:"):
             from shared.vk_db import db_conn
             from shared.vk_mail import send_welcome_email, send_rejected_email

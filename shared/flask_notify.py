@@ -21,16 +21,15 @@ def send_telegram(chat_id: str | int, text: str) -> None:
         log(f"❌  Telegram-Sendefehler: {e}")
 
 
-def send_telegram_inline(chat_id: str | int, text: str, keyboard: list) -> int | None:
+def send_telegram_inline(chat_id: str | int, text: str, keyboard: list, parse_mode: str | None = None) -> int | None:
     """Sendet Nachricht mit Inline-Keyboard, gibt message_id zurück."""
     if not TELEGRAM_TOKEN:
         return None
     url     = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = json.dumps({
-        "chat_id":      chat_id,
-        "text":         text,
-        "reply_markup": {"inline_keyboard": keyboard},
-    }).encode()
+    msg: dict = {"chat_id": chat_id, "text": text, "reply_markup": {"inline_keyboard": keyboard}}
+    if parse_mode:
+        msg["parse_mode"] = parse_mode
+    payload = json.dumps(msg).encode()
     req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
     try:
         resp = urllib.request.urlopen(req, timeout=10)

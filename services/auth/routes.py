@@ -4,6 +4,7 @@ import secrets
 import re
 import threading
 from datetime import datetime, timedelta
+from difflib import SequenceMatcher
 from functools import wraps
 
 import bcrypt
@@ -161,6 +162,48 @@ def _telegram_approve_msg(verein_id: int, verein_name: str, email: str,
         pass
 
 
+def _telegram_suggest_links(verein_id: int, verein_name: str, verein_key: str) -> None:
+    """Schickt für jeden fuzzy-gematchten JSON-Key eine eigene Telegram-Nachricht."""
+    try:
+        from shared.kalender_store import KalenderStore
+        data = KalenderStore.read()
+        with db_conn() as conn:
+            registered_keys = {
+                r["verein_key"] for r in conn.execute(
+                    "SELECT verein_key FROM vereine_accounts WHERE verein_key IS NOT NULL"
+                ).fetchall()
+            }
+        labels = data.get("_labels", {})
+        matches = []
+        for key, termine in data.items():
+            if key.startswith("_") or key in registered_keys or not isinstance(termine, list):
+                continue
+            label = labels.get(key, key)
+            score = max(
+                SequenceMatcher(None, verein_name.lower(), label.lower()).ratio(),
+                SequenceMatcher(None, verein_key, key).ratio(),
+            )
+            if score >= 0.6:
+                matches.append((score, key, label, len(termine)))
+        matches.sort(reverse=True)
+        for score, src_key, src_label, n in matches[:3]:
+            text = (
+                f"🔗 Mögliche Verknüpfung für {verein_name}:\n"
+                f"Key {src_key} ({src_label}) – {n} Termine\n"
+                f"Ähnlichkeit: {score:.0%}"
+            )
+            send_telegram_inline(
+                os.environ.get("CHAT_ID", ""),
+                text,
+                [[
+                    {"text": "✅ Verknüpfen", "callback_data": f"vk_link:{verein_id}:{src_key}"},
+                    {"text": "❌ Ignorieren", "callback_data": f"vk_ignore:{verein_id}:{src_key}"},
+                ]],
+            )
+    except Exception:
+        pass
+
+
 # ── Register ────────────────────────────────────────────────────────────────
 
 @auth_bp.route("/verein/register", methods=["GET", "POST"])
@@ -204,6 +247,20 @@ def register():
         elif not zn:
             error = "Bitte bestätigen, dass die Zugangsdaten notiert wurden."
         else:
+            # Duplikat-Check: ähnlicher Vereinsname schon vorhanden?
+            with db_conn() as conn:
+                existing = conn.execute(
+                    "SELECT verein_name FROM vereine_accounts WHERE status != 'abgelehnt'"
+                ).fetchall()
+            for ex in existing:
+                if SequenceMatcher(None, verein_name.lower(), ex["verein_name"].lower()).ratio() >= 0.85:
+                    error = (f'Ein Verein mit ähnlichem Namen ist bereits registriert: '
+                             f'„{html.escape(ex["verein_name"])}". '
+                             f'Falls du bereits einen Account hast, bitte einloggen. '
+                             f'Bei Problemen: <a href="mailto:Vereinskalender@icloud.com">Vereinskalender@icloud.com</a>')
+                    break
+
+        if not error:
             gemeinde = landkreis = ""
             geo = lookup_plz(plz)
             gemeinde  = geo.get("gemeinde", "")
@@ -232,6 +289,11 @@ def register():
             send_verify_email(email, token)
             _telegram_approve_msg(verein_id, verein_name, email,
                                   rubrik=rubrik, heimatort=heimatort, telefon=telefon)
+            threading.Thread(
+                target=_telegram_suggest_links,
+                args=(verein_id, verein_name, verein_key),
+                daemon=True,
+            ).start()
             body = f"""
 <p class="ok">✅ Registrierung eingegangen!</p>
 <p>Wir haben dir eine E-Mail an <strong>{html.escape(email)}</strong> geschickt. Bitte bestätige deine Adresse.
@@ -283,7 +345,7 @@ Danach prüft der Administrator deine Anfrage (in der Regel innerhalb eines Tage
     <input type="checkbox" name="zugangsdaten_notiert" id="zn" required>
     <label for="zn">Ich habe die Zugangsdaten (Vereinsname + Passwort) notiert.</label>
   </div>
-  <button class="btn" type="submit">Registrieren</button>
+  <button class="btn" type="submit" id="reg-btn">Registrieren</button>
 </form>
 <a class="btn btn-sec" href="/verein/login" style="margin-top:.5rem">← Abbrechen</a>
 <hr>
@@ -293,6 +355,7 @@ Danach prüft der Administrator deine Anfrage (in der Regel innerhalb eines Tage
 document.querySelector('form').addEventListener('submit',function(e){{
   this.querySelectorAll('.field-err').forEach(f=>f.classList.remove('field-err'));
   let first=null;
+  const btn=document.getElementById('reg-btn');
   this.querySelectorAll('input[required]:not([type=checkbox]),select[required]').forEach(f=>{{
     let bad=!f.value.trim();
     if(!bad&&f.name==='plz')bad=!/^\d{{5}}$/.test(f.value.trim());
@@ -305,6 +368,7 @@ document.querySelector('form').addEventListener('submit',function(e){{
   const zn=this.querySelector('[name=zugangsdaten_notiert]');
   if(zn&&!zn.checked){{zn.closest('.chk').classList.add('field-err');if(!first)first=zn;}}
   if(first){{e.preventDefault();first.scrollIntoView({{behavior:'smooth',block:'center'}});first.focus();}}
+  else if(btn){{btn.disabled=true;btn.textContent='Wird registriert…';}}
 }});
 function togglePw(btn){{
   const inp=btn.closest('.pw-wrap').querySelector('input');
