@@ -109,6 +109,32 @@ def verein_stats() -> tuple[int, int]:
     return gesamt, aktiv
 
 
+def verein_activity_stats() -> dict:
+    """Zählt Neuanlagen und Änderungen durch Vereine aus vk_audit (UTC-Timestamps)."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        now_utc = datetime.utcnow()
+        cutoff_24h = (now_utc - timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
+        cutoff_7d  = (now_utc - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
+
+        def _count(aktion: str, cutoff: str) -> int:
+            return conn.execute(
+                "SELECT COUNT(*) FROM vk_audit WHERE aktion=? AND timestamp>=?",
+                (aktion, cutoff)
+            ).fetchone()[0]
+
+        result = {
+            "neu_24h":       _count("erstellt",  cutoff_24h),
+            "geaendert_24h": _count("geaendert", cutoff_24h),
+            "neu_7d":        _count("erstellt",  cutoff_7d),
+            "geaendert_7d":  _count("geaendert", cutoff_7d),
+        }
+        conn.close()
+        return result
+    except Exception:
+        return {"neu_24h": 0, "geaendert_24h": 0, "neu_7d": 0, "geaendert_7d": 0}
+
+
 def last_import_info() -> str:
     if not LAST_IMPORT_FILE.exists():
         return "–"
@@ -125,6 +151,7 @@ def main():
     stats          = get_db_stats()
     gesamt, aktiv  = verein_stats()
     letzter_import = last_import_info()
+    act            = verein_activity_stats()
     jetzt          = datetime.now(TZ_LOCAL).strftime("%d.%m.%Y, %H:%M")
 
     text = (
@@ -132,6 +159,8 @@ def main():
         f"📅 <b>{stats['datum']}</b> · Aufrufe: <b>{stats['views']}</b> · 🇩🇪 <b>{stats['de']}</b> Besucher\n"
         f"📆 7 Tage: <b>{stats['views_7d']}</b> Aufrufe · 🇩🇪 <b>{stats['de_7d']}</b> Besucher\n"
         f"🏛 Vereine: <b>{gesamt} gesamt</b>, davon <b>{aktiv} mit künftigen Terminen</b>\n"
+        f"✏️ Vereinstermine 24h: <b>{act['neu_24h']} neu</b> · <b>{act['geaendert_24h']} geändert</b>"
+        f" | 7 Tage: <b>{act['neu_7d']} neu</b> · <b>{act['geaendert_7d']} geändert</b>\n"
         f"📥 Letzter Import: <b>{letzter_import}</b>"
     )
 
