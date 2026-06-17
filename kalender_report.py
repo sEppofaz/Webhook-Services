@@ -113,7 +113,8 @@ def verein_activity_stats() -> dict:
     """Zählt Neuanlagen und Änderungen durch Vereine aus vk_audit (UTC-Timestamps)."""
     try:
         conn = sqlite3.connect(DB_PATH)
-        now_utc = datetime.utcnow()
+        from datetime import timezone
+        now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
         cutoff_24h = (now_utc - timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
         cutoff_7d  = (now_utc - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
 
