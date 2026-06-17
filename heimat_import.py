@@ -413,6 +413,16 @@ def do_import(uid: str, verein_keys: list | None = None,
     KalenderStore.update(lambda d: d.clear() or d.update(data))
     _log(f"✅ Import: {neu} neu, {duplikat} Duplikate übersprungen")
 
+    # Manuell ausgeschlossene Einzeltermine als soft-deleted speichern → kommen nicht wieder
+    if excluded_set:
+        excluded_ev = [
+            e for e in events
+            if (e["_verein_key"], e["datum"], e.get("uhrzeit", ""),
+                e["bezeichnung"].strip().lower()) in excluded_set
+            and e.get("_neu")
+        ]
+        _save_rejected_as_deleted(excluded_ev)
+
     # Pending-Datei: bei Teilimport Rest behalten, sonst löschen
     try:
         if filter_keys is not None:
@@ -427,6 +437,32 @@ def do_import(uid: str, verein_keys: list | None = None,
     except OSError:
         pass
     return f"✅ {neu} neue Termine importiert, {duplikat} Duplikate übersprungen"
+
+
+def _save_rejected_as_deleted(events: list) -> None:
+    """Schreibt verworfene neue Events als soft-deleted in vereinstermine.json,
+    damit sie beim nächsten Import als Duplikate erkannt werden und nicht wiederkehren."""
+    if not events:
+        return
+    now = datetime.utcnow().isoformat()[:19]
+    def _upd(data):
+        for e in events:
+            key = e["_verein_key"]
+            data.setdefault("_labels", {}).setdefault(key, e.get("_label", key))
+            data.setdefault(key, []).append({
+                "datum":         e["datum"],
+                "uhrzeit":       e.get("uhrzeit", ""),
+                "bezeichnung":   e["bezeichnung"],
+                "ort":           e.get("ort", ""),
+                "geloescht":     True,
+                "geloescht_von": "admin_reject",
+                "geloescht_am":  now,
+            })
+        return data
+    try:
+        KalenderStore.update(_upd)
+    except Exception as ex:
+        _log(f"⚠️  _save_rejected_as_deleted fehlgeschlagen: {ex}")
 
 
 def do_reject(uid: str, verein_keys: list | None = None) -> str:
@@ -444,7 +480,10 @@ def do_reject(uid: str, verein_keys: list | None = None) -> str:
         return "🗑 Import verworfen"
     pending = json.loads(pending_file.read_text())
     filter_keys = set(verein_keys)
+    rejected_new = [e for e in pending["events"]
+                    if e["_verein_key"] in filter_keys and e.get("_neu")]
     remaining = [e for e in pending["events"] if e["_verein_key"] not in filter_keys]
+    _save_rejected_as_deleted(rejected_new)
     try:
         if remaining:
             pending["events"] = remaining
