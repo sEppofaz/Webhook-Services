@@ -90,7 +90,7 @@ ssh root@89.167.104.145 "/opt/rename-webhook/bin/python3 /opt/rename-webhook/hei
 
 ## Cron-Jobs (Vereinskalender-relevant)
 
-Alle Jobs als `root`-Crontab. Timezone: `Europe/Berlin`. Logs: `/var/log/pka-*.log`.
+Alle Jobs als `root`-Crontab. Timezone: `Europe/Berlin`. Logs: `/var/log/pka-*.log` – Rotation seit 2026-07-02 via `/etc/logrotate.d/pka` (weekly, 8 Rotationen, `su root root` nötig wegen `syslog`-Gruppenrechten auf `/var/log`).
 
 | Zeit | Script | Beschreibung |
 |------|--------|--------------|
@@ -111,6 +111,7 @@ Alle Jobs als `root`-Crontab. Timezone: `Europe/Berlin`. Logs: `/var/log/pka-*.l
 ## nginx-Konfiguration
 
 - **Config:** `/etc/nginx/sites-available/vereinskalender` → Domains: `vereinskalender.online`, `www.vereinskalender.online`, `veranstaltungen.website`, `www.veranstaltungen.website` (alle zeigen denselben Inhalt, kein Redirect)
+- **Seit 2026-07-02:** `sites-enabled/vereinskalender` ist ein echter Symlink auf `sites-available/vereinskalender` (vorher zwei divergierende Dateien). Immer nur `sites-available/vereinskalender` editieren. **Niemals** `.bak`-Kopien in `sites-enabled/` ablegen – nginx lädt alles dort automatisch mit (führte zu „conflicting server name"-Warnungen). Backups gehören nach `/root/nginx-backups/`.
 - **SSL-Cert:** deckt alle 4 Domains ab, läuft bis 2026-09-05, Auto-Renewal aktiv
 - **PWA-Titel domain-abhängig:** `manifest_json()` prüft `request.host` → `name: "Veranstaltungen"` bei `veranstaltungen.website`, sonst `"Vereinskalender"`. Gleich auch in `<title>` + `apple-mobile-web-app-title` per JS in kalender.html.
 - `location = /` → `proxy_pass http://127.0.0.1:5000/kalender` + `Cache-Control: no-store`
