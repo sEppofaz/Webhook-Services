@@ -63,9 +63,9 @@ def dashboard(user):
         rows += f"""<div class="card" style="{style}">
   <div style="display:flex;justify-content:space-between;align-items:start">
     <div>
-      <div style="font-weight:600">{t.get('bezeichnung','')}</div>
+      <div style="font-weight:600">{html.escape(t.get('bezeichnung',''))}</div>
       <div style="color:#aeaeb2;font-size:.85rem">{t.get('datum','')} {t.get('uhrzeit','')}</div>
-      <div style="color:#aeaeb2;font-size:.85rem">{t.get('ort','')}</div>
+      <div style="color:#aeaeb2;font-size:.85rem">{html.escape(t.get('ort',''))}</div>
     </div>
     <div>{edit_btn}</div>
   </div>
@@ -337,9 +337,9 @@ def termin_edit(user, termin_id):
   <label>Uhrzeit</label>
   <input name="uhrzeit" type="time" value="{termin.get('uhrzeit','')}">
   <label>Bezeichnung</label>
-  <input name="bezeichnung" type="text" required value="{termin.get('bezeichnung','')}">
+  <input name="bezeichnung" type="text" required value="{html.escape(termin.get('bezeichnung',''))}">
   <label>Ort</label>
-  <input name="ort" type="text" value="{termin.get('ort','')}">
+  <input name="ort" type="text" value="{html.escape(termin.get('ort',''))}">
   {flyer_section}
   <label>{'Flyer ersetzen' if flyer_url else 'Flyer hochladen'} (PDF/JPG/PNG/WebP, max. 8 MB)</label>
   <input name="flyer" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp">

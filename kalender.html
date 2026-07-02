@@ -2904,8 +2904,8 @@ function renderTermineList(){
       return `<div onclick="showTerminEdit(${idx})" style="display:flex;align-items:center;padding:9px 12px;border-bottom:1px solid var(--border);cursor:pointer;gap:10px">
         <div style="min-width:90px;font-size:13px;font-weight:600;color:var(--text)">${t.datum}</div>
         <div style="flex:1;min-width:0">
-          <div style="font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.bezeichnung}</div>
-          <div style="font-size:12px;color:var(--text3)">${t._vereinName}</div>
+          <div style="font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(t.bezeichnung)}</div>
+          <div style="font-size:12px;color:var(--text3)">${escHtml(t._vereinName)}</div>
         </div>
         <div style="font-size:13px;color:${noTime?"#f39c12":"var(--text2)"};white-space:nowrap">${noTime?"&#9888; keine Zeit":t.uhrzeit}</div>
       </div>`;
@@ -2960,7 +2960,7 @@ function showTerminEdit(idx){
   `;
 }
 function _admFld(label,id,type,val){
-  const safe=String(val).replace(/"/g,"&quot;");
+  const safe=escHtml(val);
   return `<div style="margin-bottom:10px">
     <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:3px">${label}</label>
     <input id="${id}" type="${type}" value="${safe}"

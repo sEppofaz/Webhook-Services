@@ -29,6 +29,8 @@ from shared.kalender_core import (
 
 telegram_bp = Blueprint("telegram", __name__)
 
+TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "")
+
 _DROPBOX_INVOICE_REFRESH_TOKEN = os.environ.get("DROPBOX_INVOICE_REFRESH_TOKEN", "")
 _DROPBOX_INVOICE_APP_KEY       = os.environ.get("DROPBOX_INVOICE_APP_KEY", "")
 _DROPBOX_INVOICE_APP_SECRET    = os.environ.get("DROPBOX_INVOICE_APP_SECRET", "")
@@ -341,6 +343,9 @@ def webhook_todo():
 
 @telegram_bp.route("/telegram", methods=["POST"])
 def telegram_webhook():
+    if TELEGRAM_WEBHOOK_SECRET and request.headers.get("X-Telegram-Bot-Api-Secret-Token") != TELEGRAM_WEBHOOK_SECRET:
+        return "", 403
+
     data    = request.get_json(silent=True) or {}
     message = data.get("message", {})
     chat_id = str(message.get("chat", {}).get("id", ""))
