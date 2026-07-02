@@ -675,20 +675,9 @@ def upload_process(user):
     suffix = Path(fname).suffix if fname else ""
     typ    = request.form.get("typ", "vision")
 
-    # Quota jetzt erhöhen (vor dem Claude-Call, um Missbrauch zu verhindern)
-    increment_upload_quota(verein_id, heute)
-
-    auto_plz = ""
-    alle: list = []
-
     if typ == "excel":
         if suffix != ".xlsx":
             body = '<p class="err">Nur .xlsx-Dateien erlaubt.</p>' + _BACK_DASH
-            return _page("Fehler", body), 400
-        try:
-            alle = parse_excel_bytes(f.read())
-        except Exception as ex:
-            body = f'<p class="err">Fehler beim Lesen der Excel-Datei: {html.escape(str(ex))}</p>' + _BACK_DASH
             return _page("Fehler", body), 400
     else:
         allowed = {".pdf", ".jpg", ".jpeg", ".png", ".heic", ".heif"}
@@ -698,6 +687,21 @@ def upload_process(user):
         if suffix in {".heic", ".heif"} and not _HEIC_SUPPORTED:
             body = '<p class="err">HEIC-Format auf diesem Server nicht verfügbar.</p>' + _BACK_DASH
             return _page("Fehler", body), 400
+
+    # Quota jetzt erhöhen (vor dem eigentlichen Parse/Claude-Call, um Missbrauch zu verhindern) –
+    # aber erst nach der Format-Validierung, damit ein falsches Dateiformat keinen Slot kostet
+    increment_upload_quota(verein_id, heute)
+
+    auto_plz = ""
+    alle: list = []
+
+    if typ == "excel":
+        try:
+            alle = parse_excel_bytes(f.read())
+        except Exception as ex:
+            body = f'<p class="err">Fehler beim Lesen der Excel-Datei: {html.escape(str(ex))}</p>' + _BACK_DASH
+            return _page("Fehler", body), 400
+    else:
         try:
             result   = import_pdf_bytes(f.read(), suffix)
             alle     = result["alle"]

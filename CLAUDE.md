@@ -99,10 +99,12 @@ Alle Jobs als `root`-Crontab. Timezone: `Europe/Berlin`. Logs: `/var/log/pka-*.l
 | täglich 18:00 | `kalender_erinnerung.py` | Telegram-Erinnerungen für Bot-Abonnenten |
 | täglich 00:10, 20:00 | `kalender_report.py` | Vereinskalender-Bericht (verifiziert, DE) |
 | täglich 00:05 | `stats_collector.py` | Besucherstatistik → `page_stats`-Tabelle |
-| quartalsweise 07:00 (1. Jan/Apr/Jul/Okt) | `heimat_import.py` | heimat-info.de alle Gemeinden fetchen |
+| wöchentlich Mi 07:00 (`0 7 * * 3`) | `heimat_import.py` | heimat-info.de alle Gemeinden fetchen |
+| Di+Do 06:00 | `traffic_info.py` | Verkehrsinfo-Check |
 | alle 15 Min | `pka_todos_reminder.py` | PKA Todos Fälligkeits-Erinnerungen |
 
 **kalender_report.py (2026-05-22):** Datenquelle auf SQLite-DB umgestellt (`page_stats` + `page_stats_geo`). Zeigt verifizierte Zahlen (ohne Crawler), Datum-Label des letzten verfügbaren Tages, Deutschland-Besucher aus `page_stats_geo`. Keine nginx-Log-Analyse mehr. Läuft nur noch 00:10 + 20:00 Uhr (war: 4×täglich).
+**kalender_report.py (2026-06-17):** Neue Funktion `verein_activity_stats()` – fragt `vk_audit` nach `aktion='erstellt'` und `aktion='geaendert'` ab (UTC-Timestamps, Cutoffs 24h + 7d). Zeigt im Bericht: `✏️ Vereinstermine 24h: X neu · Y geändert | 7 Tage: X neu · Y geändert`. Nur Aktionen durch Vereine selbst (Dashboard), keine heimat-info-Importe.
 
 ---
 
@@ -117,9 +119,12 @@ Alle Jobs als `root`-Crontab. Timezone: `Europe/Berlin`. Logs: `/var/log/pka-*.l
 - `location = /api/termine` → Rate-Limit 30 req/min, Burst 5 (Scraping-Schutz)
 - `location /api/` → Rate-Limit 10 req/s, Burst 30
 - `location /verein` → proxy_pass Flask (Auth-Seiten, Dashboard)
+- `location /telegram` → Telegram Haupt-Bot-Webhook (**Pflicht!** Muss in dieser Config stehen)
+- `location /kalender-bot` → Telegram Kalender-Bot-Webhook
 - **Rate-Limit-Conf:** `/etc/nginx/conf.d/rate-limit.conf` (api_zone, api_termine_zone, auth_zone)
 - **Security-Header:** HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy – in Locations mit eigenem `add_header` explizit wiederholen (nginx-Vererbungsregel)
 - Nach Änderungen: `nginx -t && systemctl reload nginx`
+- **⚠️ Pitfall Telegram-Webhook:** Bei Domain-Änderungen oder neuer nginx-Config IMMER prüfen ob `/telegram` enthalten ist. Fehlt die Location → Telegram-Callbacks kommen nicht an → Bot stumm. Webhook-URL: `https://vereinskalender.online/telegram`. Prüfen: `getWebhookInfo`. Neu setzen: `setWebhook url=https://vereinskalender.online/telegram`. (Vorfall 2026-06-07 bis 2026-06-10)
 
 ---
 
@@ -143,9 +148,6 @@ Alle Jobs als `root`-Crontab. Timezone: `Europe/Berlin`. Logs: `/var/log/pka-*.l
 | `/api/admin/users` | GET – Alle Accounts (Auth) |
 | `/api/admin/verein/<id>` | PATCH/DELETE – Verein-Account |
 | `/api/admin/unregistered-keys` | GET – Keys in vereinstermine.json ohne Account (für Transfer-Dropdown) |
-| `/claude-remote/` | Claude Remote PWA (HTTP BasicAuth: htpasswd `/etc/nginx/claude-remote.htpasswd`) |
-| `/api/claude-remote/chat` | POST – Chat-Anfrage + Agentic Loop (BasicAuth) |
-| `/api/claude-remote/confirm-write` | POST – Schreiboperation bestätigen/ablehnen (BasicAuth) |
 | `/api/admin/verein/<id>/transfer-key` | POST `{source_key}` – Termine + _meta + _labels + tg_subscriptions übertragen |
 | `/upload` | Superadmin-Upload (PDF/JPG/PNG/HEIC/Excel) |
 | `/#admin` | Admin-PWA (Tabs: Import/Importe/Vereine/Accounts/Termine/Stats) |
@@ -163,6 +165,10 @@ Alle Jobs als `root`-Crontab. Timezone: `Europe/Berlin`. Logs: `/var/log/pka-*.l
 - **`_labels`**: `{vereinKey: "Anzeigename"}` – letztes Wort > 4 Zeichen = Heimatort-Fallback
 - **`_meta[key]`**: `{plz, gemeinde, landkreis, heimatort?, selbstverwaltung?}`
 - **`_ortschaften`**: `{gemeinde_map: {...}}` – Mapping Ortschaft→Gemeinde
+
+### Pitfalls `vereinstermine.json`
+- **`approve`-Endpunkt legt keinen JSON-Eintrag an:** `POST /api/admin/vereine/<id>/approve` setzt nur `status=aktiv` in der DB. Wenn ein freigegebener Verein noch nie Termine importiert hat, fehlt er in `_labels`/`_meta` → unsichtbar in Vereinsübersicht. Fix: `_labels` + `_meta` (mit `selbstverwaltung: true`) manuell via `KalenderStore.update()` nachtragen. (Vorfall 2026-06-18: FFW Paindlkofen)
+- **`KalenderStore.update()` als `root` → Owner-Problem:** Direkter Python-Aufruf als root ändert den Datei-Owner auf `root` → App-User `webhook` bekommt `Permission denied`. Danach immer: `chown webhook:webhook /opt/rename-webhook/vereinstermine.json`
 - **`ortschaft`**: Pro Termin – Veranstaltungsort
 - **`quelle`** / **`quelle_url`**: Pro Termin – Herkunft (heimat-info oder Vereinsadmin)
 - **`flyer_url`** / **`flyer_path`** (optional, Stand 2026-06-07): Pro Termin – Dropbox-Link (`?raw=1` für Browser-Anzeige) + Dropbox-Pfad zum Löschen. Modul: `shared/flyer_store.py`. Upload-Ordner: `/Dokumente/Vereinskalender/flyer/`. Nur PDF/JPG/PNG/WebP, max. 8 MB, Magic-Bytes-geprüft, UUID-Dateiname.
@@ -182,8 +188,8 @@ Alle Jobs als `root`-Crontab. Timezone: `Europe/Berlin`. Logs: `/var/log/pka-*.l
 - **Accordion-Transitions:** `.f-content` nutzt `max-height:0/1000px` + `overflow:hidden` – KEIN `display:none/block` mehr. Pitfall: Wenn neue Sections hinzugefügt werden, kein `display:none` im CSS setzen.
 - **Scroll zu Datum:** Beim Render scrollt die App zum `.ev-date-sep` vor dem ersten kommenden Termin (rückwärts durch `previousElementSibling` bis zur Klasse `ev-date-sep`).
 - **Event-Card Icons (Stand 2026-06-07):** Alle drei Buttons nutzen gemeinsame CSS-Klasse `.ev-icon-btn` (position absolute, top:10px). Positionen: `.ev-cal` right:10px, `.ev-fav` right:50px, `.ev-flyer` right:90px. Icons als Lucide SVG inline.
-- **Favoriten-Herz:** `.ev-fav.on` → `color:#ff3b30` + `svg path { fill:currentColor }` per CSS. Kein JS-`style.filter` mehr. `toggleFavVerein` setzt `textContent="⭐"` nur für `.fav-star`-Elemente (nicht für `.ev-fav` mit SVG).
-- **Favoriten-Pills Icon-Pitfall:** `f.icon` enthält HTML-Entities (z.B. `&#127968;`). Diese **direkt** in `innerHTML` einfügen – NICHT durch `escHtml()` jagen, sonst wird `&amp;#127968;` gerendert und das Emoji erscheint als Rohtext.
+- **Favoriten-Herz:** `.ev-fav.on` → `color:#ff3b30` + `svg path { fill:currentColor }` per CSS. Kein JS-`style.filter` mehr. `toggleFavVerein` setzt `innerHTML=icon("heart",14)` für alle `.fav-star`-Elemente (kein Emoji mehr).
+- **Alle UI-Icons Lucide SVG (Stand 2026-06-08):** Kein Emoji als Icon irgendwo im UI. Zentrales `ICON_PATHS`-Objekt + `icon(name,size,filled)` Hilfsfunktion. Ausnahme: `alert()` / `confirm()` Browser-Dialoge – dort dürfen Emojis bleiben (kein SVG möglich).
 - **Flyer-Button:** Nur gerendert wenn `t.flyer_url` gesetzt. `titlePadding` dynamisch: 74px (ohne Flyer) / 114px (mit Flyer). Click via Event-Delegation `.js-ev-flyer-btn` → `window.open(dataset.flyerUrl, '_blank', 'noopener')`.
 
 ## Registrierungsform `/verein/register` – Pitfalls (Stand 2026-06-07)
@@ -286,18 +292,6 @@ Endpunkt `/telegram` – nur Josefs Chat-ID. Token = `TOKEN` aus `/etc/pka/secre
 
 - **529-Retry:** `rename_via_claude()` hat 3-Versuche-Retry (15s / 30s Backoff). Ohne Retry: Overload-Fehler wird geloggt, Cursor trotzdem gesetzt → Datei wird nie erneut versucht.
 - **Cursor-Fix nach Stuck:** Datei manuell umbenennen; Cursor lebt weiter.
-
----
-
-## Claude Remote (services/claude_remote/routes.py)
-
-- **URL:** `https://vereinskalender.online/claude-remote/` (HTTP BasicAuth)
-- **Auth:** `/etc/nginx/claude-remote.htpasswd` – Passwort ändern: `ssh -t root@89.167.104.145 "htpasswd /etc/nginx/claude-remote.htpasswd josef"`
-- **Pfad-Whitelist:** Dropbox `/Apps/Claude/` + Server `/opt/{rename-webhook,kargl-invoice,project-insight,autoquartett}/`
-- **Write-Gate:** `_pending` Dict in-memory – geht bei Service-Neustart verloren → User muss Anfrage neu stellen
-- **Icons:** `icon-192.png` + `icon-512.png` sind im Repo unter `services/claude_remote/static/` – werden bei `git pull` automatisch mitgezogen, kein manuelles Generieren nötig. Script zum Neuerstellen: `python3 services/claude_remote/generate_icons.py` (reine stdlib, kein Pillow).
-- **Pitfall SSH htpasswd:** Immer `ssh -t` verwenden für interaktive Passwort-Eingabe (TTY-Zuweisung für Masking nötig)
-- **Kosten:** ~0,003–0,02 € pro Chat-Anfrage (Claude Sonnet 4.6, je nach Dateigrößen)
 
 ---
 

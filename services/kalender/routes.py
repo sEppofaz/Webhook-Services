@@ -980,9 +980,12 @@ def api_termine_delete():
     found = [False]
     def mutator(data):
         liste = data.get(verein_key, [])
-        neue_liste = [t for t in liste if not (t.get("datum") == old_datum and t.get("bezeichnung") == old_bezeichnung)]
-        found[0] = len(neue_liste) < len(liste)
-        data[verein_key] = neue_liste
+        for i, t in enumerate(liste):
+            if t.get("datum") == old_datum and t.get("bezeichnung") == old_bezeichnung:
+                liste.pop(i)
+                found[0] = True
+                break
+        data[verein_key] = liste
     from shared.kalender_store import KalenderStore
     KalenderStore.update(mutator)
     if not found[0]:
