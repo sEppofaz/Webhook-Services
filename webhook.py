@@ -4,6 +4,7 @@ from pathlib import Path
 
 from flask import Flask
 
+from services.aktien.routes import aktien_bp
 from services.auth.routes import auth_bp
 from services.autoquartett.routes import autoquartett_bp
 from services.kalender.routes import kalender_bp
@@ -33,6 +34,7 @@ def _load_secret_key() -> str:
 def create_app() -> Flask:
     app = Flask(__name__)
     app.secret_key = _load_secret_key()
+    app.register_blueprint(aktien_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(autoquartett_bp)
     app.register_blueprint(kalender_bp)

@@ -35,3 +35,13 @@ lib64
 # Sensible Daten – NIEMALS in Git
 .env
 *.env
+
+# Laufzeit-Caches & generierte Dateien (nicht in Git)
+.cache/
+.config/
+*.mmdb
+vereinskalender.db
+vereinstermine_backup_*.json
+
+# Flask Session-Secret – NIEMALS in Git
+flask_secret.key
