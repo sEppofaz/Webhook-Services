@@ -1,3 +1,4 @@
+import hmac
 import secrets
 
 from flask import request, session
@@ -12,7 +13,7 @@ def get_csrf_token() -> str:
 def validate_csrf() -> bool:
     token = request.form.get("_csrf") or request.headers.get("X-CSRF-Token", "")
     stored = session.get("_csrf", "")
-    return bool(token and stored and token == stored)
+    return bool(token and stored and hmac.compare_digest(token, stored))
 
 
 def csrf_field(token: str) -> str:

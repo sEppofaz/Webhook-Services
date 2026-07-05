@@ -1,3 +1,4 @@
+import hmac
 import html
 import os
 import secrets
@@ -44,6 +45,16 @@ def _make_preauth(choices: list[tuple[int, str]]) -> str:
 def _pop_preauth(token: str) -> list[tuple[int, str]] | None:
     with _preauth_lock:
         entry = _preauth.pop(token, None)
+    if not entry:
+        return None
+    choices, expires = entry
+    return choices if datetime.utcnow() < expires else None
+
+
+def _peek_preauth(token: str) -> list[tuple[int, str]] | None:
+    """Wie _pop_preauth, aber verbraucht den Token nicht (für die GET-Anzeige)."""
+    with _preauth_lock:
+        entry = _preauth.get(token)
     if not entry:
         return None
     choices, expires = entry
@@ -498,8 +509,15 @@ def login():
                     matched = [r for r in rows if _check_pw(pw, r["password_hash"])]
 
                     if not matched:
-                        # Fehlversuch: alle Rows dieser E-Mail hochzählen und ggf. sperren
-                        new_attempts = max(r["login_attempts"] for r in rows) + 1
+                        # Fehlversuch: alle Rows dieser E-Mail hochzählen und ggf. sperren.
+                        # Eine abgelaufene Sperre setzt den Zähler zurück (sonst sperrt
+                        # der nächste Fehlversuch sofort wieder, statt neu bis
+                        # MAX_LOGIN_ATTEMPTS zu zählen).
+                        def _eff_attempts(r):
+                            if r["locked_until"] and datetime.fromisoformat(r["locked_until"]) <= now:
+                                return 0
+                            return r["login_attempts"]
+                        new_attempts = max(_eff_attempts(r) for r in rows) + 1
                         locked = (now + timedelta(minutes=LOCKOUT_MINUTES)).isoformat() if new_attempts >= MAX_LOGIN_ATTEMPTS else None
                         ids = [r["id"] for r in rows]
                         conn.execute(
@@ -563,12 +581,12 @@ def login():
 @auth_bp.route("/verein/login/verein-waehlen", methods=["GET", "POST"])
 def login_verein_waehlen():
     preauth_token = request.cookies.get("vk_preauth", "")
-    choices = _pop_preauth(preauth_token)
-    if not choices:
-        return redirect("/verein/login")
 
     if request.method == "POST":
         if not validate_csrf():
+            return redirect("/verein/login")
+        choices = _pop_preauth(preauth_token)
+        if not choices:
             return redirect("/verein/login")
         try:
             chosen_id = int(request.form.get("user_id", ""))
@@ -583,7 +601,10 @@ def login_verein_waehlen():
         resp.delete_cookie("vk_preauth")
         return resp
 
-    # GET: Auswahl-Seite anzeigen
+    # GET: Auswahl-Seite anzeigen (Token wird hier nur gelesen, nicht verbraucht)
+    choices = _peek_preauth(preauth_token)
+    if not choices:
+        return redirect("/verein/login")
     tok = get_csrf_token()
     options = "".join(
         f"""<form method="post" style="margin:.5rem 0">
@@ -694,7 +715,7 @@ def reset_password():
 @auth_bp.route("/api/admin/vereine/<int:verein_id>/approve", methods=["POST"])
 def approve_verein(verein_id: int):
     token = request.headers.get("X-Upload-Token", "")
-    if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
         return {"error": "Unauthorized"}, 401
     with db_conn() as conn:
         row = conn.execute(
@@ -716,7 +737,7 @@ def approve_verein(verein_id: int):
 @auth_bp.route("/api/admin/vereine/<int:verein_id>/reject", methods=["POST"])
 def reject_verein(verein_id: int):
     token = request.headers.get("X-Upload-Token", "")
-    if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
         return {"error": "Unauthorized"}, 401
     with db_conn() as conn:
         row = conn.execute(
@@ -738,7 +759,7 @@ def reject_verein(verein_id: int):
 @auth_bp.route("/api/admin/vereine-pending")
 def pending_vereine():
     token = request.headers.get("X-Upload-Token", "")
-    if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
         return {"error": "Unauthorized"}, 401
     with db_conn() as conn:
         rows = conn.execute(
@@ -753,7 +774,7 @@ def pending_vereine():
 @auth_bp.route("/api/admin/users")
 def admin_users():
     token = request.headers.get("X-Upload-Token", "")
-    if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
         return {"error": "Unauthorized"}, 401
     with db_conn() as conn:
         vereine = conn.execute(
@@ -782,7 +803,7 @@ def admin_users():
 @auth_bp.route("/api/admin/users/<int:user_id>", methods=["PATCH"])
 def admin_update_user(user_id: int):
     token = request.headers.get("X-Upload-Token", "")
-    if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
         return {"error": "Unauthorized"}, 401
     body = request.get_json(silent=True) or {}
     name    = body.get("name",    "").strip() or None
@@ -801,7 +822,7 @@ def admin_update_user(user_id: int):
 @auth_bp.route("/api/admin/verein/<int:verein_id>", methods=["PATCH"])
 def admin_update_verein(verein_id: int):
     token = request.headers.get("X-Upload-Token", "")
-    if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
         return {"error": "Unauthorized"}, 401
     body = request.get_json(silent=True) or {}
     with db_conn() as conn:
@@ -830,7 +851,7 @@ def admin_update_verein(verein_id: int):
 @auth_bp.route("/api/admin/verein/<int:verein_id>", methods=["DELETE"])
 def admin_delete_verein(verein_id: int):
     token = request.headers.get("X-Upload-Token", "")
-    if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
         return {"error": "Unauthorized"}, 401
     body = request.get_json(silent=True) or {}
     delete_termine = bool(body.get("delete_termine", False))
@@ -878,7 +899,7 @@ def admin_delete_verein(verein_id: int):
 @auth_bp.route("/api/admin/unregistered-keys")
 def admin_unregistered_keys():
     token = request.headers.get("X-Upload-Token", "")
-    if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
         return {"error": "Unauthorized"}, 401
     from shared.kalender_store import KalenderStore
     data = KalenderStore.read()
@@ -901,7 +922,7 @@ def admin_unregistered_keys():
 @auth_bp.route("/api/admin/verein/<int:verein_id>/transfer-key", methods=["POST"])
 def admin_transfer_key(verein_id: int):
     token = request.headers.get("X-Upload-Token", "")
-    if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
         return {"error": "Unauthorized"}, 401
     body = request.get_json(silent=True) or {}
     source_key = (body.get("source_key") or "").strip()

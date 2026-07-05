@@ -1,4 +1,5 @@
 import gzip
+import hmac
 import ipaddress
 import json
 import os
@@ -38,6 +39,14 @@ kalender_bp = Blueprint("kalender", __name__)
 UPLOAD_TOKEN         = os.environ.get("UPLOAD_TOKEN", "")
 VKO_MAINTENANCE_FILE = Path("/opt/rename-webhook/vko_maintenance")
 _import_lock         = threading.Lock()
+
+# Felder pro Termin, die nur intern/serverseitig relevant sind (Admin-E-Mails,
+# interne Dropbox-Pfade) und nie an den öffentlichen, unauthentifizierten
+# /api/termine-Endpunkt ausgeliefert werden dürfen (DSGVO).
+_TERMIN_INTERNE_FELDER = {
+    "erstellt_von", "geaendert_von", "geloescht_von",
+    "geloescht", "geloescht_am", "deleted", "flyer_path",
+}
 
 _MAINTENANCE_HTML = """<!DOCTYPE html>
 <html lang="de">
@@ -165,7 +174,7 @@ def kalender_page():
 @kalender_bp.route("/upload", methods=["POST"])
 def upload_kalender():
     token = request.headers.get("X-Upload-Token", "")
-    if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
         log("⚠️  /upload: ungültiges Token")
         return json.dumps({"error": "Nicht autorisiert"}), 401, {"Content-Type": "application/json"}
     if "file" not in request.files:
@@ -245,7 +254,7 @@ def upload_kalender():
             )
 
         form_plz           = request.form.get("plz", "").strip()
-        result_vereine, total = _do_save_import(alle, auto_plz, form_plz, data)
+        result_vereine, total = _do_save_import(alle, auto_plz, form_plz)
         return (
             json.dumps({"success": True, "vereine": result_vereine, "total": total}, ensure_ascii=False),
             200,
@@ -260,7 +269,7 @@ def upload_kalender():
 @kalender_bp.route("/api/check-token", methods=["POST"])
 def api_check_token():
     token = request.headers.get("X-Upload-Token", "")
-    if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
         return "", 401
     return "", 200
 
@@ -361,7 +370,7 @@ def _count_today_live() -> tuple[int, int]:
 @kalender_bp.route("/api/admin/stats/chart", methods=["GET"])
 def api_admin_stats_chart():
     token = request.headers.get("X-Upload-Token", "")
-    if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
         return json.dumps({"error": "Nicht autorisiert"}), 401, {"Content-Type": "application/json"}
 
     from zoneinfo import ZoneInfo
@@ -417,7 +426,7 @@ def api_admin_stats_chart():
 @kalender_bp.route("/api/admin/stats/hourly", methods=["GET"])
 def api_admin_stats_hourly():
     token = request.headers.get("X-Upload-Token", "")
-    if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
         return json.dumps({"error": "Nicht autorisiert"}), 401, {"Content-Type": "application/json"}
 
     from zoneinfo import ZoneInfo
@@ -487,7 +496,7 @@ def api_admin_stats_hourly():
 @kalender_bp.route("/api/admin/stats/geo", methods=["GET"])
 def api_admin_stats_geo():
     token = request.headers.get("X-Upload-Token", "")
-    if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
         return json.dumps({"error": "Nicht autorisiert"}), 401, {"Content-Type": "application/json"}
 
     try:
@@ -530,7 +539,7 @@ def api_admin_stats_geo():
 @kalender_bp.route("/api/admin/stats", methods=["GET"])
 def api_admin_stats():
     token = request.headers.get("X-Upload-Token", "")
-    if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
         return json.dumps({"error": "Nicht autorisiert"}), 401, {"Content-Type": "application/json"}
 
     h_views, w_views, h_unique, w_unique = _count_page_views()
@@ -656,7 +665,7 @@ def api_admin_stats():
 @kalender_bp.route("/api/confirm-import", methods=["POST"])
 def api_confirm_import():
     token = request.headers.get("X-Upload-Token", "")
-    if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
         return json.dumps({"error": "Nicht autorisiert"}), 401, {"Content-Type": "application/json"}
 
     body               = request.get_json(silent=True) or {}
@@ -675,12 +684,7 @@ def api_confirm_import():
         auto_plz = pending.get("auto_plz", "")
         form_plz = pending.get("form_plz", "")
 
-        try:
-            data = json.loads(VEREINSTERMINE_FILE.read_text()) if VEREINSTERMINE_FILE.exists() else {}
-        except Exception:
-            data = {}
-
-        result_vereine, total = _do_save_import(alle, auto_plz, form_plz, data, verein_ortschaften, key_remappings or None)
+        result_vereine, total = _do_save_import(alle, auto_plz, form_plz, verein_ortschaften, key_remappings or None)
         pending_path.unlink(missing_ok=True)
         log(f"✅  Confirm-Import: {total} Termine")
 
@@ -705,7 +709,7 @@ def _get_rubrik(key: str, name: str, meta_entry: dict) -> str:
 @kalender_bp.route("/api/vereine", methods=["GET"])
 def api_vereine_get():
     token = request.headers.get("X-Upload-Token", "")
-    if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
         return json.dumps({"error": "Nicht autorisiert"}), 401, {"Content-Type": "application/json"}
     try:
         raw = json.loads(VEREINSTERMINE_FILE.read_text()) if VEREINSTERMINE_FILE.exists() else {}
@@ -745,7 +749,7 @@ def api_vereine_get():
 @kalender_bp.route("/api/vereine", methods=["POST"])
 def api_vereine_post():
     token = request.headers.get("X-Upload-Token", "")
-    if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
         return json.dumps({"error": "Nicht autorisiert"}), 401, {"Content-Type": "application/json"}
     body = request.get_json(silent=True) or {}
     key  = body.get("key", "").strip()
@@ -820,7 +824,7 @@ def api_vereine_post():
 @kalender_bp.route("/api/vereine/plz/<plz>", methods=["GET"])
 def api_vereine_plz(plz):
     token = request.headers.get("X-Upload-Token", "")
-    if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
         return json.dumps({"error": "Nicht autorisiert"}), 401, {"Content-Type": "application/json"}
     if not re.match(r"^\d{5}$", plz):
         return json.dumps({"error": "Ungültige PLZ"}), 400, {"Content-Type": "application/json"}
@@ -832,7 +836,7 @@ def api_vereine_plz(plz):
 @kalender_bp.route("/api/vereine/<key>", methods=["DELETE"])
 def api_vereine_delete(key):
     token = request.headers.get("X-Upload-Token", "")
-    if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
         return json.dumps({"error": "Nicht autorisiert"}), 401, {"Content-Type": "application/json"}
     try:
         raw = json.loads(VEREINSTERMINE_FILE.read_text()) if VEREINSTERMINE_FILE.exists() else {}
@@ -868,7 +872,8 @@ def api_termine():
         for t in events:
             if t.get("geloescht") or t.get("deleted"):
                 continue
-            termine.append({**t, "verein": key})
+            t_public = {k: v for k, v in t.items() if k not in _TERMIN_INTERNE_FELDER}
+            termine.append({**t_public, "verein": key})
 
     _hat_pfarrgemeinde = any(k.startswith("pfarrgemeinde") for k in raw if not k.startswith("_"))
     gf = GOTTESDIENSTE_FILE
@@ -931,7 +936,7 @@ def api_termine():
 @kalender_bp.route("/api/termine", methods=["PATCH"])
 def api_termine_patch():
     token = request.headers.get("X-Upload-Token", "")
-    if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
         return json.dumps({"error": "Nicht autorisiert"}), 401, {"Content-Type": "application/json"}
     body = request.get_json(force=True, silent=True) or {}
     verein_key = body.get("verein_key", "")
@@ -969,7 +974,7 @@ def api_termine_patch():
 @kalender_bp.route("/api/termine", methods=["DELETE"])
 def api_termine_delete():
     token = request.headers.get("X-Upload-Token", "")
-    if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
         return json.dumps({"error": "Nicht autorisiert"}), 401, {"Content-Type": "application/json"}
     body = request.get_json(force=True, silent=True) or {}
     verein_key = body.get("verein_key", "")
@@ -992,6 +997,24 @@ def api_termine_delete():
         return json.dumps({"error": "Termin nicht gefunden"}), 404, {"Content-Type": "application/json"}
     log(f"Termin geloescht: {verein_key} / {old_datum} / {old_bezeichnung}")
     return json.dumps({"ok": True}, ensure_ascii=False), 200, {"Content-Type": "application/json; charset=utf-8"}
+
+
+def _ics_escape(text: str) -> str:
+    """RFC 5545 TEXT-Escaping (Backslash, Komma, Semikolon, Zeilenumbrüche).
+
+    Ohne dieses Escaping könnten Vereinsadmins über Bezeichnung/Ort einen
+    Zeilenumbruch einschleusen und damit zusätzliche iCal-Properties/-Events
+    in den geteilten Feed injizieren.
+    """
+    return (
+        str(text)
+        .replace("\\", "\\\\")
+        .replace(",", "\\,")
+        .replace(";", "\\;")
+        .replace("\r\n", "\\n")
+        .replace("\n", "\\n")
+        .replace("\r", "\\n")
+    )
 
 
 @kalender_bp.route("/api/ical")
@@ -1026,18 +1049,18 @@ def api_ical():
         dtend   = f"DTEND;VALUE=DATE:{nd.year}{_p(nd.month)}{_p(nd.day)}"
 
     uid  = f"{datum}-{re.sub(r'[^a-z0-9]', '', titel.lower()[:20])}-{int(time.time())}@vereinskalender"
-    desc = label + (f"\\n{ort}" if ort else "")
+    desc = label + (f"\n{ort}" if ort else "")  # echter Zeilenumbruch – _ics_escape() macht daraus "\n"
 
     lines = [
         "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Vereinskalender//DE",
         "BEGIN:VEVENT",
         f"UID:{uid}",
         dtstart, dtend,
-        f"SUMMARY:{titel.replace(',', chr(92) + ',')}",
-        f"DESCRIPTION:{desc.replace(',', chr(92) + ',')}",
+        f"SUMMARY:{_ics_escape(titel)}",
+        f"DESCRIPTION:{_ics_escape(desc)}",
     ]
     if ort:
-        lines.append(f"LOCATION:{ort.replace(',', chr(92) + ',')}")
+        lines.append(f"LOCATION:{_ics_escape(ort)}")
     lines += ["TRANSP:TRANSPARENT", "STATUS:CONFIRMED", "END:VEVENT", "END:VCALENDAR"]
 
     safe = re.sub(r"[^\wäöüÄÖÜß]", "-", titel).strip("-")[:40]
@@ -1168,18 +1191,18 @@ def api_ical_feed():
             dtend   = f"DTEND;VALUE=DATE:{nd.year}{_p(nd.month)}{_p(nd.day)}"
 
         uid_raw = f"{t['datum']}-{re.sub(r'[^a-z0-9]', '', bezeichnung.lower()[:20])}-{vkey}@vereinskalender"
-        desc    = vereinname + (f"\\n{ort}" if ort else "")
+        desc    = vereinname + (f"\n{ort}" if ort else "")  # echter Zeilenumbruch – _ics_escape() macht daraus "\n"
 
         vevent_lines += [
             "BEGIN:VEVENT",
             f"UID:{uid_raw}",
             f"DTSTAMP:{now_stamp}",
             dtstart, dtend,
-            f"SUMMARY:{bezeichnung}",
-            f"DESCRIPTION:{desc}",
+            f"SUMMARY:{_ics_escape(bezeichnung)}",
+            f"DESCRIPTION:{_ics_escape(desc)}",
         ]
         if ort:
-            vevent_lines.append(f"LOCATION:{ort}")
+            vevent_lines.append(f"LOCATION:{_ics_escape(ort)}")
         vevent_lines += ["TRANSP:TRANSPARENT", "STATUS:CONFIRMED", "END:VEVENT"]
 
     cal_name = "Vereinskalender"
@@ -1190,7 +1213,7 @@ def api_ical_feed():
     header = [
         "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Vereinskalender//DE",
         "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
-        f"X-WR-CALNAME:{cal_name}",
+        f"X-WR-CALNAME:{_ics_escape(cal_name)}",
         "X-WR-TIMEZONE:Europe/Berlin",
         "REFRESH-INTERVAL;VALUE=DURATION:PT6H",
         "X-PUBLISHED-TTL:PT6H",
@@ -1252,7 +1275,7 @@ def _load_pending_meta(f: Path) -> dict | None:
 @kalender_bp.route("/api/admin/importe", methods=["GET"])
 def api_admin_importe():
     token = request.headers.get("X-Upload-Token", "")
-    if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
         return json.dumps({"error": "Nicht autorisiert"}), 401, {"Content-Type": "application/json"}
     HEIMAT_PENDING_DIR.mkdir(parents=True, exist_ok=True)
     result = []
@@ -1268,7 +1291,7 @@ def api_admin_importe():
 @kalender_bp.route("/api/admin/importe/<uid>", methods=["GET"])
 def api_admin_importe_detail(uid):
     token = request.headers.get("X-Upload-Token", "")
-    if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
         return json.dumps({"error": "Nicht autorisiert"}), 401, {"Content-Type": "application/json"}
     pf = HEIMAT_PENDING_DIR / f"heimat_pending_{uid}.json"
     if not pf.exists():
@@ -1316,7 +1339,7 @@ def api_admin_importe_detail(uid):
 @kalender_bp.route("/api/admin/importe/<uid>/confirm", methods=["POST"])
 def api_admin_importe_confirm(uid):
     token = request.headers.get("X-Upload-Token", "")
-    if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
         return json.dumps({"error": "Nicht autorisiert"}), 401, {"Content-Type": "application/json"}
     body             = request.get_json(silent=True) or {}
     alle             = body.get("alle", False)
@@ -1359,7 +1382,7 @@ def api_admin_importe_confirm(uid):
 @kalender_bp.route("/api/admin/importe/<uid>/reject", methods=["POST"])
 def api_admin_importe_reject(uid):
     token = request.headers.get("X-Upload-Token", "")
-    if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
         return json.dumps({"error": "Nicht autorisiert"}), 401, {"Content-Type": "application/json"}
     body        = request.get_json(silent=True) or {}
     alle        = body.get("alle", False)
@@ -1383,7 +1406,7 @@ def api_admin_importe_trigger():
     import urllib.parse as _up
 
     token = request.headers.get("X-Upload-Token", "")
-    if not UPLOAD_TOKEN or token != UPLOAD_TOKEN:
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
         return json.dumps({"error": "Nicht autorisiert"}), 401, {"Content-Type": "application/json"}
 
     body = request.get_json(silent=True) or {}

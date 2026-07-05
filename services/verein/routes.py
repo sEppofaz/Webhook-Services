@@ -449,7 +449,10 @@ def mitglieder(user):
                         send_invite_email(email, token, user["verein_name"])
                         success = f"Einladung an {email} verschickt."
         elif aktion == "entfernen":
-            member_id = int(request.form.get("member_id", 0))
+            try:
+                member_id = int(request.form.get("member_id", 0))
+            except ValueError:
+                member_id = 0
             with db_conn() as conn:
                 conn.execute(
                     "DELETE FROM vk_users WHERE id=? AND verein_id=? AND role='member'",
@@ -719,12 +722,7 @@ def upload_process(user):
         t["verein"] = verein_name
         t["quelle"] = verein_name
 
-    try:
-        data = json.loads(VEREINSTERMINE_FILE.read_text()) if VEREINSTERMINE_FILE.exists() else {}
-    except Exception:
-        data = {}
-
-    _, total = _do_save_import(alle, auto_plz, "", data)
+    _, total = _do_save_import(alle, auto_plz, "", verein_key=verein_key)
     def _sv_up(d): d.setdefault("_meta", {}).setdefault(verein_key, {})["selbstverwaltung"] = True; return d
     KalenderStore.update(_sv_up)
     log_audit("upload", f"bulk_{total}", verein_key, user["id"])
@@ -756,13 +754,8 @@ def confirm_upload(user):
         body = '<p class="err">Nicht autorisiert.</p>' + _BACK_DASH
         return _page("Fehler", body), 403
 
-    try:
-        data = json.loads(VEREINSTERMINE_FILE.read_text()) if VEREINSTERMINE_FILE.exists() else {}
-    except Exception:
-        data = {}
-
     vk = user["verein_key"]
-    _, total = _do_save_import(pending["alle"], pending.get("auto_plz", ""), "", data)
+    _, total = _do_save_import(pending["alle"], pending.get("auto_plz", ""), "", verein_key=vk)
     pending_path.unlink(missing_ok=True)
     def _sv_cf(d): d.setdefault("_meta", {}).setdefault(vk, {})["selbstverwaltung"] = True; return d
     KalenderStore.update(_sv_cf)
@@ -774,7 +767,7 @@ def confirm_upload(user):
 
 @verein_bp.route("/verein/datenschutz")
 def datenschutz():
-    body = """
+    body = f"""
 <p style="color:#aeaeb2;font-size:.85rem">Stand: Mai 2026</p>
 <div class="card">
 <h2 style="font-size:1rem;margin-top:0">1. Verantwortlicher</h2>
@@ -810,7 +803,7 @@ def datenschutz():
 
 @verein_bp.route("/verein/nutzungsbedingungen")
 def nutzungsbedingungen():
-    body = """
+    body = f"""
 <p style="color:#aeaeb2;font-size:.85rem">Stand: Mai 2026</p>
 <div class="card">
 <h2 style="font-size:1rem;margin-top:0">1. Nutzung</h2>

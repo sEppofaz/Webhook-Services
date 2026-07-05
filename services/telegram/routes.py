@@ -285,8 +285,12 @@ def _collect_alle_termine_30() -> str:
             raw           = json.loads(VEREINSTERMINE_FILE.read_text())
             verein_labels = {"ff": "FF Hölskofen", "kp": "Königstreue Patrioten Hölskofen"}
             for key, items in raw.items():
+                if key.startswith("_") or not isinstance(items, list):
+                    continue
                 vlabel = verein_labels.get(key, key.upper())
                 for t in items:
+                    if t.get("geloescht") or t.get("deleted"):
+                        continue
                     datum = t.get("datum", "")
                     if not (heute_str <= datum <= ende_str):
                         continue
@@ -536,8 +540,7 @@ def telegram_webhook():
             if cb_data.startswith("kal_ok:"):
                 def _do_import(p=pending):
                     try:
-                        data_db = json.loads(VEREINSTERMINE_FILE.read_text()) if VEREINSTERMINE_FILE.exists() else {}
-                        result_vereine, total = _do_save_import(p["alle"], p["auto_plz"], "", data_db)
+                        result_vereine, total = _do_save_import(p["alle"], p["auto_plz"], "")
                         namen = ", ".join(v["name"] for v in result_vereine[:3])
                         if len(result_vereine) > 3:
                             namen += f" (+{len(result_vereine)-3})"

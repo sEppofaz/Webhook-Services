@@ -6,6 +6,7 @@ import re
 import time
 import urllib.parse
 import urllib.request
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -226,70 +227,92 @@ def import_pdf_bytes(file_bytes: bytes, suffix: str) -> dict:
     return {"alle": parsed.get("termine", []), "auto_plz": parsed.get("plz", "")}
 
 
-def _do_save_import(alle: list, auto_plz: str, form_plz: str, data: dict,
+def _do_save_import(alle: list, auto_plz: str, form_plz: str,
                     verein_ortschaften: dict | None = None,
-                    key_remappings: dict | None = None) -> tuple:
-    """Speichert importierte Termine in vereinstermine.json (data wird mutiert und gespeichert)."""
-    labels = data.get("_labels", {"ff": "FF Hölskofen", "kp": "Königstreue Patrioten"})
-    heute  = datetime.now().strftime("%Y-%m-%d")
+                    key_remappings: dict | None = None,
+                    verein_key: str | None = None) -> tuple:
+    """Speichert importierte Termine in vereinstermine.json.
 
-    by_verein: dict = {}
-    for t in alle:
-        t_copy = {k: v for k, v in t.items() if k != "verein"}
-        name = (t.get("verein") or "Unbekannt").strip() or "Unbekannt"
-        by_verein.setdefault(name, []).append(t_copy)
+    Die Zusammenführung mit dem Datenbestand passiert innerhalb von
+    KalenderStore.update() auf dem zu diesem Zeitpunkt aktuellen Dateiinhalt
+    (nicht auf einem vorher gelesenen Snapshot) – so gehen parallele
+    Schreibzugriffe (z.B. ein Vereinsadmin, der währenddessen einen Termin
+    einträgt) nicht verloren.
 
-    result_vereine = []
-    for verein_name, termine in by_verein.items():
-        key = _make_verein_key(verein_name)
-        remapped = key_remappings and key in key_remappings
-        if remapped:
-            key = key_remappings[key]  # merge into existing verein
-        else:
-            labels[key] = verein_name
-        bestehende = [t for t in data.get(key, []) if t.get("datum", "") >= heute]
-        ex_bez = {(t["datum"], t.get("bezeichnung", "")) for t in bestehende}
-        ex_dzo = {(t["datum"], t.get("uhrzeit", ""), t.get("ort", ""))
-                  for t in bestehende if t.get("uhrzeit") or t.get("ort")}
-        for t in termine:
-            k_bez = (t.get("datum", ""), t.get("bezeichnung", ""))
-            k_dzo = (t.get("datum", ""), t.get("uhrzeit", ""), t.get("ort", ""))
-            is_dup = k_bez in ex_bez or (
-                (t.get("uhrzeit") or t.get("ort")) and k_dzo in ex_dzo
-            )
-            if not is_dup:
-                bestehende.append(t)
-                ex_bez.add(k_bez)
-                if t.get("uhrzeit") or t.get("ort"):
-                    ex_dzo.add(k_dzo)
-        bestehende = sorted(
-            [t for t in bestehende if t.get("datum", "") >= heute],
-            key=lambda t: (t["datum"], t.get("uhrzeit", ""))
-        )
-        data[key] = bestehende
-        result_vereine.append({"name": verein_name, "key": key, "count": len(termine)})
-
-    data["_labels"] = labels
+    `verein_key`: Wenn gesetzt (Vereinsadmin-Upload – genau ein Verein aus der
+    Session), wird dieser Key direkt verwendet statt ihn aus dem erkannten
+    Vereinsnamen neu abzuleiten. Verhindert, dass Termine unter einem
+    abweichenden Key (z.B. durch Kürzung/Uniquifizierung beim Registrieren)
+    landen als der Account tatsächlich hat.
+    """
+    heute = datetime.now().strftime("%Y-%m-%d")
 
     plz = form_plz
     if not plz and re.match(r"^\d{5}$", auto_plz):
         plz = auto_plz
         log(f"📮  PLZ automatisch erkannt: {plz}")
-    data.setdefault("_meta", {})
-    if plz and re.match(r"^\d{5}$", plz):
-        meta_info = lookup_plz(plz)
-        for v in result_vereine:
-            existing = data["_meta"].get(v["key"], {})
-            # Bestehende Felder haben Vorrang – nur neue geo-Felder aus meta_info einfügen
-            data["_meta"][v["key"]] = {**meta_info, **existing}
+    # Netzwerk-Lookup bewusst außerhalb des Locks – blockiert sonst alle
+    # anderen Schreibzugriffe für die Dauer des externen Requests.
+    meta_info = lookup_plz(plz) if plz and re.match(r"^\d{5}$", plz) else None
 
-    if verein_ortschaften:
-        for v in result_vereine:
-            ort = (verein_ortschaften.get(v["key"]) or "").strip()
-            if ort:
-                data["_meta"].setdefault(v["key"], {})["heimatort"] = ort
+    by_verein: dict = {}
+    for t in alle:
+        t_copy = {k: v for k, v in t.items() if k != "verein"}
+        t_copy.setdefault("id", str(uuid.uuid4())[:8])
+        name = (t.get("verein") or "Unbekannt").strip() or "Unbekannt"
+        by_verein.setdefault(name, []).append(t_copy)
 
-    KalenderStore.update(lambda d: d.clear() or d.update(data))
+    result_vereine: list = []
+
+    def _merge(d: dict) -> dict:
+        labels = d.setdefault("_labels", {"ff": "FF Hölskofen", "kp": "Königstreue Patrioten"})
+        meta   = d.setdefault("_meta", {})
+        result_vereine.clear()
+        for verein_name, termine in by_verein.items():
+            if verein_key is not None:
+                key = verein_key
+            else:
+                key = _make_verein_key(verein_name)
+                if key_remappings and key in key_remappings:
+                    key = key_remappings[key]  # merge into existing verein
+            if key not in labels:
+                labels[key] = verein_name
+            bestehende = [t for t in d.get(key, []) if t.get("datum", "") >= heute]
+            ex_bez = {(t["datum"], t.get("bezeichnung", "")) for t in bestehende}
+            ex_dzo = {(t["datum"], t.get("uhrzeit", ""), t.get("ort", ""))
+                      for t in bestehende if t.get("uhrzeit") or t.get("ort")}
+            for t in termine:
+                k_bez = (t.get("datum", ""), t.get("bezeichnung", ""))
+                k_dzo = (t.get("datum", ""), t.get("uhrzeit", ""), t.get("ort", ""))
+                is_dup = k_bez in ex_bez or (
+                    (t.get("uhrzeit") or t.get("ort")) and k_dzo in ex_dzo
+                )
+                if not is_dup:
+                    bestehende.append(t)
+                    ex_bez.add(k_bez)
+                    if t.get("uhrzeit") or t.get("ort"):
+                        ex_dzo.add(k_dzo)
+            bestehende = sorted(
+                [t for t in bestehende if t.get("datum", "") >= heute],
+                key=lambda t: (t["datum"], t.get("uhrzeit", ""))
+            )
+            d[key] = bestehende
+            result_vereine.append({"name": verein_name, "key": key, "count": len(termine)})
+
+        if meta_info:
+            for v in result_vereine:
+                existing = meta.get(v["key"], {})
+                # Bestehende Felder haben Vorrang – nur neue geo-Felder aus meta_info einfügen
+                meta[v["key"]] = {**meta_info, **existing}
+
+        if verein_ortschaften:
+            for v in result_vereine:
+                ort = (verein_ortschaften.get(v["key"]) or "").strip()
+                if ort:
+                    meta.setdefault(v["key"], {})["heimatort"] = ort
+        return d
+
+    KalenderStore.update(_merge)
 
     total = sum(v["count"] for v in result_vereine)
     log(f"📥  Import: {total} Termine, {len(result_vereine)} Vereine gespeichert")

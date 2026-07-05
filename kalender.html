@@ -1450,8 +1450,8 @@ function render(){
   const el=document.getElementById("ev-list");
   if(!out.length){
     let ctxMsg="Keine Termine gefunden.";
-    if(aktOrte.size===1)ctxMsg=`Keine Termine f&uuml;r <strong>${[...aktOrte][0]}</strong> gefunden.`;
-    else if(srchText.length>=2)ctxMsg=`Keine Treffer f&uuml;r &bdquo;${srchText}&ldquo;.`;
+    if(aktOrte.size===1)ctxMsg=`Keine Termine f&uuml;r <strong>${escHtml([...aktOrte][0])}</strong> gefunden.`;
+    else if(srchText.length>=2)ctxMsg=`Keine Treffer f&uuml;r &bdquo;${escHtml(srchText)}&ldquo;.`;
     el.innerHTML=`<div class="ev-empty"><p style="display:flex;justify-content:center;color:var(--text3)">${icon("calendar",32)}</p><small>${ctxMsg}</small></div>`+
       `<div class="cta-card" style="margin-top:12px"><strong>Termine fehlen?</strong>Jahresprogramm als PDF an <a href="mailto:Vereinskalender@icloud.com">Vereinskalender@icloud.com</a> &ndash; wir k&uuml;mmern uns zeitnah.</div>`;
     return;
