@@ -170,9 +170,12 @@ Alle Jobs als `root`-Crontab. Timezone: `Europe/Berlin`. Logs: `/var/log/pka-*.l
 ### Pitfalls `vereinstermine.json`
 - **`approve`-Endpunkt legt keinen JSON-Eintrag an:** `POST /api/admin/vereine/<id>/approve` setzt nur `status=aktiv` in der DB. Wenn ein freigegebener Verein noch nie Termine importiert hat, fehlt er in `_labels`/`_meta` → unsichtbar in Vereinsübersicht. Fix: `_labels` + `_meta` (mit `selbstverwaltung: true`) manuell via `KalenderStore.update()` nachtragen. (Vorfall 2026-06-18: FFW Paindlkofen)
 - **`KalenderStore.update()` als `root` → Owner-Problem:** Direkter Python-Aufruf als root ändert den Datei-Owner auf `root` → App-User `webhook` bekommt `Permission denied`. Danach immer: `chown webhook:webhook /opt/rename-webhook/vereinstermine.json`
+- **`KalenderStore.update()`-Mutator darf `d` nie durch einen vorher gelesenen Snapshot ersetzen:** `_do_save_import()` hat genau das getan (`d.clear() or d.update(data)`) und damit parallele Schreibzugriffe verloren gehen lassen, obwohl der Store selbst korrekt sperrt. Merge-Logik immer *innerhalb* des Mutators auf `d` selbst ausführen; langsame Netzwerk-Calls (z.B. `lookup_plz`) davor/außerhalb berechnen, nicht im Lock. (Regression gefixt 2026-07-05, Fable-5-Review)
+- **`_do_save_import()` bei Vereinsadmin-Uploads:** Immer `verein_key=user["verein_key"]` übergeben, sonst wird der Key neu aus dem Vereinsnamen abgeleitet und kann vom Account-Key abweichen (Kürzung/Uniquifizierung) → Termine landen unsichtbar unter falschem Key.
 - **`ortschaft`**: Pro Termin – Veranstaltungsort
 - **`quelle`** / **`quelle_url`**: Pro Termin – Herkunft (heimat-info oder Vereinsadmin)
 - **`flyer_url`** / **`flyer_path`** (optional, Stand 2026-06-07): Pro Termin – Dropbox-Link (`?raw=1` für Browser-Anzeige) + Dropbox-Pfad zum Löschen. Modul: `shared/flyer_store.py`. Upload-Ordner: `/Dokumente/Vereinskalender/flyer/`. Nur PDF/JPG/PNG/WebP, max. 8 MB, Magic-Bytes-geprüft, UUID-Dateiname.
+- **DSGVO – interne Felder pro Termin:** `erstellt_von`/`geaendert_von`/`geloescht_von` (Admin-E-Mail) + `flyer_path` (interner Dropbox-Pfad) dürfen nie an den öffentlichen `/api/termine`-Endpunkt raus. Blacklist: `_TERMIN_INTERNE_FELDER` in `services/kalender/routes.py`. Neues Feld mit potenziell sensiblem Inhalt pro Termin → dort ergänzen. (Fund 2026-07-05, Fable-5-Review)
 
 **Ortschaft-Hierarchie:** `Landkreis → Gemeinde → Ortschaft (Vereinsheimat) → Verein → Termin`
 - Ortschaft-Chips = Heimatort des Vereins, NICHT Veranstaltungsort
