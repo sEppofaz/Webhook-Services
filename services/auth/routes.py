@@ -827,10 +827,11 @@ def admin_update_verein(verein_id: int):
     body = request.get_json(silent=True) or {}
     with db_conn() as conn:
         row = conn.execute(
-            "SELECT id FROM vereine_accounts WHERE id = ?", (verein_id,)
+            "SELECT id, verein_key FROM vereine_accounts WHERE id = ?", (verein_id,)
         ).fetchone()
         if not row:
             return {"error": "Nicht gefunden"}, 404
+        verein_key = row["verein_key"]
         fields = {}
         for f in ("verein_name", "rubrik", "heimatort", "plz", "gemeinde", "landkreis"):
             if f in body:
@@ -845,6 +846,12 @@ def admin_update_verein(verein_id: int):
                 f"UPDATE vereine_accounts SET {set_clause} WHERE id = ?",
                 list(fields.values()) + [verein_id],
             )
+    if fields.get("verein_name") and verein_key:
+        new_name = fields["verein_name"]
+        from shared.kalender_store import KalenderStore
+        def _rename_label(d, vk=verein_key, new_name=new_name):
+            d.setdefault("_labels", {})[vk] = new_name
+        KalenderStore.update(_rename_label)
     return {"ok": True}
 
 

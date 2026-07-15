@@ -897,6 +897,11 @@ def verein_profil(user):
                     "UPDATE vk_users SET telefon=? WHERE id=?",
                     (new_telefon or None, user["id"]),
                 )
+            if new_name != verein_name and user.get("verein_key"):
+                vk = user["verein_key"]
+                def _rename_label(d, vk=vk, new_name=new_name):
+                    d.setdefault("_labels", {})[vk] = new_name
+                KalenderStore.update(_rename_label)
             verein_name = new_name
             rubrik      = new_rubrik
             heimatort   = new_heimatort
