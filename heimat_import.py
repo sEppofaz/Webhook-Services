@@ -516,9 +516,12 @@ def fetch_and_save_pending(gemeinden_filter: list | None = None) -> dict:
     existing = _existing_events(exclude_keys=old_keys)
 
     try:
-        _sv_meta = json.loads(VEREINSTERMINE_FILE.read_text()).get("_meta", {}) if VEREINSTERMINE_FILE.exists() else {}
+        _vk_data       = json.loads(VEREINSTERMINE_FILE.read_text()) if VEREINSTERMINE_FILE.exists() else {}
+        _sv_meta       = _vk_data.get("_meta", {})
+        _heimat_aliase = _vk_data.get("_heimat_aliases", {})
     except Exception:
-        _sv_meta = {}
+        _sv_meta       = {}
+        _heimat_aliase = {}
 
     alle_events: list = []
     fehler: list      = []
@@ -532,14 +535,15 @@ def fetch_and_save_pending(gemeinden_filter: list | None = None) -> dict:
         events = _parse_api_events(api_events, heute, g["name"])
         for e in events:
             veranst          = e.get("_verein_name", "")
-            e["_verein_key"] = _slugify(veranst) or g["verein_key"]
+            roh_key          = _slugify(veranst) or g["verein_key"]
+            e["_verein_key"] = _heimat_aliase.get(roh_key, roh_key)
             e["_label"]      = veranst or g.get("label", g["name"])
             e["_gemeinde"]   = g["name"]
             e["_landkreis"]  = g.get("landkreis", "Landkreis Landshut")
             e["quelle"]      = "heimat-info.de"
             e["quelle_url"]  = g.get("url", "")
             e["_sv"]         = bool(_sv_meta.get(e["_verein_key"], {}).get("selbstverwaltung", False))
-            e["_neu"]        = False if e["_sv"] else not _is_duplicate(
+            e["_neu"]        = not _is_duplicate(
                 e["datum"], e["uhrzeit"], e["bezeichnung"], existing)
         alle_events.extend(events)
         neu_count = sum(1 for e in events if e["_neu"])
@@ -558,9 +562,9 @@ def fetch_and_save_pending(gemeinden_filter: list | None = None) -> dict:
     }, ensure_ascii=False))
 
     neu = sum(1 for e in alle_events if e["_neu"])
+    dup = sum(1 for e in alle_events if not e["_neu"])
     sv  = sum(1 for e in alle_events if e.get("_sv"))
-    dup = sum(1 for e in alle_events if not e["_neu"] and not e.get("_sv"))
-    _log(f"✅ Pending uid={uid}: {neu} neu, {dup} dup, {sv} sv")
+    _log(f"✅ Pending uid={uid}: {neu} neu, {dup} dup, {sv} sv (davon)")
     return {"uid": uid, "neu": neu, "duplikate": dup, "sv": sv,
             "fehler": fehler, "gesamt": len(alle_events)}
 
@@ -600,7 +604,7 @@ def cmd_import(secrets: dict) -> None:
         vorschau += f"\n… +{len(neue)-15} weitere neue"
 
     sv_labels  = sorted({e.get("_label") or e["_verein_key"] for e in alle_events if e.get("_sv")})
-    sv_hinweis = (f"\n\n⛔ Selbstverwaltete Vereine ignoriert ({sv_gesamt} Termine): "
+    sv_hinweis = (f"\n\nℹ️ Davon {sv_gesamt} Termine bei selbstverwaltenden Vereinen (bitte bei Bestätigung prüfen): "
                   + ", ".join(sv_labels)) if sv_gesamt else ""
     zähler     = f"Gesamt: {result['gesamt']} | 🆕 Neu: {neu_gesamt} | ⏭ Duplikate: {dup_gesamt}"
     if sv_gesamt:

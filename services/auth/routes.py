@@ -967,6 +967,7 @@ def admin_transfer_key(verein_id: int):
                         meta[target_key][k] = v
                 del meta[source_key]
         data.setdefault("_labels", {}).pop(source_key, None)
+        data.setdefault("_heimat_aliases", {})[source_key] = target_key
     KalenderStore.update(_merge)
     with db_conn() as conn:
         conn.execute(
