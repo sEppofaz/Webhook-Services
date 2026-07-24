@@ -26,17 +26,34 @@ def load_kalender_bot_token() -> str:
     return ""
 
 
+def split_telegram_message(text: str, limit: int = 4096) -> list[str]:
+    if len(text) <= limit:
+        return [text]
+    parts = []
+    while text:
+        if len(text) <= limit:
+            parts.append(text)
+            break
+        cut = text.rfind("\n", 0, limit)
+        if cut <= 0:
+            cut = limit
+        parts.append(text[:cut])
+        text = text[cut:].lstrip("\n")
+    return parts
+
+
 def send(token: str, chat_id: str, text: str):
-    payload = json.dumps({"chat_id": chat_id, "text": text, "parse_mode": "HTML"}).encode()
-    req = urllib.request.Request(
-        f"https://api.telegram.org/bot{token}/sendMessage",
-        data=payload,
-        headers={"Content-Type": "application/json"},
-    )
-    try:
-        urllib.request.urlopen(req, timeout=10)
-    except Exception as e:
-        print(f"  ❌ Fehler für {chat_id}: {e}")
+    for part in split_telegram_message(text):
+        payload = json.dumps({"chat_id": chat_id, "text": part, "parse_mode": "HTML"}).encode()
+        req = urllib.request.Request(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            urllib.request.urlopen(req, timeout=10)
+        except Exception as e:
+            print(f"  ❌ Fehler für {chat_id}: {e}")
 
 
 def main():

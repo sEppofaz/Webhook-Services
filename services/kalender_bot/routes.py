@@ -13,41 +13,57 @@ kalender_bot_bp = Blueprint("kalender_bot", __name__)
 KALENDER_BOT_TOKEN = os.environ.get("KALENDER_BOT_TOKEN", "")
 
 
+def _split_telegram_message(text, limit=4096):
+    if len(text) <= limit:
+        return [text]
+    parts = []
+    while text:
+        if len(text) <= limit:
+            parts.append(text)
+            break
+        cut = text.rfind("\n", 0, limit)
+        if cut <= 0:
+            cut = limit
+        parts.append(text[:cut])
+        text = text[cut:].lstrip("\n")
+    return parts
+
+
 def _bot_send(chat_id, text):
     import urllib.request
     if not KALENDER_BOT_TOKEN:
         return
-    payload = json.dumps({"chat_id": chat_id, "text": text, "parse_mode": "HTML"}).encode()
-    req = urllib.request.Request(
-        f"https://api.telegram.org/bot{KALENDER_BOT_TOKEN}/sendMessage",
-        data=payload,
-        headers={"Content-Type": "application/json"},
-    )
-    try:
-        urllib.request.urlopen(req, timeout=10)
-    except Exception as e:
-        log(f"❌ kalender_bot send: {e}")
+    for part in _split_telegram_message(text):
+        payload = json.dumps({"chat_id": chat_id, "text": part, "parse_mode": "HTML"}).encode()
+        req = urllib.request.Request(
+            f"https://api.telegram.org/bot{KALENDER_BOT_TOKEN}/sendMessage",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            urllib.request.urlopen(req, timeout=10)
+        except Exception as e:
+            log(f"❌ kalender_bot send: {e}")
 
 
 def _bot_send_inline(chat_id, text, keyboard):
     import urllib.request
     if not KALENDER_BOT_TOKEN:
         return
-    payload = json.dumps({
-        "chat_id": chat_id,
-        "text": text,
-        "parse_mode": "HTML",
-        "reply_markup": {"inline_keyboard": keyboard},
-    }).encode()
-    req = urllib.request.Request(
-        f"https://api.telegram.org/bot{KALENDER_BOT_TOKEN}/sendMessage",
-        data=payload,
-        headers={"Content-Type": "application/json"},
-    )
-    try:
-        urllib.request.urlopen(req, timeout=10)
-    except Exception as e:
-        log(f"❌ kalender_bot send_inline: {e}")
+    parts = _split_telegram_message(text)
+    for i, part in enumerate(parts):
+        payload = {"chat_id": chat_id, "text": part, "parse_mode": "HTML"}
+        if i == len(parts) - 1:
+            payload["reply_markup"] = {"inline_keyboard": keyboard}
+        req = urllib.request.Request(
+            f"https://api.telegram.org/bot{KALENDER_BOT_TOKEN}/sendMessage",
+            data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            urllib.request.urlopen(req, timeout=10)
+        except Exception as e:
+            log(f"❌ kalender_bot send_inline: {e}")
 
 
 def _bot_answer_callback(cb_id, text=""):

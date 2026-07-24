@@ -31,11 +31,28 @@ def _dbx():
     )
 
 
+def _split_message(text: str, limit: int = 4096) -> list[str]:
+    if len(text) <= limit:
+        return [text]
+    parts = []
+    while text:
+        if len(text) <= limit:
+            parts.append(text)
+            break
+        cut = text.rfind("\n", 0, limit)
+        if cut <= 0:
+            cut = limit
+        parts.append(text[:cut])
+        text = text[cut:].lstrip("\n")
+    return parts
+
+
 def _send(text: str) -> None:
-    url  = f"https://api.telegram.org/bot{_TOKEN}/sendMessage"
-    body = json.dumps({"chat_id": _CHAT_ID, "text": text, "parse_mode": "HTML"}).encode()
-    req  = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
-    urllib.request.urlopen(req, timeout=10)
+    url = f"https://api.telegram.org/bot{_TOKEN}/sendMessage"
+    for part in _split_message(text):
+        body = json.dumps({"chat_id": _CHAT_ID, "text": part, "parse_mode": "HTML"}).encode()
+        req  = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=10)
 
 
 def main() -> None:

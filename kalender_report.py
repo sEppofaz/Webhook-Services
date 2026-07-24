@@ -33,14 +33,31 @@ def load_secrets() -> dict:
     return secrets
 
 
+def split_telegram_message(text: str, limit: int = 4096) -> list[str]:
+    if len(text) <= limit:
+        return [text]
+    parts = []
+    while text:
+        if len(text) <= limit:
+            parts.append(text)
+            break
+        cut = text.rfind("\n", 0, limit)
+        if cut <= 0:
+            cut = limit
+        parts.append(text[:cut])
+        text = text[cut:].lstrip("\n")
+    return parts
+
+
 def send_telegram(token: str, chat_id: str, text: str) -> None:
-    payload = json.dumps({"chat_id": chat_id, "text": text, "parse_mode": "HTML"}).encode()
-    req = urllib.request.Request(
-        f"https://api.telegram.org/bot{token}/sendMessage",
-        data=payload,
-        headers={"Content-Type": "application/json"},
-    )
-    urllib.request.urlopen(req, timeout=10)
+    for part in split_telegram_message(text):
+        payload = json.dumps({"chat_id": chat_id, "text": part, "parse_mode": "HTML"}).encode()
+        req = urllib.request.Request(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+        )
+        urllib.request.urlopen(req, timeout=10)
 
 
 def get_db_stats() -> dict:

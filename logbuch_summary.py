@@ -85,12 +85,29 @@ def summarize_with_claude(api_key: str, entry: str) -> str:
         return json.loads(r.read())["content"][0]["text"].strip()
 
 
+def split_telegram_message(text: str, limit: int = 4096) -> list[str]:
+    if len(text) <= limit:
+        return [text]
+    parts = []
+    while text:
+        if len(text) <= limit:
+            parts.append(text)
+            break
+        cut = text.rfind("\n", 0, limit)
+        if cut <= 0:
+            cut = limit
+        parts.append(text[:cut])
+        text = text[cut:].lstrip("\n")
+    return parts
+
+
 def send_telegram(token: str, chat_id: str, text: str) -> None:
-    url     = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = json.dumps({"chat_id": chat_id, "text": text}).encode()
-    req     = urllib.request.Request(
-        url, data=payload, headers={"Content-Type": "application/json"})
-    urllib.request.urlopen(req, timeout=10)
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    for part in split_telegram_message(text):
+        payload = json.dumps({"chat_id": chat_id, "text": part}).encode()
+        req     = urllib.request.Request(
+            url, data=payload, headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=10)
 
 
 def main():
@@ -120,8 +137,8 @@ def main():
         body    = summary
         print("Claude-Zusammenfassung erstellt")
     except Exception as e:
-        print(f"Claude-Fehler: {e} – sende gekuerzten Rohtext")
-        body = entry[:3800] + ("\n(…)" if len(entry) > 3800 else "")
+        print(f"Claude-Fehler: {e} – sende Rohtext (wird bei Bedarf auf mehrere Nachrichten aufgeteilt)")
+        body = entry
 
     message = f"📋 PKA-Logbuch {day_german}\n\n{body}"
 
