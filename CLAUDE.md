@@ -306,5 +306,6 @@ Endpunkt `/telegram` – nur Josefs Chat-ID. Token = `TOKEN` aus `/etc/pka/secre
 - Liest `Logbuch.md` aus Dropbox via Invoice-Dropbox-Token
 - Regex matcht `## YYYY-MM-DD` mit beliebigem Suffix
 - Mehrere Nachtrag-Einträge werden chronologisch zusammengeführt
-- **Nicht im GitHub-Repo** – liegt nur auf Server unter `/opt/rename-webhook/logbuch_summary.py`
+- Im GitHub-Repo getrackt (seit Initial-Commit 2026-05-06) – normaler Deployment-Flow gilt, kein Sonderfall
+- Telegram-Versand splittet lange Texte automatisch (>4096 Zeichen, siehe `BKM/Telegram-Integration.md`) – der frühere `entry[:3800]`-Kürzungs-Fallback bei Claude-Fehler wurde entfernt, da nicht mehr nötig
 - Log prüfen: `tail -20 /var/log/pka-logbuch.log`
