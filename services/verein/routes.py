@@ -229,6 +229,7 @@ def termin_neu(user):
   <label>Ort / Veranstaltungsort</label>
   <input name="ort" type="text" placeholder="z.B. Gasthaus zur Post">
   <label>Flyer (optional, PDF/JPG/PNG/WebP, max. 8 MB)</label>
+  <p class="hint">Bitte den Flyer zuerst auf dem Gerät speichern (z.B. Bild aus der E-Mail per „Speichern unter") und von dort hochladen. Ein Bild direkt aus Outlook/der E-Mail zu ziehen funktioniert nicht.</p>
   <input name="flyer" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp">
   <button class="btn" type="submit">Termin speichern</button>
 </form>
@@ -342,6 +343,7 @@ def termin_edit(user, termin_id):
   <input name="ort" type="text" value="{html.escape(termin.get('ort',''))}">
   {flyer_section}
   <label>{'Flyer ersetzen' if flyer_url else 'Flyer hochladen'} (PDF/JPG/PNG/WebP, max. 8 MB)</label>
+  <p class="hint">Bitte den Flyer zuerst auf dem Gerät speichern (z.B. Bild aus der E-Mail per „Speichern unter") und von dort hochladen. Ein Bild direkt aus Outlook/der E-Mail zu ziehen funktioniert nicht.</p>
   <input name="flyer" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp">
   <button class="btn" type="submit" name="aktion" value="speichern">Änderungen speichern</button>
 </form>
