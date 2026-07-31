@@ -129,6 +129,11 @@ def dashboard(user):
       </div>
     </div>
 
+    <div>
+      <div style="font-weight:600;font-size:.9rem;margin-bottom:.25rem">🖼 Flyer-Upload bei einem Termin</div>
+      <div style="color:#aeaeb2;font-size:.85rem">Bild oder PDF zuerst auf dem Gerät speichern und von dort hochladen. Ein Bild direkt aus Outlook/einer E-Mail in das Upload-Feld zu ziehen funktioniert nicht (Outlook gibt dabei nur einen internen Bild-Verweis statt der echten Datei weiter).</div>
+    </div>
+
   </div>
 </details>"""
 
