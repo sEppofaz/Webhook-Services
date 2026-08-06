@@ -145,8 +145,15 @@ def verein_stats() -> tuple[int, int]:
     return gesamt, aktiv
 
 
+_NEU_AKTIONEN = ("erstellt", "upload", "upload_confirmed")
+
+
 def verein_activity_stats() -> dict:
-    """Zählt Neuanlagen und Änderungen durch Vereine aus vk_audit (UTC-Timestamps)."""
+    """Zählt Neuanlagen und Änderungen durch Vereine aus vk_audit (UTC-Timestamps).
+    'neu' umfasst sowohl Einzel-Anlagen (aktion='erstellt') als auch Massen-Uploads
+    (aktion='upload'/'upload_confirmed') – letztere über die Spalte 'anzahl' gewichtet,
+    da eine Audit-Zeile dort einen ganzen Upload-Batch (mehrere Termine) repräsentiert.
+    """
     try:
         conn = sqlite3.connect(DB_PATH)
         from datetime import timezone
@@ -154,17 +161,25 @@ def verein_activity_stats() -> dict:
         cutoff_24h = (now_utc - timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
         cutoff_7d  = (now_utc - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
 
-        def _count(aktion: str, cutoff: str) -> int:
+        placeholders = ",".join("?" * len(_NEU_AKTIONEN))
+
+        def _sum_neu(cutoff: str) -> int:
             return conn.execute(
-                "SELECT COUNT(*) FROM vk_audit WHERE aktion=? AND timestamp>=?",
-                (aktion, cutoff)
+                f"SELECT COALESCE(SUM(anzahl),0) FROM vk_audit WHERE aktion IN ({placeholders}) AND timestamp>=?",
+                (*_NEU_AKTIONEN, cutoff)
+            ).fetchone()[0]
+
+        def _count_geaendert(cutoff: str) -> int:
+            return conn.execute(
+                "SELECT COUNT(*) FROM vk_audit WHERE aktion='geaendert' AND timestamp>=?",
+                (cutoff,)
             ).fetchone()[0]
 
         result = {
-            "neu_24h":       _count("erstellt",  cutoff_24h),
-            "geaendert_24h": _count("geaendert", cutoff_24h),
-            "neu_7d":        _count("erstellt",  cutoff_7d),
-            "geaendert_7d":  _count("geaendert", cutoff_7d),
+            "neu_24h":       _sum_neu(cutoff_24h),
+            "geaendert_24h": _count_geaendert(cutoff_24h),
+            "neu_7d":        _sum_neu(cutoff_7d),
+            "geaendert_7d":  _count_geaendert(cutoff_7d),
         }
         conn.close()
         return result

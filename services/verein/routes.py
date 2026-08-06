@@ -732,7 +732,7 @@ def upload_process(user):
     _, total = _do_save_import(alle, auto_plz, "", verein_key=verein_key)
     def _sv_up(d): d.setdefault("_meta", {}).setdefault(verein_key, {})["selbstverwaltung"] = True; return d
     KalenderStore.update(_sv_up)
-    log_audit("upload", f"bulk_{total}", verein_key, user["id"])
+    log_audit("upload", f"bulk_{total}", verein_key, user["id"], anzahl=total)
     return redirect(f"/verein/dashboard?upload_ok={total}")
 
 
@@ -766,7 +766,7 @@ def confirm_upload(user):
     pending_path.unlink(missing_ok=True)
     def _sv_cf(d): d.setdefault("_meta", {}).setdefault(vk, {})["selbstverwaltung"] = True; return d
     KalenderStore.update(_sv_cf)
-    log_audit("upload_confirmed", f"bulk_{total}", vk, user["id"])
+    log_audit("upload_confirmed", f"bulk_{total}", vk, user["id"], anzahl=total)
     return redirect(f"/verein/dashboard?upload_ok={total}")
 
 

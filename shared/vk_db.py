@@ -119,7 +119,8 @@ def init_db():
                 termin_id   TEXT NOT NULL,
                 verein_key  TEXT NOT NULL,
                 user_id     INTEGER REFERENCES vk_users(id),
-                timestamp   DATETIME DEFAULT CURRENT_TIMESTAMP
+                timestamp   DATETIME DEFAULT CURRENT_TIMESTAMP,
+                anzahl      INTEGER NOT NULL DEFAULT 1
             );
 
             CREATE TABLE IF NOT EXISTS upload_quota (
@@ -179,6 +180,7 @@ def init_db():
             "ALTER TABLE vereine_accounts ADD COLUMN plz TEXT",
             "ALTER TABLE vereine_accounts ADD COLUMN gemeinde TEXT",
             "ALTER TABLE vereine_accounts ADD COLUMN landkreis TEXT",
+            "ALTER TABLE vk_audit ADD COLUMN anzahl INTEGER NOT NULL DEFAULT 1",
         ]:
             try:
                 conn.execute(col_sql)
@@ -224,11 +226,11 @@ def delete_session(token: str):
         conn.execute("DELETE FROM vk_sessions WHERE id = ?", (token,))
 
 
-def log_audit(aktion: str, termin_id: str, verein_key: str, user_id: int):
+def log_audit(aktion: str, termin_id: str, verein_key: str, user_id: int, anzahl: int = 1):
     with db_conn() as conn:
         conn.execute(
-            "INSERT INTO vk_audit (aktion, termin_id, verein_key, user_id) VALUES (?,?,?,?)",
-            (aktion, termin_id, verein_key, user_id),
+            "INSERT INTO vk_audit (aktion, termin_id, verein_key, user_id, anzahl) VALUES (?,?,?,?,?)",
+            (aktion, termin_id, verein_key, user_id, anzahl),
         )
 
 
