@@ -13,6 +13,8 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from stats_collector import collect_day
+
 SECRETS_FILE        = Path("/etc/pka/secrets.env")
 VEREINSTERMINE_FILE = Path("/opt/rename-webhook/vereinstermine.json")
 LAST_IMPORT_FILE    = Path("/opt/rename-webhook/last_import.json")
@@ -107,6 +109,23 @@ def get_db_stats() -> dict:
     }
 
 
+def get_live_today_stats() -> dict:
+    """Live-Auswertung des laufenden Tages (00:00 bis jetzt) direkt aus dem nginx-Log –
+    für den 20-Uhr-Bericht. Nutzt dieselbe Zähl-/Crawler-Logik wie
+    stats_collector.collect_day(), schreibt aber nichts in die DB (sonst würde die
+    7-Tage-Summe unvollständige mit vollständigen Tagen mischen).
+    """
+    heute = datetime.now(TZ_LOCAL).date()
+    views, unique, _hourly, geo = collect_day(heute, max_files=1)
+    de = sum(besucher for (land, _stadt), besucher in geo.items() if land == "Deutschland")
+    return {
+        "datum":  heute.strftime("%d.%m."),
+        "views":  views,
+        "unique": unique,
+        "de":     de,
+    }
+
+
 def verein_stats() -> tuple[int, int]:
     if not VEREINSTERMINE_FILE.exists():
         return 0, 0
@@ -170,11 +189,23 @@ def main():
     gesamt, aktiv  = verein_stats()
     letzter_import = last_import_info()
     act            = verein_activity_stats()
-    jetzt          = datetime.now(TZ_LOCAL).strftime("%d.%m.%Y, %H:%M")
+    jetzt_dt       = datetime.now(TZ_LOCAL)
+    jetzt          = jetzt_dt.strftime("%d.%m.%Y, %H:%M")
+
+    # 00:10-Lauf: vollständiger, abgeschlossener Vortag aus der DB (von stats_collector 00:05 befüllt).
+    # 20:00-Lauf: laufender Tag (00:00 bis jetzt) live aus dem nginx-Log – nicht identisch mit dem
+    # DB-Wert, der bis zum nächsten 00:05-Lauf noch den davor liegenden Vortag zeigt.
+    if jetzt_dt.hour < 12:
+        tag_label = f"{stats['datum']} (Vortag, vollständig)"
+        tag_views, tag_de = stats["views"], stats["de"]
+    else:
+        live = get_live_today_stats()
+        tag_label = f"{live['datum']} (heute bis {jetzt_dt.strftime('%H:%M')} Uhr)"
+        tag_views, tag_de = live["views"], live["de"]
 
     text = (
         f"📊 <b>Vereinskalender</b> · {jetzt}\n\n"
-        f"📅 <b>{stats['datum']}</b> · Aufrufe: <b>{stats['views']}</b> · 🇩🇪 <b>{stats['de']}</b> Besucher\n"
+        f"📅 <b>{tag_label}</b> · Aufrufe: <b>{tag_views}</b> · 🇩🇪 <b>{tag_de}</b> Besucher\n"
         f"📆 7 Tage: <b>{stats['views_7d']}</b> Aufrufe · 🇩🇪 <b>{stats['de_7d']}</b> Besucher\n"
         f"🏛 Vereine: <b>{gesamt} gesamt</b>, davon <b>{aktiv} mit künftigen Terminen</b>\n"
         f"✏️ Vereinstermine 24h: <b>{act['neu_24h']} neu</b> · <b>{act['geaendert_24h']} geändert</b>"
