@@ -367,6 +367,7 @@ def do_import(uid: str, verein_keys: list | None = None,
 
     existing = _existing_events(exclude_keys=old_keys)
     neu = duplikat = 0
+    neu_vereine: set = set()
 
     for e in events:
         if filter_keys is not None and e["_verein_key"] not in filter_keys:
@@ -409,9 +410,17 @@ def do_import(uid: str, verein_keys: list | None = None,
         })
         existing.add((e["datum"], e["uhrzeit"], e["bezeichnung"].strip().lower()))
         neu += 1
+        neu_vereine.add(key)
 
     KalenderStore.update(lambda d: d.clear() or d.update(data))
     _log(f"✅ Import: {neu} neu, {duplikat} Duplikate übersprungen")
+    Path("/opt/rename-webhook/last_import.json").write_text(
+        json.dumps({
+            "datum":   datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "termine": neu,
+            "vereine": len(neu_vereine),
+        }, ensure_ascii=False)
+    )
 
     # Manuell ausgeschlossene Einzeltermine als soft-deleted speichern → kommen nicht wieder
     if excluded_set:
