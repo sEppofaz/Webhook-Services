@@ -175,6 +175,8 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
 .srch-icon-abs{position:absolute;left:24px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--text3);display:flex;align-items:center}
 .srch-clear{position:absolute;right:18px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text3);font-size:16px;line-height:1;padding:4px;cursor:pointer;display:none;border-radius:50%;width:24px;height:24px;align-items:center;justify-content:center}
 .srch-clear:hover{color:var(--text);background:var(--bg2)}
+.mini-srch-clear{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text3);font-size:15px;line-height:1;padding:4px;cursor:pointer;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center}
+.mini-srch-clear:hover{color:var(--text);background:var(--bg2)}
 .srch-dropdown{position:fixed;background:var(--card);border:1px solid var(--border2);border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.18);z-index:1000;max-height:220px;overflow-y:auto;-webkit-overflow-scrolling:touch;display:none}
 .srch-dropdown.open{display:block}
 .srch-item{padding:9px 12px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:8px;color:var(--text);border-bottom:.5px solid var(--border);border-left:none;border-right:none;border-top:none;width:100%;text-align:left;background:none;font-family:inherit;box-sizing:border-box}
@@ -2141,6 +2143,19 @@ async function rejectVereinAccount(id,btn){
 /* ── Accounts-Tab: Alle Accounts ── */
 function escHtml(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
 
+function _toggleMiniClear(inputId){
+  const inp=document.getElementById(inputId),btn=document.getElementById(inputId+"-clear");
+  if(inp&&btn)btn.style.display=inp.value?"flex":"none";
+}
+function _clearMiniSearch(inputId,cb){
+  const inp=document.getElementById(inputId);
+  if(!inp)return;
+  inp.value="";
+  _toggleMiniClear(inputId);
+  if(cb)cb();
+  inp.focus();
+}
+
 async function loadAllAccounts(){
   const el=document.getElementById("acc-all-content");
   if(!el)return;
@@ -2452,9 +2467,12 @@ function renderVereine(list){
     const fieldOpts=[["name","Verein"],["heimatort","Heimatort"],["gemeinde","Gemeinde"],["landkreis","Landkreis"],["rubrik","Rubrik"]].map(([v,l])=>
       `<option value="${v}"${_vereinSearchField===v?" selected":""}>${l}</option>`).join("");
     el.innerHTML=`<div style="display:flex;gap:8px;margin-bottom:10px">
-      <input id="ver-srch" type="search" value="${escHtml(_vereinSearch)}" placeholder="${_sfPh[_vereinSearchField]}"
-        oninput="_vereinSearch=this.value;_renderVereinResults()"
-        style="flex:1;padding:8px 11px;border:1.5px solid var(--border2);border-radius:10px;font-size:14px;background:var(--bg);color:var(--text);outline:none">
+      <div style="position:relative;flex:1;display:flex">
+        <input id="ver-srch" type="search" value="${escHtml(_vereinSearch)}" placeholder="${_sfPh[_vereinSearchField]}"
+          oninput="_vereinSearch=this.value;_renderVereinResults();_toggleMiniClear('ver-srch')"
+          style="flex:1;padding:8px 30px 8px 11px;border:1.5px solid var(--border2);border-radius:10px;font-size:14px;background:var(--bg);color:var(--text);outline:none">
+        <button id="ver-srch-clear" class="mini-srch-clear" type="button" onclick="_clearMiniSearch('ver-srch',()=>{_vereinSearch='';_renderVereinResults()})" aria-label="Suche löschen" style="${_vereinSearch?'':'display:none'}">&#10005;</button>
+      </div>
       <select id="ver-field" onchange="_vereinFieldChange(this.value)"
         style="padding:8px 8px;border:1.5px solid var(--border2);border-radius:10px;font-size:13px;background:var(--bg);color:var(--text);cursor:pointer;outline:none">${fieldOpts}</select>
     </div><div id="ver-results"></div>`;
@@ -2862,10 +2880,11 @@ async function loadTermine(restoreScroll=false){
   const el=document.getElementById("trm-tab-content");
   const today=new Date().toISOString().slice(0,10);
   el.innerHTML=`
-    <div style="margin-bottom:6px">
+    <div style="margin-bottom:6px;position:relative;display:flex">
       <input id="trm-search" type="text" placeholder="Suche nach Datum, Verein, Bezeichnung&#8230;"
-        oninput="renderTermineList()"
-        style="width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid var(--border2);border-radius:10px;font-size:14px;background:var(--bg);color:var(--text);outline:none">
+        oninput="renderTermineList();_toggleMiniClear('trm-search')"
+        style="width:100%;box-sizing:border-box;padding:9px 34px 9px 12px;border:1.5px solid var(--border2);border-radius:10px;font-size:14px;background:var(--bg);color:var(--text);outline:none">
+      <button id="trm-search-clear" class="mini-srch-clear" type="button" onclick="_clearMiniSearch('trm-search',renderTermineList)" aria-label="Suche löschen" style="display:none">&#10005;</button>
     </div>
     <label style="font-size:12px;color:var(--text3);display:flex;align-items:center;gap:6px;margin-bottom:8px;cursor:pointer">
       <input type="checkbox" id="trm-show-all" onchange="renderTermineList()"> Vergangene Termine anzeigen
