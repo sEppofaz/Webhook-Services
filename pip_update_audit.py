@@ -87,26 +87,24 @@ def pip_outdated(bin_dir: str) -> list[dict]:
 def pip_audit(bin_dir: str) -> list[dict]:
     """Gibt Liste von CVE-Funden zurück: {name, version, id, description}."""
     audit_bin = f"{bin_dir}/pip-audit"
-    pip_bin   = f"{bin_dir}/pip"
 
     # pip-audit nicht in jedem venv – fallback auf rename-webhook
     if not Path(audit_bin).exists():
         audit_bin = "/opt/rename-webhook/bin/pip-audit"
 
+    # --path muss auf site-packages zeigen, nicht auf die venv-Wurzel –
+    # sonst matcht pip-audit keine installierten Pakete und meldet
+    # stillschweigend 0 CVEs (Bug entdeckt 2026-08-16, siehe Pitfall in CLAUDE.md).
+    site_packages = next(Path(bin_dir).parent.glob("lib/python3.*/site-packages"), None)
+    if site_packages is None:
+        return []
+
     try:
         result = subprocess.run(
-            [audit_bin, "--format=json", "--requirement",
-             "/dev/stdin", "--no-deps"],
-            input="",
+            [audit_bin, "--format=json", f"--path={site_packages}"],
             capture_output=True, text=True, timeout=120
         )
-        # pip-audit mit -r (requirements aus venv)
-        result2 = subprocess.run(
-            [audit_bin, "--format=json",
-             f"--path={Path(bin_dir).parent}"],
-            capture_output=True, text=True, timeout=120
-        )
-        data = json.loads(result2.stdout) if result2.stdout.strip() else {}
+        data = json.loads(result.stdout) if result.stdout.strip() else {}
         vulns = []
         for dep in data.get("dependencies", []):
             for v in dep.get("vulns", []):
