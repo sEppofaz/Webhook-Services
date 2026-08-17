@@ -73,7 +73,7 @@ def summarize_with_claude(api_key: str, entry: str) -> str:
     )
     payload = json.dumps({
         "model": "claude-haiku-4-5-20251001",
-        "max_tokens": 512,
+        "max_tokens": 1536,
         "messages": [{"role": "user", "content": prompt}],
     }).encode()
     req = urllib.request.Request(url, data=payload, headers={
@@ -82,7 +82,10 @@ def summarize_with_claude(api_key: str, entry: str) -> str:
         "anthropic-version": "2023-06-01",
     })
     with urllib.request.urlopen(req, timeout=30) as r:
-        return json.loads(r.read())["content"][0]["text"].strip()
+        data = json.loads(r.read())
+        if data.get("stop_reason") == "max_tokens":
+            print(f"WARNUNG: Claude-Antwort bei max_tokens abgeschnitten (Zusammenfassung evtl. unvollstaendig)")
+        return data["content"][0]["text"].strip()
 
 
 def split_telegram_message(text: str, limit: int = 4096) -> list[str]:
