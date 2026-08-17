@@ -319,3 +319,11 @@ Endpunkt `/telegram` – nur Josefs Chat-ID. Token = `TOKEN` aus `/etc/pka/secre
 - Im GitHub-Repo getrackt (seit Initial-Commit 2026-05-06) – normaler Deployment-Flow gilt, kein Sonderfall
 - Telegram-Versand splittet lange Texte automatisch (>4096 Zeichen, siehe `BKM/Telegram-Integration.md`) – der frühere `entry[:3800]`-Kürzungs-Fallback bei Claude-Fehler wurde entfernt, da nicht mehr nötig
 - Log prüfen: `tail -20 /var/log/pka-logbuch.log`
+
+## pip_update_audit.py (Sonntags-Pip-Report)
+
+Prüft alle App-venvs (`VENVS`-Dict im Script: rename-webhook, claude-remote, kargl-invoice, life-doku, rechnungen) auf veraltete Pakete + CVEs, sendet Ampel-Report per Telegram. Läuft sonntags via `server-maintenance.sh` → `/etc/cron.d/server-maintenance` (03:00 Uhr). Macht **keine** automatischen Updates.
+
+- Im GitHub-Repo getrackt, normaler Deployment-Flow (`git push` → `ssh ... "git -C /opt/rename-webhook pull"`)
+- **Pitfall (behoben 2026-08-16):** `pip_audit()` rief `pip-audit --path=<venv-Wurzel>` auf (z.B. `/opt/rename-webhook`) statt der Site-Packages (`/opt/rename-webhook/lib/python3.12/site-packages`). `--path` filtert die *installierten Pakete des laufenden Interpreters* auf den angegebenen Pfad – bei falschem Pfad landen 0 Treffer, ganz ohne Fehlermeldung. Ergebnis: der CVE-Check hat seit Einführung des Scripts **immer 0 CVEs gemeldet**, unabhängig vom tatsächlichen Stand. Beim Nachprüfen fanden sich reale, ungemeldete CVEs: `pillow 12.2.0` in `rechnungen` (20 Advisories, Fix in 12.3.0) und `pypdf 6.14.2` in `kargl-invoice` + `life-doku` (2 Advisories je, Fix ab 6.15.0). Fix: `pip_audit()` ermittelt jetzt den Site-Packages-Pfad per `Path(bin_dir).parent.glob("lib/python3.*/site-packages")`. Alle 3 betroffenen Apps sofort aktualisiert, CVE-Check danach mit 0 Treffern verifiziert.
+- **Bekannter, nicht behebbarer Rot-Alarm bei rename-webhook:** `pyee` bleibt auf `13.0.1` hängen (Report zeigt `14.0.0` als verfügbar, `pip-upgrade-safe` versucht es auch, pip installiert es aber nicht) – `playwright 1.62.0` pinnt `pyee<14,>=13` fest. Kein Bug, kein Handlungsbedarf; löst sich erst wenn playwright seine `pyee`-Obergrenze anhebt. Der wöchentliche Report wird `rename-webhook` deshalb weiterhin 🔴 melden, bis dahin ignorierbar (kein CVE, nur Major-Versionsdiff).
