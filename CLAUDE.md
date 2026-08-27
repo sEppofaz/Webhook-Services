@@ -102,6 +102,7 @@ Alle Jobs als `root`-Crontab. Timezone: `Europe/Berlin`. Logs: `/var/log/pka-*.l
 | wöchentlich Mi 07:00 (`0 7 * * 3`) | `heimat_import.py` | heimat-info.de alle Gemeinden fetchen |
 | Di+Do 06:00 | `traffic_info.py` | Verkehrsinfo-Check |
 | alle 15 Min | `pka_todos_reminder.py` | PKA Todos Fälligkeits-Erinnerungen |
+| alle 30 Min | `telegram_webhook_guard.py` | Prüft `getWebhookInfo`, setzt Webhook automatisch neu + Telegram-Alarm falls weg (seit 2026-08-27, siehe Pitfall oben) |
 
 **kalender_report.py (2026-05-22):** Datenquelle auf SQLite-DB umgestellt (`page_stats` + `page_stats_geo`). Zeigt verifizierte Zahlen (ohne Crawler), Datum-Label des letzten verfügbaren Tages, Deutschland-Besucher aus `page_stats_geo`. Keine nginx-Log-Analyse mehr. Läuft nur noch 00:10 + 20:00 Uhr (war: 4×täglich).
 **kalender_report.py (2026-06-17):** Neue Funktion `verein_activity_stats()` – fragt `vk_audit` nach `aktion='erstellt'` und `aktion='geaendert'` ab (UTC-Timestamps, Cutoffs 24h + 7d). Zeigt im Bericht: `✏️ Vereinstermine 24h: X neu · Y geändert | 7 Tage: X neu · Y geändert`. Nur Aktionen durch Vereine selbst (Dashboard), keine heimat-info-Importe.
