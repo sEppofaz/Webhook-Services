@@ -46,6 +46,7 @@ CRAWLER_UA = {
     "cms-checker",          # CMS-Checker/1.0
     "meta-externalagent",   # Facebook/Meta neuer Bot-Name
     "iphone os 13_2",       # Tencent-Cloud-Scanner (18 verschiedene IPs, identischer UA)
+    "recscan",              # RecScan/2.0 (Hosting-IP, kein echter Browser)
 }
 
 
