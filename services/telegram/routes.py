@@ -38,6 +38,7 @@ _TODOS_FILE_PATH               = "/Apps/Claude/Todo-App/Todos.json"
 _GOOGLE_MAPS_API_KEY           = os.environ.get("GOOGLE_MAPS_API_KEY", "")
 _VERKEHR_ORIGIN                = "Hölskofen, Pfeffenhausen, Bayern, Deutschland"
 _TODO_WEBHOOK_SECRET           = os.environ.get("TODO_WEBHOOK_SECRET", "")
+_QGFB_CALLBACK_TOKEN           = os.environ.get("QGFEEDBACK_CALLBACK_TOKEN", "")
 
 
 def _fmt_dauer(sek: int) -> str:
@@ -677,5 +678,31 @@ def telegram_webhook():
                             send_telegram(TELEGRAM_CHAT_ID, f"❌ Verein abgelehnt: {row['verein_name']}")
             except Exception as e:
                 answer_telegram_callback(cb_id, f"❌ Fehler: {e}")
+
+        # ── QG-Feedback-Bot (eigener Service, Port 5008) – nur Weiterleitung,
+        # keine Fachlogik hier. Der Service beantwortet den internen Call sofort
+        # und arbeitet selbst im Hintergrund weiter (siehe QG-Feedback-Bot/CLAUDE.md).
+        elif cb_data.startswith("qgfb_analyze:") or cb_data.startswith("qgfb_apply:"):
+            uid = cb_data.split(":", 1)[1]
+            action = "analyze" if cb_data.startswith("qgfb_analyze:") else "apply"
+
+            def _forward_qgfb(u=uid, a=action):
+                try:
+                    req = urllib.request.Request(
+                        "http://127.0.0.1:5008/api/callback",
+                        data=json.dumps({"uid": u, "action": a}).encode(),
+                        headers={
+                            "Content-Type": "application/json",
+                            "Authorization": f"Bearer {_QGFB_CALLBACK_TOKEN}",
+                        },
+                        method="POST",
+                    )
+                    urllib.request.urlopen(req, timeout=5)
+                except Exception as e:
+                    log(f"❌  QG-Feedback-Bot Weiterleitung fehlgeschlagen: {e}")
+                    send_telegram(TELEGRAM_CHAT_ID, f"❌ QG-Feedback-Bot nicht erreichbar: {e}")
+
+            answer_telegram_callback(cb_id, "⏳ Wird bearbeitet…" if action == "apply" else "⏳ Analysiere…")
+            threading.Thread(target=_forward_qgfb, daemon=True).start()
 
     return "", 200
