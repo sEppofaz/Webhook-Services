@@ -49,7 +49,7 @@ def main():
 
     zeilen = [
         f"🚗 Verkehr: Hölskofen → CrossFit München",
-        f"{datum} – 06:00 Uhr",
+        f"{datum} – {now:%H:%M} Uhr",
         "",
         f"📍 Strecke: {dist / 1000:.0f} km",
         f"⏱ Normale Fahrt:  {fmt_dauer(normal)}",
