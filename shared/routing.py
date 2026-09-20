@@ -21,6 +21,8 @@ _ROUTE_URL = "https://api.tomtom.com/routing/1/calculateRoute/{o}:{d}/json"
 _TIMEOUT = 15
 _MAX_QUERY_LEN = 200
 _MAX_POINTS = 400
+_MAX_TRAFFIC_SECTIONS = 15
+_MAX_SECTION_POINTS = 80
 _GEOCODE_CACHE_MAX = 500
 # Josefs Heimatort: Hölskofen, 84092 Bayerbach (Landkreis Landshut). Es gibt weitere Orte namens Hölskofen
 # (u. a. TomTom-Treffer bei Pfeffenhausen, ~25 km westlich) und "Hölskofen 12" ohne Zusatz landet in Tschechien.
@@ -97,10 +99,10 @@ def _geocode(query: str, key: str) -> tuple:
     return _geocode_cache[q]
 
 
-def _downsample(points: list) -> list:
-    if len(points) <= _MAX_POINTS:
+def _downsample(points: list, limit: int = _MAX_POINTS) -> list:
+    if len(points) <= limit:
         return points
-    sampled = points[::math.ceil(len(points) / _MAX_POINTS)]
+    sampled = points[::math.ceil(len(points) / limit)]
     if sampled[-1] != points[-1]:
         sampled.append(points[-1])
     return sampled
@@ -122,8 +124,55 @@ def _encode_polyline(points: list) -> str:
     return "".join(out)
 
 
+def _length_m(points: list) -> float:
+    """Länge eines Punktzugs in Metern (Näherung, für Abschnitte von wenigen km völlig ausreichend)."""
+    total = 0.0
+    for (la1, lo1), (la2, lo2) in zip(points, points[1:]):
+        dy = (la2 - la1) * 111_320
+        dx = (lo2 - lo1) * 111_320 * math.cos(math.radians((la1 + la2) / 2))
+        total += math.hypot(dx, dy)
+    return total
+
+
+def _traffic_level(sec: dict):
+    """TomTom-Verkehrsabschnitt → 'red' (Stau), 'yellow' (zähfließend) oder None (ignorieren).
+    magnitudeOfDelay: 1 gering, 2 mäßig, 3 stark; ROAD_WORK/OTHER werden bewusst nicht angezeigt."""
+    cat = sec.get("simpleCategory")
+    mag = sec.get("magnitudeOfDelay") or 0
+    if cat == "ROAD_CLOSURE" or (cat == "JAM" and mag >= 3):
+        return "red"
+    if cat == "JAM" and mag >= 1 and (sec.get("delayInSeconds") or 0) >= 30:
+        return "yellow"
+    return None
+
+
+def _traffic_segments(sections: list, points: list) -> list:
+    """[{level, polyline, km, delay_min}] – Teilstücke der Route mit Stau/zähfließendem Verkehr."""
+    segs = []
+    for sec in sections:
+        if sec.get("sectionType") != "TRAFFIC":
+            continue
+        level = _traffic_level(sec)
+        si, ei = sec.get("startPointIndex"), sec.get("endPointIndex")
+        if not level or si is None or ei is None:
+            continue
+        sl = points[si:ei + 1]
+        if len(sl) < 2:
+            continue
+        segs.append({
+            "level": level,
+            "start": si,
+            "delay_sek": sec.get("delayInSeconds") or 0,
+            "km": round(_length_m(sl) / 1000, 1),
+            "polyline": _encode_polyline(_downsample(sl, _MAX_SECTION_POINTS)),
+        })
+    segs = sorted(segs, key=lambda x: -x["delay_sek"])[:_MAX_TRAFFIC_SECTIONS]
+    return [{"level": x["level"], "polyline": x["polyline"], "km": x["km"], "delay_min": round(x["delay_sek"] / 60)}
+            for x in sorted(segs, key=lambda x: x["start"])]
+
+
 def get_route(origin: str, destination: str) -> dict:
-    """Adressen → {normal_sek, traffic_sek, dist_m, overview_polyline, start_name, end_name}."""
+    """Adressen → {normal_sek, traffic_sek, dist_m, overview_polyline, start_name, end_name, traffic}."""
     key = _api_key()
     o = _geocode(origin, key)
     d = _geocode(destination, key)
@@ -134,6 +183,7 @@ def get_route(origin: str, destination: str) -> dict:
         "travelMode": "car",
         "routeType": "fastest",
         "computeTravelTimeFor": "all",
+        "sectionType": "traffic",
         "language": "de-DE",
     })
     url = _ROUTE_URL.format(o=f"{o[0]},{o[1]}", d=f"{d[0]},{d[1]}") + "?" + params
@@ -154,4 +204,5 @@ def get_route(origin: str, destination: str) -> dict:
         "overview_polyline": _encode_polyline(_downsample(points)),
         "start_name": o[2],
         "end_name": d[2],
+        "traffic": _traffic_segments(route.get("sections") or [], points),
     }

@@ -26,6 +26,7 @@ def api_verkehr():
             "overview_polyline": d["overview_polyline"],
             "start_name": d["start_name"],
             "end_name": d["end_name"],
+            "traffic": d["traffic"],
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
