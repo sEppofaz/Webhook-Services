@@ -171,6 +171,19 @@ def _traffic_segments(sections: list, points: list) -> list:
             for x in sorted(segs, key=lambda x: x["start"])]
 
 
+def traffic_lines(traffic: list) -> list:
+    """Stau-/Zähfließend-Zeilen für Telegram (leer, wenn nichts gemeldet): '🔴 Stau: 8,8 km (+11 Min)'."""
+    lines = []
+    for level, icon, label in (("red", "🔴", "Stau"), ("yellow", "🟡", "Zähfließend")):
+        segs = [t for t in traffic or [] if t["level"] == level]
+        if not segs:
+            continue
+        km = f"{sum(t['km'] for t in segs):.1f}".replace(".", ",").removesuffix(",0")
+        mins = sum(t["delay_min"] for t in segs)
+        lines.append(f"{icon} {label}: {km} km" + (f" (+{mins} Min)" if mins else ""))
+    return lines
+
+
 def get_route(origin: str, destination: str) -> dict:
     """Adressen → {normal_sek, traffic_sek, dist_m, overview_polyline, start_name, end_name, traffic}."""
     key = _api_key()

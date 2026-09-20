@@ -8,7 +8,7 @@ import sys
 from datetime import datetime
 
 sys.path.insert(0, "/opt/rename-webhook")
-from shared.routing import get_route
+from shared.routing import get_route, traffic_lines
 from shared.secrets import load_secrets
 from shared.telegram import send_telegram
 
@@ -54,6 +54,7 @@ def main():
         f"📍 Strecke: {dist / 1000:.0f} km",
         f"⏱ Normale Fahrt:  {fmt_dauer(normal)}",
         f"{ampel} Mit Verkehr:   {fmt_dauer(traffic)}" + (f"  (+{diff_min} Min)" if diff_min else ""),
+        *traffic_lines(route["traffic"]),
         "",
         f"→ {hinweis}",
     ]

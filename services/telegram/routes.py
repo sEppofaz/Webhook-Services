@@ -19,7 +19,7 @@ from shared.flask_notify import (
     send_telegram,
     send_telegram_inline,
 )
-from shared.routing import get_route
+from shared.routing import get_route, traffic_lines
 from shared.kalender_core import (
     GOTTESDIENSTE_FILE,
     VEREINSTERMINE_FILE,
@@ -52,6 +52,7 @@ def _get_verkehr(ziel: str) -> str:
         normal  = route["normal_sek"]
         traffic = route["traffic_sek"]
         dist    = route["dist_m"]
+        stau    = traffic_lines(route["traffic"])
     except Exception as e:
         return f"❌ Fehler: {e}"
 
@@ -73,6 +74,7 @@ def _get_verkehr(ziel: str) -> str:
         f"📍 Strecke: {dist / 1000:.0f} km",
         f"⏱ Normale Fahrt:  {_fmt_dauer(normal)}",
         f"{ampel} Mit Verkehr:   {_fmt_dauer(traffic)}" + (f"  (+{diff_min} Min)" if diff_min else ""),
+        *stau,
         "",
         f"→ {hinweis}",
     ]
