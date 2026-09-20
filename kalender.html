@@ -251,7 +251,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
   </div>
   <div class="hdr-right" style="display:flex;align-items:center;gap:6px">
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px">
-      <span class="ver-lbl" style="margin-right:0">v1.11</span>
+      <span class="ver-lbl" style="margin-right:0">v1.12</span>
       <span style="font-size:9px;color:rgba(255,255,255,.28);letter-spacing:.2px;line-height:1">a sEpp-App</span>
     </div>
     <button class="refresh-btn" onclick="showInfoModal()" title="Info" style="font-size:13px;font-weight:600;letter-spacing:.3px">Info</button>
@@ -378,7 +378,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title" style="width:55%"></div><div class="sk-line sk-ort"></div></div>
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title"></div><div class="sk-line sk-ort" style="width:30%"></div></div>
     </div>
-    <p class="version">Vereinskalender &middot; v1.11 &middot; 2026-09-20 &middot; a sEpp-App</p>
+    <p class="version">Vereinskalender &middot; v1.12 &middot; 2026-09-20 &middot; a sEpp-App</p>
     <p style="font-size:11px;color:var(--text3);text-align:center;padding:0 0 24px;line-height:2">&#127807; Hosting in Finnland mit &Ouml;kostrom &middot; Werbefrei &middot; DSGVO-konform</p>
   </div>
 
@@ -689,11 +689,32 @@ function _migrateGemFavorites(){
   if(changed){favorites=out;saveFavorites();saveActiveFavs();}
 }
 
+/* ── Region: Landkreis-Name ohne Präfix (Landkreis/Stadt/Kreis) – "Landshut" umfasst Landkreis + Stadt Landshut ── */
+function _regionOf(lk){return String(lk||"").replace(/^(?:Landkreis|Stadt|Kreis)\s+/i,"").trim();}
+function _regionForVerein(k){return _regionOf((meta[k]||{}).landkreis||"Landkreis Landshut");}
+function _gemRegion(g){return _regionOf(g.slice(g.indexOf("|")+1));}
+function _migrateRegionFavorites(){
+  let changed=false;
+  const out=[];
+  favorites.forEach(f=>{
+    if(f.type!=="region"){out.push(f);return;}
+    const r=_regionOf(f.key);
+    if(r===f.key){out.push(f);return;}
+    changed=true;
+    const wasActive=activeFavs.has("region:"+f.key);
+    activeFavs.delete("region:"+f.key);
+    if(out.some(x=>x.type==="region"&&x.key===r)||favorites.some(x=>x.type==="region"&&x.key===r))return;
+    out.push({...f,key:r,label:r});
+    if(wasActive)activeFavs.add("region:"+r);
+  });
+  if(changed){favorites=out;saveFavorites();saveActiveFavs();}
+}
+
 /* ── Ortschaft-Identität: Ortsname + Gemeinde (ADR-006) ──
    Chip-Schlüssel = Anzeige-Label: "Weng" – bei Namensgleichheit in mehreren Gemeinden "Weng (Postau)".
    Ohne Kollision identisch mit dem bisherigen Schlüssel (kein Migrationsbedarf).
    _meta[key].ortschaft_gemeinde überschreibt die Gemeinde nur für die Ortschaft-Zuordnung. */
-let _ortOf={},_ortBase={};
+let _ortOf={},_ortBase={},_ortGem={};
 function _ortNameOf(k){
   const h=(meta[k]||{}).heimatort;
   if(h)return h;
@@ -712,7 +733,7 @@ function _ortGemeindeOf(k){
   return _gemOf[k]||"";
 }
 function _prepareOrtschaften(){
-  _ortOf={};_ortBase={};allOrteAll={};
+  _ortOf={};_ortBase={};_ortGem={};allOrteAll={};
   const byName={};  // Ortsname → {Gemeinde-Schlüssel: [verein_keys]}
   new Set([...Object.keys(labels),...Object.keys(meta)]).forEach(k=>{
     const n=_ortNameOf(k);
@@ -727,8 +748,11 @@ function _prepareOrtschaften(){
     const main=gems.slice().sort((a,b)=>groups[b].length-groups[a].length||a.localeCompare(b))[0]||"";
     Object.entries(groups).forEach(([g,ks])=>{
       const eff=g||main;
-      const lbl=gems.length>1?n+" ("+_gemLabel(eff)+")":n;
+      // Ortsname = Gemeindename → Gemeinde-Label direkt ("Bayerbach (Rottal-Inn)"), sonst "Ortsname (Gemeinde)"
+      const gl=gems.length>1?_gemLabel(eff):"";
+      const lbl=gems.length>1?((gl===n||gl.startsWith(n+" ("))?gl:n+" ("+gl+")"):n;
       _ortBase[lbl]=n;
+      _ortGem[lbl]=eff;  // effektive Gemeinde (inkl. Override) für die Filter-Kaskade
       ks.forEach(k=>{
         _ortOf[k]=lbl;
         if(labels[k])(allOrteAll[lbl]=allOrteAll[lbl]||[]).push(k);
@@ -808,8 +832,9 @@ function loadState(){
       aktOrte=new Set(s.aktOrte.flatMap(_ortKeysForOld).filter(o=>alleOrte.has(o)));
     }
     if(s.aktLandkreis){
-      const lks=new Set(Object.values(meta).map(m=>m.landkreis).filter(Boolean));
-      aktLandkreis=lks.has(s.aktLandkreis)?s.aktLandkreis:null;
+      const regs=new Set(Object.keys(meta).map(_regionForVerein).filter(Boolean));
+      const r=_regionOf(s.aktLandkreis);
+      aktLandkreis=regs.has(r)?r:null;
     }
     if(Array.isArray(s.aktGemeinden)){
       aktGemeinden=new Set(s.aktGemeinden.flatMap(_gemKeysForOld));
@@ -821,6 +846,7 @@ function loadState(){
 }
 
 function applyStateToUI(){
+  _applyHierarchy();
   document.querySelectorAll("[data-z]").forEach(c=>c.classList.toggle("on",c.dataset.z===zeitraum));
   const alleOrtChip=document.querySelector('[data-o="alle"]');
   if(alleOrtChip)alleOrtChip.classList.toggle("on",aktOrte.size===0);
@@ -857,6 +883,7 @@ async function load(){
   meta=j.meta||{};
   _prepareGemeinden();
   _migrateGemFavorites();
+  _migrateRegionFavorites();
   rubriken=j.rubriken||{};
   Object.keys(labels).sort().forEach((k,i)=>colors[k]=COLORS[i%COLORS.length]);
 
@@ -915,12 +942,13 @@ function toggleSection(id){
 function buildLandkreisFilter(){
   const section=document.getElementById("lk-section");
   const container=document.getElementById("lk-chips");
-  const landkreise=[...new Set(Object.values(meta).map(m=>m.landkreis).filter(Boolean))].sort();
+  const landkreise=[...new Set(Object.keys(meta).map(_regionForVerein).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"de"));
+  container.innerHTML="";
   if(landkreise.length<=1){section.style.display="none";return;}
   section.style.display="";
   landkreise.forEach(lk=>{
     const isFav=favorites.some(f=>f.type==="region"&&f.key===lk);
-    const lkLabel=lk.replace(/^Landkreis\s+/,"");
+    const lkLabel=lk;
     const c=document.createElement("span");
     c.className="chip"+(aktLandkreis===lk?" on":"");c.dataset.lk=lk;
     c.appendChild(document.createTextNode(lkLabel+" "));
@@ -938,10 +966,7 @@ function selectLandkreis(lk){
   aktLandkreis=(lk==="alle"||aktLandkreis===lk)?null:lk;
   aktGemeinden=new Set();
   document.querySelectorAll("[data-lk]").forEach(c=>c.classList.toggle("on",c.dataset.lk===(aktLandkreis||"alle")));
-  filterGemeindeChipsForLandkreis();
-  filterOrtChipsForGemeinde();
-  filterOrtChipsForLandkreis();
-  filterVereinListForOrt();
+  _applyHierarchy();
   updateAllBadges();
   render();
 }
@@ -976,32 +1001,12 @@ function toggleGemeinde(g){
   } else {
     if(aktGemeinden.has(g))aktGemeinden.delete(g);else aktGemeinden.add(g);
   }
-  const alleChip=document.querySelector('[data-gem="alle"]');
-  if(alleChip)alleChip.classList.toggle("on",aktGemeinden.size===0);
-  document.querySelectorAll("[data-gem]:not([data-gem='alle'])").forEach(c=>{
-    c.classList.toggle("on",aktGemeinden.has(c.dataset.gem));
-  });
-  filterOrtChipsForGemeinde();
-  filterVereinListForOrt();
+  _applyHierarchy();
   updateAllBadges();
   render();
 }
 
-function filterGemeindeChipsForLandkreis(){
-  const chips=document.querySelectorAll("[data-gem]:not([data-gem='alle'])");
-  if(!aktLandkreis){chips.forEach(c=>c.style.display="");return;}
-  const gemInLk=new Set(Object.values(_gemOf).filter(g=>g.slice(g.indexOf("|")+1)===aktLandkreis));
-  chips.forEach(c=>c.style.display=gemInLk.has(c.dataset.gem)?"":"none");
-}
 
-function filterOrtChipsForGemeinde(){
-  const chips=document.querySelectorAll("[data-o]:not([data-o='alle'])");
-  if(!aktGemeinden.size){chips.forEach(c=>c.style.display="");return;}
-  chips.forEach(c=>{
-    const g=_gemeindeForOrt(c.dataset.o);
-    c.style.display=(g&&aktGemeinden.has(g))?"":"none";
-  });
-}
 
 /* ── Badges & Reset-Button ── */
 function updateAllBadges(){
@@ -1063,10 +1068,7 @@ function resetAll(){
   document.querySelectorAll("[data-o]").forEach(c=>c.classList.toggle("on",c.dataset.o==="alle"));
   document.querySelectorAll("[data-gem]").forEach(c=>c.classList.toggle("on",c.dataset.gem==="alle"));
   document.querySelectorAll("[data-lk]").forEach(c=>c.classList.toggle("on",c.dataset.lk==="alle"));
-  filterGemeindeChipsForLandkreis();
-  filterOrtChipsForGemeinde();
-  filterVereinListForOrt();
-  filterOrtChipsForLandkreis();
+  _applyHierarchy();
   updateChecks();
   updateAllBadges();
   render();
@@ -1076,11 +1078,6 @@ function resetAll(){
 // Alle Verein-Keys einer Ortschaft (Ortschaft-Label → _ortOf, siehe _prepareOrtschaften)
 function _vereinsForOrt(o){
   return new Set(Object.keys(_ortOf).filter(k=>_ortOf[k]===o));
-}
-// Gemeinde einer Ortschaft – ermittelt aus den Vereinen die dort beheimatet sind
-function _gemeindeForOrt(o){
-  for(const k of _vereinsForOrt(o)){const g=_gemOf[k];if(g)return g;}
-  return "";
 }
 
 function buildOrtFilter(){
@@ -1108,29 +1105,57 @@ function buildOrtFilter(){
   container.querySelector('[data-o="alle"]').onclick=()=>toggleOrt("alle");
 }
 
+/* ── Filter-Kaskade Region → Gemeinde → Ortschaft → Verein ──
+   Jede Ebene bietet nur an, was zu den darüber gewählten Filtern passt. Zentral, damit sich die Ebenen
+   nicht gegenseitig überschreiben und auch nach State-Laden / Chip-Neubau gilt. */
+function _gemVisible(g){return !aktLandkreis||_gemRegion(g)===aktLandkreis;}
+function _ortVisible(o){
+  const g=_ortGem[o];
+  if(aktGemeinden.size>0){
+    if(g)return aktGemeinden.has(g);
+    return [..._vereinsForOrt(o)].some(k=>aktGemeinden.has(_gemOf[k]||""));
+  }
+  if(aktLandkreis){
+    if(g)return _gemRegion(g)===aktLandkreis;
+    return [..._vereinsForOrt(o)].some(k=>_regionForVerein(k)===aktLandkreis);
+  }
+  return true;
+}
+function _applyHierarchy(){
+  // nicht mehr sichtbare Auswahlen der unteren Ebenen abwählen (sonst filtern sie unsichtbar weiter)
+  if(aktLandkreis)aktGemeinden=new Set([...aktGemeinden].filter(_gemVisible));
+  aktOrte=new Set([...aktOrte].filter(o=>!allOrteAll[o]||_ortVisible(o)));
+  document.querySelectorAll("[data-gem]:not([data-gem='alle'])").forEach(c=>{
+    c.style.display=_gemVisible(c.dataset.gem)?"":"none";
+    c.classList.toggle("on",aktGemeinden.has(c.dataset.gem));
+  });
+  const gemAlle=document.querySelector('[data-gem="alle"]');
+  if(gemAlle)gemAlle.classList.toggle("on",aktGemeinden.size===0);
+  document.querySelectorAll("[data-o]:not([data-o='alle'])").forEach(c=>{
+    c.style.display=_ortVisible(c.dataset.o)?"":"none";
+    c.classList.toggle("on",aktOrte.has(c.dataset.o));
+  });
+  const ortAlle=document.querySelector('[data-o="alle"]');
+  if(ortAlle)ortAlle.classList.toggle("on",aktOrte.size===0);
+  filterVereinListForOrt();
+}
+
 function filterVereinListForOrt(){
   const lbls=document.querySelectorAll("#v-list .v-check");
   const gemFilter=aktGemeinden.size>0;
-  if(!aktOrte.size&&!gemFilter){lbls.forEach(l=>l.style.display="");return;}
+  if(!aktOrte.size&&!gemFilter&&!aktLandkreis){lbls.forEach(l=>l.style.display="");return;}
   lbls.forEach(lbl=>{
     const cb=lbl.querySelector("[data-vk]");
     if(cb){
       const k=cb.dataset.vk;
       const inOrt=!aktOrte.size||aktOrte.has(_ortOf[k]);
       const inGem=!gemFilter||aktGemeinden.has(_gemOf[k]||"");
-      lbl.style.display=(inOrt&&inGem)?"":"none";
+      const inReg=!aktLandkreis||_regionForVerein(k)===aktLandkreis;
+      lbl.style.display=(inOrt&&inGem&&inReg)?"":"none";
     }
   });
 }
 
-function filterOrtChipsForLandkreis(){
-  const chips=document.querySelectorAll("[data-o]:not([data-o='alle'])");
-  if(!aktLandkreis){chips.forEach(c=>c.style.display="");return;}
-  chips.forEach(c=>{
-    const inLk=[..._vereinsForOrt(c.dataset.o)].some(k=>(meta[k]||{}).landkreis===aktLandkreis);
-    c.style.display=inLk?"":"none";
-  });
-}
 
 function toggleOrt(o){
   if(o==="alle"){
@@ -1485,7 +1510,7 @@ function _termMatchFav(t,f){
   const k=t.verein;
   if(f.type==="verein")return k===f.key;
   if(f.type==="ort"||f.type==="ortschaft")return _ortOf[k]===f.key;
-  if(f.type==="region")return((meta[k]||{}).landkreis||"Landkreis Landshut")===f.key;
+  if(f.type==="region")return _regionForVerein(k)===f.key;
   if(f.type==="gemeinde")return(_gemOf[k]||"")===f.key;
   return false;
 }
@@ -1520,7 +1545,7 @@ function render(){
     // Normaler UND-Filter
     if(!aktVereine.has(t.verein))return false;
     if(aktRubrikSet.size>0){const r=rubriken[t.verein]||"Verein";if(!aktRubrikSet.has(r))return false;}
-    if(aktLandkreis!==null){const m=meta[t.verein];if(!m||m.landkreis!==aktLandkreis)return false;}
+    if(aktLandkreis!==null&&_regionForVerein(t.verein)!==aktLandkreis)return false;
     if(aktGemeinden.size>0&&!aktGemeinden.has(_gemOf[t.verein]||""))return false;
     if(aktOrte.size>0&&!aktOrte.has(_ortOf[t.verein]))return false;
     return true;
@@ -3310,7 +3335,7 @@ function showInfoModal(){
       </div>
       <div class="help-row" style="padding:8px 0">
         <span class="help-icon">${icon("map",20)}</span>
-        <div><strong>Region</strong><span>Erscheint bei mehreren Landkreisen &ndash; zeigt nur Vereine des gew&auml;hlten Landkreises.</span></div>
+        <div><strong>Region</strong><span>Erscheint bei mehreren Regionen &ndash; zeigt nur Vereine der gew&auml;hlten Region (Landkreis und gleichnamige Stadt zusammengefasst, z.&nbsp;B. &bdquo;Landshut&ldquo;). Gemeinde und Ortschaft bieten danach nur noch passende Eintr&auml;ge an.</span></div>
       </div>
       <div class="help-row" style="padding:8px 0">
         <span class="help-icon">${icon("mapPin",20)}</span>
