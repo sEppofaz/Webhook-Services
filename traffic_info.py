@@ -4,13 +4,11 @@ traffic_info.py
 Cron Di+Do 06:00: Verkehrsinfo Hölskofen → CrossFit München per Telegram.
 """
 
-import json
 import sys
-import urllib.request
-import urllib.parse
 from datetime import datetime
 
 sys.path.insert(0, "/opt/rename-webhook")
+from shared.routing import get_route
 from shared.secrets import load_secrets
 from shared.telegram import send_telegram
 
@@ -19,29 +17,6 @@ DESTINATION = "Frankfurter Ring 255, 80807 München"
 LOG         = "/var/log/pka-traffic.log"
 
 WOCHENTAGE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]
-
-
-def get_route(api_key: str) -> tuple[int, int, int]:
-    """Gibt (normal_sek, traffic_sek, distanz_m) zurück."""
-    params = urllib.parse.urlencode({
-        "origin":         ORIGIN,
-        "destination":    DESTINATION,
-        "departure_time": "now",
-        "traffic_model":  "best_guess",
-        "key":            api_key,
-    })
-    url = f"https://maps.googleapis.com/maps/api/directions/json?{params}"
-    with urllib.request.urlopen(url, timeout=15) as r:
-        data = json.loads(r.read())
-
-    if data["status"] != "OK":
-        raise RuntimeError(f"Directions API: {data['status']} – {data.get('error_message', '')}")
-
-    leg     = data["routes"][0]["legs"][0]
-    normal  = leg["duration"]["value"]
-    traffic = leg["duration_in_traffic"]["value"]
-    dist    = leg["distance"]["value"]
-    return normal, traffic, dist
 
 
 def fmt_dauer(sek: int) -> str:
@@ -55,11 +30,11 @@ def main():
     datum   = now.strftime(f"{tag}, %d.%m.%Y")
 
     secrets = load_secrets()
-    api_key = secrets["GOOGLE_MAPS_API_KEY"]
     token   = secrets["TOKEN"]
     chat_id = secrets["CHAT_ID"]
 
-    normal, traffic, dist = get_route(api_key)
+    route   = get_route(ORIGIN, DESTINATION)
+    normal, traffic, dist = route["normal_sek"], route["traffic_sek"], route["dist_m"]
     diff_min = max(0, (traffic - normal) // 60)
 
     if diff_min < 10:

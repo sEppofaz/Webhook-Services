@@ -1,51 +1,8 @@
-import json
-import re
-import urllib.parse
-import urllib.request
-
 from flask import Blueprint, jsonify, request
 
-from shared.secrets import load_secrets
+from shared.routing import get_route
 
 verkehr_bp = Blueprint("verkehr", __name__)
-
-_LANDMARK_RE = re.compile(r'(?:in\s+[Rr]ichtung|toward)\s+<b>([^<]+)</b>')
-
-
-def _extract_landmarks(steps):
-    seen = set()
-    landmarks = []
-    for step in steps:
-        for name in _LANDMARK_RE.findall(step.get("html_instructions", "")):
-            name = name.strip()
-            if name and name not in seen:
-                seen.add(name)
-                loc = step["start_location"]
-                landmarks.append({"name": name, "lat": loc["lat"], "lng": loc["lng"]})
-    return landmarks
-
-
-def _get_route(api_key: str, origin: str, destination: str) -> dict:
-    params = urllib.parse.urlencode({
-        "origin": origin,
-        "destination": destination,
-        "departure_time": "now",
-        "traffic_model": "best_guess",
-        "key": api_key,
-    })
-    url = f"https://maps.googleapis.com/maps/api/directions/json?{params}"
-    with urllib.request.urlopen(url, timeout=15) as r:
-        data = json.loads(r.read())
-    if data["status"] != "OK":
-        raise RuntimeError(f"Directions API: {data['status']} – {data.get('error_message', '')}")
-    leg = data["routes"][0]["legs"][0]
-    return {
-        "normal_sek": leg["duration"]["value"],
-        "traffic_sek": leg["duration_in_traffic"]["value"],
-        "dist_m": leg["distance"]["value"],
-        "overview_polyline": data["routes"][0]["overview_polyline"]["points"],
-        "landmarks": _extract_landmarks(leg["steps"]),
-    }
 
 
 @verkehr_bp.route("/api/verkehr")
@@ -55,8 +12,7 @@ def api_verkehr():
     if not origin or not destination:
         return jsonify({"error": "origin und destination erforderlich"}), 400
     try:
-        secrets = load_secrets()
-        d = _get_route(secrets["GOOGLE_MAPS_API_KEY"], origin, destination)
+        d = get_route(origin, destination)
         normal_min = d["normal_sek"] // 60
         traffic_min = d["traffic_sek"] // 60
         delta = max(0, traffic_min - normal_min)

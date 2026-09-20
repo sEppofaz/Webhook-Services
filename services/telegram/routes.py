@@ -19,6 +19,7 @@ from shared.flask_notify import (
     send_telegram,
     send_telegram_inline,
 )
+from shared.routing import get_route
 from shared.kalender_core import (
     GOTTESDIENSTE_FILE,
     VEREINSTERMINE_FILE,
@@ -35,7 +36,6 @@ _DROPBOX_INVOICE_REFRESH_TOKEN = os.environ.get("DROPBOX_INVOICE_REFRESH_TOKEN",
 _DROPBOX_INVOICE_APP_KEY       = os.environ.get("DROPBOX_INVOICE_APP_KEY", "")
 _DROPBOX_INVOICE_APP_SECRET    = os.environ.get("DROPBOX_INVOICE_APP_SECRET", "")
 _TODOS_FILE_PATH               = "/Apps/Claude/Todo-App/Todos.json"
-_GOOGLE_MAPS_API_KEY           = os.environ.get("GOOGLE_MAPS_API_KEY", "")
 _VERKEHR_ORIGIN                = "Hölskofen, Pfeffenhausen, Bayern, Deutschland"
 _TODO_WEBHOOK_SECRET           = os.environ.get("TODO_WEBHOOK_SECRET", "")
 _QGFB_CALLBACK_TOKEN           = os.environ.get("QGFEEDBACK_CALLBACK_TOKEN", "")
@@ -47,25 +47,11 @@ def _fmt_dauer(sek: int) -> str:
 
 
 def _get_verkehr(ziel: str) -> str:
-    if not _GOOGLE_MAPS_API_KEY:
-        return "❌ Google Maps API-Key nicht konfiguriert."
-    params = urllib.parse.urlencode({
-        "origin":         _VERKEHR_ORIGIN,
-        "destination":    ziel,
-        "departure_time": "now",
-        "traffic_model":  "best_guess",
-        "key":            _GOOGLE_MAPS_API_KEY,
-    })
-    url = f"https://maps.googleapis.com/maps/api/directions/json?{params}"
     try:
-        with urllib.request.urlopen(url, timeout=15) as r:
-            resp = json.loads(r.read())
-        if resp["status"] != "OK":
-            return f"❌ Directions API: {resp['status']} – {resp.get('error_message', '')}"
-        leg     = resp["routes"][0]["legs"][0]
-        normal  = leg["duration"]["value"]
-        traffic = leg["duration_in_traffic"]["value"]
-        dist    = leg["distance"]["value"]
+        route   = get_route(_VERKEHR_ORIGIN, ziel)
+        normal  = route["normal_sek"]
+        traffic = route["traffic_sek"]
+        dist    = route["dist_m"]
     except Exception as e:
         return f"❌ Fehler: {e}"
 
