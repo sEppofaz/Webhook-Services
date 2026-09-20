@@ -53,6 +53,23 @@ def log(msg: str) -> None:
     print(f"[{ts}] {msg}", flush=True)
 
 
+def _normalize_landkreis(county: str, stadt: str) -> str:
+    """Landkreis-Wert im Bestandsformat (wie `_meta.landkreis`, vom Frontend erwartet).
+
+    - Nominatim liefert für Landkreis-Gemeinden `county` MIT Präfix ("Landkreis Landshut") → unverändert übernehmen.
+      Das Präfix darf NICHT entfernt werden: der Roh-Wert "Landshut" erzeugt im Frontend Landkreis-/Gemeinde-Dubletten
+      (Vorfall FFW Paindlkofen, 2026-09-20) und ist nicht von der kreisfreien Stadt Landshut unterscheidbar.
+    - Kreisfreie Städte (München, Regensburg, Landshut …) haben bei Nominatim kein `county` → "Stadt <Name>"
+      (Frontend gruppiert Region über den Namen ohne Präfix: "Stadt Landshut" + "Landkreis Landshut" = Region "Landshut").
+    - Kein Fallback auf `state_district` (Regierungsbezirk, z. B. "Niederbayern" ist kein Landkreis).
+    """
+    county = (county or "").strip()
+    if county:
+        return county
+    stadt = (stadt or "").strip()
+    return f"Stadt {stadt}" if stadt else ""
+
+
 def lookup_plz(plz: str) -> dict:
     """PLZ → Gemeinde + Landkreis via Nominatim."""
     url = "https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode({
@@ -68,8 +85,7 @@ def lookup_plz(plz: str) -> dict:
             addr      = results[0].get("address", {})
             gemeinde  = (addr.get("city") or addr.get("town") or
                          addr.get("village") or addr.get("municipality") or "")
-            landkreis = (addr.get("county") or addr.get("state_district") or "")
-            landkreis = re.sub(r"^(Landkreis|Kreis)\s+", "", landkreis).strip()
+            landkreis = _normalize_landkreis(addr.get("county"), addr.get("city") or addr.get("town"))
             log(f"📍  PLZ {plz} → {gemeinde}, {landkreis}")
             return {"plz": plz, "gemeinde": gemeinde, "landkreis": landkreis}
     except Exception as e:
