@@ -90,7 +90,7 @@ def _geocode(query: str, key: str) -> tuple:
         raise RuntimeError(f"Adresse nicht gefunden: {q}")
     pos = results[0]["position"]
     addr = results[0].get("address") or {}
-    name = addr.get("municipality") or addr.get("localName") or q.split(",")[0].strip()
+    name = "Hölskofen" if m else re.split(r"\s+(?:bei|b\.)\s+", addr.get("municipality") or addr.get("localName") or q.split(",")[0].strip())[0]
     if len(_geocode_cache) >= _GEOCODE_CACHE_MAX:
         _geocode_cache.clear()
     _geocode_cache[q] = (pos["lat"], pos["lon"], name)
