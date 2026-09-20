@@ -143,9 +143,9 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
 .back-top:active{opacity:.7}
 
 /* ── Active Filter Pills ── */
-.act-pill{display:inline-flex;align-items:center;gap:4px;background:var(--accent);color:#fff;border-radius:16px;padding:4px 8px 4px 10px;font-size:12px;font-weight:500;cursor:pointer;user-select:none;transition:opacity .15s}
+.act-pill{display:inline-flex;align-items:center;gap:6px;box-sizing:border-box;height:34px;background:var(--accent);color:#fff;border-radius:20px;padding:0 10px 0 14px;font-size:13px;font-weight:500;cursor:pointer;user-select:none;transition:opacity .15s}
 .act-pill:active{opacity:.7}
-.act-pill-x{opacity:.75;font-size:14px;line-height:1}
+.act-pill-x{display:inline-flex;align-items:center;opacity:.8}
 /* Alle Toggle-Chips der Filter-Card exakt gleich hoch (34px); Breite richtet sich nach dem Inhalt */
 .filter-card .chip,.filter-card .rubrik-chip,.fav-hint .fav-hint-btn{box-sizing:border-box;height:34px;padding-top:0;padding-bottom:0;display:inline-flex;align-items:center;gap:5px;line-height:1.2}
 /* Favoriten-Chips: Icon 14px statt 18px */
@@ -263,7 +263,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
   </div>
   <div class="hdr-right" style="display:flex;align-items:center;gap:6px">
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px">
-      <span class="ver-lbl" style="margin-right:0">v1.16</span>
+      <span class="ver-lbl" style="margin-right:0">v1.17</span>
       <span style="font-size:9px;color:rgba(255,255,255,.28);letter-spacing:.2px;line-height:1">a sEpp-App</span>
     </div>
     <button class="refresh-btn" onclick="showInfoModal()" title="Info" style="font-size:13px;font-weight:600;letter-spacing:.3px">Info</button>
@@ -391,7 +391,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title" style="width:55%"></div><div class="sk-line sk-ort"></div></div>
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title"></div><div class="sk-line sk-ort" style="width:30%"></div></div>
     </div>
-    <p class="version">Vereinskalender &middot; v1.16 &middot; 2026-09-20 &middot; a sEpp-App</p>
+    <p class="version">Vereinskalender &middot; v1.17 &middot; 2026-09-20 &middot; a sEpp-App</p>
     <p style="font-size:11px;color:var(--text3);text-align:center;padding:0 0 24px;line-height:2">&#127807; Hosting in Finnland mit &Ouml;kostrom &middot; Werbefrei &middot; DSGVO-konform</p>
   </div>
 
@@ -1049,13 +1049,12 @@ function renderActiveFilterPills(){
   if(!fm&&aktLandkreis)pills.push({label:aktLandkreis.replace(/^Landkreis\s+/,""),fn:()=>selectLandkreis(aktLandkreis)});
   if(!fm)aktGemeinden.forEach(g=>pills.push({label:_gemLabel(g),fn:()=>toggleGemeinde(g)}));
   if(!fm)aktOrte.forEach(o=>pills.push({label:o,fn:()=>toggleOrt(o)}));
-  if(!fm)aktRubrikSet.forEach(r=>pills.push({label:r,fn:()=>setRubrik(r)}));
   const tot=Object.keys(labels).length;
   if(!fm&&aktVereine.size<tot)pills.push({label:aktVereine.size+"/"+tot+" Vereine",fn:()=>selectAllVereine(true)});
   _activePillActions=pills.map(p=>p.fn);
   if(!pills.length){el.style.display="none";el.innerHTML="";return;}
   el.style.display="flex";
-  el.innerHTML=pills.map((p,i)=>`<span class="act-pill" data-pi="${i}">${escHtml(p.label)}<span class="act-pill-x"> ×</span></span>`).join("");
+  el.innerHTML=pills.map((p,i)=>`<span class="act-pill" data-pi="${i}">${escHtml(p.label)}<span class="act-pill-x">${icon("x",14)}</span></span>`).join("");
 }
 
 /* ── Reset all filters ── */
