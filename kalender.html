@@ -146,6 +146,13 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
 .act-pill{display:inline-flex;align-items:center;gap:4px;background:var(--accent);color:#fff;border-radius:16px;padding:4px 8px 4px 10px;font-size:12px;font-weight:500;cursor:pointer;user-select:none;transition:opacity .15s}
 .act-pill:active{opacity:.7}
 .act-pill-x{opacity:.75;font-size:14px;line-height:1}
+/* Favoriten-Ansicht: Hinweisbox + gedimmte (pausierte) Filter */
+.fav-hint{margin:8px 14px 2px;padding:9px 12px 10px;border-radius:10px;background:var(--bg);border:1px solid var(--border2);border-left:3px solid var(--accent);color:var(--text2);font-size:12.5px;line-height:1.45}
+.fav-hint strong{display:flex;align-items:center;gap:5px;color:var(--text);font-size:13px;margin-bottom:2px}
+.fav-hint strong svg{color:#ff3b30;flex-shrink:0}
+.fav-hint-btn{display:block;margin-top:8px;background:none;border:1.5px solid var(--accent);color:var(--text);border-radius:14px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer}
+.fav-hint-btn:active{opacity:.7}
+.fav-mode #rubrik-bar,.fav-mode #lk-section,.fav-mode #gem-section,.fav-mode #ort-section,.fav-mode #ver-section{opacity:.45}
 
 /* ── Skeleton Loader ── */
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
@@ -251,7 +258,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
   </div>
   <div class="hdr-right" style="display:flex;align-items:center;gap:6px">
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px">
-      <span class="ver-lbl" style="margin-right:0">v1.12</span>
+      <span class="ver-lbl" style="margin-right:0">v1.13</span>
       <span style="font-size:9px;color:rgba(255,255,255,.28);letter-spacing:.2px;line-height:1">a sEpp-App</span>
     </div>
     <button class="refresh-btn" onclick="showInfoModal()" title="Info" style="font-size:13px;font-weight:600;letter-spacing:.3px">Info</button>
@@ -294,6 +301,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
         <div class="srch-chips" id="srch-chips" style="display:none"></div>
       </div>
       <div id="active-pills" style="display:none;flex-wrap:wrap;gap:6px;padding:6px 14px;border-bottom:.5px solid var(--border)"></div>
+      <div id="fav-hint" style="display:none"></div>
       <div id="fav-bar" style="display:none;flex-wrap:wrap;gap:6px;padding:8px 14px 6px;border-bottom:.5px solid var(--border)"></div>
       <div id="rubrik-bar" class="rubrik-bar" style="display:none"></div>
       <div id="filter-body" style="display:none">
@@ -351,7 +359,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
       </div>
 
       <!-- Verein -->
-      <div class="f-section">
+      <div class="f-section" id="ver-section">
         <button class="f-toggle" onclick="toggleSection('ver')">
           <span class="f-arrow" id="ver-arrow"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:block"><polyline points="9 18 15 12 9 6"/></svg></span>
           <span class="f-name">Verein <span class="f-badge" id="ver-badge">Alle</span></span>
@@ -378,7 +386,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title" style="width:55%"></div><div class="sk-line sk-ort"></div></div>
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title"></div><div class="sk-line sk-ort" style="width:30%"></div></div>
     </div>
-    <p class="version">Vereinskalender &middot; v1.12 &middot; 2026-09-20 &middot; a sEpp-App</p>
+    <p class="version">Vereinskalender &middot; v1.13 &middot; 2026-09-20 &middot; a sEpp-App</p>
     <p style="font-size:11px;color:var(--text3);text-align:center;padding:0 0 24px;line-height:2">&#127807; Hosting in Finnland mit &Ouml;kostrom &middot; Werbefrei &middot; DSGVO-konform</p>
   </div>
 
@@ -592,6 +600,7 @@ const WD=["So","Mo","Di","Mi","Do","Fr","Sa"];
 const MO=["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
 const ZEIT_LBL={"zukunft":"Künftig","-14":"14 Tage zurück","-30":"30 Tage zurück","30":"Nächste 30 Tage","90":"3 Monate","365":"1 Jahr","alle":"Alle"};
 const ICON_PATHS={
+  x:`<path d="M18 6 6 18"/><path d="m6 6 12 12"/>`,
   house:`<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`,
   mail:`<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>`,
   calendarPlus:`<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M12 14v4"/><path d="M10 16h4"/>`,
@@ -963,6 +972,7 @@ function buildLandkreisFilter(){
 }
 
 function selectLandkreis(lk){
+  leaveFavMode();
   aktLandkreis=(lk==="alle"||aktLandkreis===lk)?null:lk;
   aktGemeinden=new Set();
   document.querySelectorAll("[data-lk]").forEach(c=>c.classList.toggle("on",c.dataset.lk===(aktLandkreis||"alle")));
@@ -996,6 +1006,7 @@ function buildGemeindeFilter(){
 }
 
 function toggleGemeinde(g){
+  leaveFavMode();
   if(g==="alle"){
     aktGemeinden=new Set();
   } else {
@@ -1018,7 +1029,8 @@ function updateAllBadges(){
   document.getElementById("ort-badge").textContent=aktOrte.size===0?"Alle":aktOrte.size===1?[...aktOrte][0]:aktOrte.size+" Orte";
   const tot=Object.keys(labels).length,act=aktVereine.size;
   document.getElementById("ver-badge").textContent=act===tot?"Alle":act+"/"+tot;
-  const active=zeitraum!=="zukunft"||aktOrte.size>0||aktGemeinden.size>0||act!==tot||aktLandkreis!==null||searchChips.length>0||srchText.length>0||activeFavs.size>0||aktRubrikSet.size>0;
+  if(_favMode())["lk-badge","gem-badge","ort-badge","ver-badge"].forEach(id=>{const b=document.getElementById(id);if(b)b.textContent="pausiert";});
+  const active=zeitraum!=="zukunft"||aktOrte.size>0||aktGemeinden.size>0||act!==tot||aktLandkreis!==null||searchChips.length>0||srchText.length>0||_favMode()||aktRubrikSet.size>0;
   document.getElementById("reset-btn").style.display=active?"":"none";
   renderActiveFilterPills();
 }
@@ -1027,15 +1039,16 @@ function renderActiveFilterPills(){
   const el=document.getElementById("active-pills");
   if(!el)return;
   const pills=[];
+  const fm=_favMode();  // Favoriten-Ansicht: pausierte Filter zeigen keine Pills
   if(zeitraum!=="zukunft")pills.push({label:ZEIT_LBL[zeitraum],fn:()=>{zeitraum="zukunft";document.querySelectorAll("[data-z]").forEach(c=>c.classList.toggle("on",c.dataset.z==="zukunft"));updateAllBadges();render();}});
-  if(aktLandkreis)pills.push({label:aktLandkreis.replace(/^Landkreis\s+/,""),fn:()=>selectLandkreis(aktLandkreis)});
-  aktGemeinden.forEach(g=>pills.push({label:_gemLabel(g),fn:()=>toggleGemeinde(g)}));
-  aktOrte.forEach(o=>pills.push({label:o,fn:()=>toggleOrt(o)}));
-  aktRubrikSet.forEach(r=>pills.push({label:r,fn:()=>setRubrik(r)}));
+  if(!fm&&aktLandkreis)pills.push({label:aktLandkreis.replace(/^Landkreis\s+/,""),fn:()=>selectLandkreis(aktLandkreis)});
+  if(!fm)aktGemeinden.forEach(g=>pills.push({label:_gemLabel(g),fn:()=>toggleGemeinde(g)}));
+  if(!fm)aktOrte.forEach(o=>pills.push({label:o,fn:()=>toggleOrt(o)}));
+  if(!fm)aktRubrikSet.forEach(r=>pills.push({label:r,fn:()=>setRubrik(r)}));
   const tot=Object.keys(labels).length;
-  if(aktVereine.size<tot)pills.push({label:aktVereine.size+"/"+tot+" Vereine",fn:()=>selectAllVereine(true)});
+  if(!fm&&aktVereine.size<tot)pills.push({label:aktVereine.size+"/"+tot+" Vereine",fn:()=>selectAllVereine(true)});
   _activePillActions=pills.map(p=>p.fn);
-  if(!pills.length){el.style.display="none";return;}
+  if(!pills.length){el.style.display="none";el.innerHTML="";return;}
   el.style.display="flex";
   el.innerHTML=pills.map((p,i)=>`<span class="act-pill" data-pi="${i}">${escHtml(p.label)}<span class="act-pill-x"> ×</span></span>`).join("");
 }
@@ -1158,6 +1171,7 @@ function filterVereinListForOrt(){
 
 
 function toggleOrt(o){
+  leaveFavMode();
   if(o==="alle"){
     aktOrte=new Set();
   } else {
@@ -1211,6 +1225,7 @@ function buildVereinFilter(){
 }
 
 function selectAllVereine(all){
+  leaveFavMode();
   aktVereine=all?new Set(Object.keys(labels)):new Set();
   aktOrte=new Set();
   document.querySelectorAll("[data-o]").forEach(c=>c.classList.toggle("on",c.dataset.o==="alle"));
@@ -1263,6 +1278,7 @@ function renderRubrikBar(){
 }
 
 function setRubrik(r){
+  leaveFavMode();
   if(aktRubrikSet.has(r))aktRubrikSet.delete(r);
   else aktRubrikSet.add(r);
   if(aktRubrikSet.size===0)localStorage.removeItem(RUBRIK_KEY);
@@ -1277,6 +1293,7 @@ function updateChecks(){
 }
 
 function onCbChange(cb){
+  leaveFavMode();
   if(cb.checked)aktVereine.add(cb.dataset.vk);
   else aktVereine.delete(cb.dataset.vk);
   aktOrte=new Set();
@@ -1300,7 +1317,31 @@ function isFavorite(r){return favorites.some(f=>f.type===r.type&&String(f.key)==
 function saveFavorites(){localStorage.setItem(FAV_KEY,JSON.stringify(favorites));}
 function saveActiveFavs(){localStorage.setItem(ACTIVE_FAV_KEY,JSON.stringify([...activeFavs]));}
 
+/* ── Favoriten-Ansicht ──
+   Aktive Favoriten ersetzen Region/Gemeinde/Ortschaft/Verein/Rubrik-Filter (Zeitraum + Suche gelten weiter).
+   Hinweisbox + gedimmte Filter machen den Modus sichtbar; ein Filter-Tipp beendet ihn automatisch. */
+function _favMode(){return favorites.some(f=>activeFavs.has(f.type+":"+String(f.key)));}
+function leaveFavMode(){
+  if(!_favMode())return false;
+  activeFavs=new Set();
+  saveActiveFavs();
+  renderFavBar();
+  return true;
+}
+function favModeOff(){leaveFavMode();updateAllBadges();render();}
+function _renderFavHint(){
+  const on=_favMode();
+  const sk=document.getElementById("s-kal");
+  if(sk)sk.classList.toggle("fav-mode",on);
+  const el=document.getElementById("fav-hint");
+  if(!el)return;
+  if(!on){el.style.display="none";el.innerHTML="";return;}
+  el.style.display="";
+  el.innerHTML=`<div class="fav-hint"><strong>${icon("heart",13,true)} Favoriten-Ansicht</strong>Es werden nur deine aktiven Favoriten gezeigt. Region, Gemeinde, Ortschaft, Verein und Rubrik sind pausiert &ndash; Zeitraum und Suche gelten weiter.<button class="fav-hint-btn" onclick="favModeOff()">Favoriten ausschalten</button></div>`;
+}
+
 function renderFavBar(){
+  _renderFavHint();
   const el=document.getElementById("fav-bar");
   if(!favorites.length){el.style.display="none";el.innerHTML="";return;}
   el.style.display="flex";
@@ -1310,7 +1351,7 @@ function renderFavBar(){
     const id=f.type+":"+String(f.key);
     const on=activeFavs.has(id);
     const key=String(f.key).replace(/"/g,"&quot;").replace(/'/g,"&#39;");
-    const rmBtn=`<span onclick="event.stopPropagation();removeFavorite('${f.type}','${key}')" style="margin-left:4px;opacity:.55;font-size:11px;line-height:1">✕</span>`;
+    const rmBtn=`<span onclick="event.stopPropagation();removeFavorite('${f.type}','${key}')" style="margin-left:4px;opacity:.55;display:inline-flex;align-items:center;vertical-align:middle">${icon("x",11)}</span>`;
     return `<span class="chip${on?" on":""}" data-ftype="${f.type}" data-fkey="${key}">${f.icon||""} ${escHtml(f.label)}${rmBtn}</span>`;
   }).join("");
 }
@@ -1523,7 +1564,7 @@ function render(){
   const _now=new Date();
   const todayStr=_now.toISOString().slice(0,10);
   const nowMin=_now.getHours()*60+_now.getMinutes();
-  const hasFavs=activeFavs.size>0;
+  const hasFavs=_favMode();
 
   let out=allT.filter(t=>{
     // Zeitraum gilt immer
@@ -3345,9 +3386,13 @@ function showInfoModal(){
         <span class="help-icon">${icon("mapPin",20)}</span>
         <div><strong>Ortschaft</strong><span>Mehrfachauswahl m&ouml;glich. Erscheint wenn mehrere Vereine einer Ortschaft vorhanden sind. Gibt es denselben Ortsnamen in mehreren Gemeinden, steht die Gemeinde in Klammern dahinter.</span></div>
       </div>
-      <div class="help-row" style="padding:8px 0;border-bottom:none">
+      <div class="help-row" style="padding:8px 0">
         <span class="help-icon">${icon("users",20)}</span>
         <div><strong>Verein</strong><span>Einzelne Vereine gezielt ein- oder ausblenden.</span></div>
+      </div>
+      <div class="help-row" style="padding:8px 0;border-bottom:none">
+        <span class="help-icon">${icon("heart",20)}</span>
+        <div><strong>Favoriten</strong><span>Das Herz an Verein, Gemeinde oder Ortschaft speichert einen Favoriten. Aktive Favoriten zeigen nur ihre Termine &ndash; Region, Gemeinde, Ortschaft, Verein und Rubrik sind dann pausiert, Zeitraum und Suche gelten weiter. Favoriten-Chip antippen = ein/aus, Kreuz = entfernen. Tippst du einen Filter an, endet die Favoriten-Ansicht automatisch.</span></div>
       </div>
       <div class="help-row" style="padding:12px 0 8px;border-top:1.5px solid var(--border);margin-top:4px;border-bottom:none">
         <span class="help-icon">${icon("scale",20)}</span>
