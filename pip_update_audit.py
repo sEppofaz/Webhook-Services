@@ -135,6 +135,45 @@ def pip_outdated(bin_dir: str) -> list[dict]:
         return []
 
 
+# Läuft im Python des Ziel-venvs: welches installierte Paket schließt die neueste Version per
+# Requirement aus? (nutzt das von pip mitgelieferte packaging – kein Extra-Paket nötig)
+HELD_SNIPPET = """
+import sys, json, importlib.metadata as m
+from pip._vendor.packaging.requirements import Requirement
+norm = lambda s: s.lower().replace("_", "-")
+result = {}
+for pkg, latest in json.loads(sys.argv[1]):
+    for d in m.distributions():
+        for r in (d.requires or []):
+            try:
+                req = Requirement(r)
+            except Exception:
+                continue
+            if norm(req.name) != norm(pkg) or (req.marker and not req.marker.evaluate()):
+                continue
+            if not req.specifier.contains(latest, prereleases=True):
+                result[pkg] = f"{d.metadata['Name']} {req.specifier}"
+                break
+        if pkg in result:
+            break
+print(json.dumps(result))
+"""
+
+
+def held_back(bin_dir: str, outdated: list[dict]) -> dict[str, str]:
+    """{paket: 'abhängiges-paket spezifizierer'} für Pakete, die durch einen Pin nicht
+    auf die neueste Version können (z. B. pydantic_core ← pydantic, pyee ← playwright)."""
+    pairs = [[p["name"], p["latest_version"]] for p in outdated]
+    if not pairs:
+        return {}
+    try:
+        r = subprocess.run([f"{bin_dir}/python3", "-c", HELD_SNIPPET, json.dumps(pairs)],
+                           capture_output=True, text=True, timeout=30)
+        return json.loads(r.stdout) if r.stdout.strip() else {}
+    except Exception:
+        return {}
+
+
 def pip_audit(bin_dir: str) -> list[dict]:
     """Gibt Liste von CVE-Funden zurück: {name, version, id, fix}."""
     audit_bin = f"{bin_dir}/pip-audit"
@@ -174,8 +213,10 @@ def analyse_venv(name: str, bin_dir: str) -> dict:
     outdated = pip_outdated(bin_dir)
     cves     = pip_audit(bin_dir)
 
-    # Paketmanager-Tools aus Ampel-Berechnung ausschließen
-    relevant = [p for p in outdated if p["name"].lower() not in IGNORE_PACKAGES]
+    # Paketmanager-Tools und durch Abhängigkeits-Pins gehaltene Pakete aus der Ampel nehmen
+    held     = held_back(bin_dir, outdated)
+    relevant = [p for p in outdated
+                if p["name"].lower() not in IGNORE_PACKAGES and p["name"] not in held]
 
     # Gesamt-Ampel bestimmen
     if cves:
@@ -194,7 +235,8 @@ def analyse_venv(name: str, bin_dir: str) -> dict:
     return {
         "name":     name,
         "gesamt":   gesamt,
-        "outdated": outdated,
+        "outdated": relevant,
+        "held":     held,
         "cves":     cves,
     }
 
@@ -247,6 +289,22 @@ def format_block(r: dict) -> str:
     return "\n".join(lines)
 
 
+def held_line(results: list[dict]) -> str:
+    """Eine Zeile über alle venvs: Pakete, die wegen eines Abhängigkeits-Pins bewusst zurückbleiben."""
+    grouped: dict[str, dict] = {}
+    for r in results:
+        for pkg, by in r.get("held", {}).items():
+            g = grouped.setdefault(pkg, {"by": by, "venvs": []})
+            g["venvs"].append(r["name"])
+    if not grouped:
+        return ""
+    parts = []
+    for pkg, g in sorted(grouped.items()):
+        where = f"{len(g['venvs'])} venvs" if len(g["venvs"]) > 2 else ", ".join(g["venvs"])
+        parts.append(f"{html.escape(pkg)} (← {html.escape(g['by'])}; {html.escape(where)})")
+    return "  ⏸ Durch Abhängigkeit gehalten (nicht upgradebar): " + ", ".join(parts)
+
+
 def format_inventory(findings: list[dict], venv_count: int) -> str:
     """Server-Inventar-Abschnitt: Auffälligkeiten einzeln, Unauffälliges in einer Zeile."""
     warn = [f for f in findings if f["level"] in ("rot", "gelb")]
@@ -291,7 +349,11 @@ def main() -> None:
         header += f"\n⚠️ {inv_rot} kritische Server-Auffälligkeit(en) – Handlung erforderlich"
 
     message = header + "\n\n" + "\n\n".join(blocks)
-    message += "\n\n" + format_inventory(inv["findings"], len(results))
+    inventory_text = format_inventory(inv["findings"], len(results))
+    held = held_line(results)
+    if held:
+        inventory_text += "\n" + held
+    message += "\n\n" + inventory_text
 
     if not rote and not gelbe and not inv_rot and not inv_gelb:
         message += "\n\n✅ Alle Apps aktuell und sicher."
