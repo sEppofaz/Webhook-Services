@@ -24,13 +24,15 @@ _MAX_POINTS = 400
 _MAX_TRAFFIC_SECTIONS = 15
 _MAX_SECTION_POINTS = 80
 _GEOCODE_CACHE_MAX = 500
-# Josefs Heimatort: Hölskofen, 84092 Bayerbach (Landkreis Landshut). Es gibt weitere Orte namens Hölskofen
-# (u. a. TomTom-Treffer bei Pfeffenhausen, ~25 km westlich) und "Hölskofen 12" ohne Zusatz landet in Tschechien.
+# Josefs Heimatort: Hölskofen, 84092 Bayerbach (Landkreis Landshut) – der Ortsname ist eindeutig, es gibt nur ein Hölskofen.
+# Aber: Die alten Start-Strings im Projekt ("Hölskofen, Pfeffenhausen, Bayern, Deutschland", seit Mai 2026 in Cron/Bot/PWA,
+# auch in gespeicherten PWA-Routen) tragen das falsche "Pfeffenhausen". Google ignorierte den Zusatz, TomTom nimmt ihn
+# wörtlich und landet ~25 km westlich im Raum Pfeffenhausen. Zusätzlich landet "Hölskofen 12" ohne Zusatz in Tschechien.
 # → Bias auf den Heimatort (nur Rangfolge, kein Filter), Länder zuerst DACH, dann ohne Filter.
 _HOME_LAT, _HOME_LON = 48.68441, 12.288
 _HOME_COUNTRIES = "DE,AT,CH"
 # Eingaben, die nur aus Hölskofen (+ optional Hausnummer, Pfeffenhausen/Bayerbach, PLZ, Bayern, Deutschland) bestehen,
-# meinen immer den Heimatort. Ohne Hausnummer → feste Koordinaten (auch die alten Default-Routen der PWA in localStorage
+# meinen immer den Heimatort (das falsche "Pfeffenhausen" wird dabei verworfen). Ohne Hausnummer → feste Koordinaten (auch die alten Default-Routen der PWA in localStorage
 # mit "Hölskofen, Pfeffenhausen, Bayern, Deutschland" landen so korrekt); mit Hausnummer → Suche mit PLZ Bayerbach.
 _HOME_ALIAS_RE = re.compile(
     r"^Hölskofen(?P<nr>\s+\d+\s*[a-zA-Z]?)?(\s*,\s*(?:(?:84076|84092)\s+)?(?:Pfeffenhausen|Bayerbach))?"
