@@ -26,10 +26,14 @@ _GEOCODE_CACHE_MAX = 500
 # Bias auf Hölskofen (Pfeffenhausen) – nur Rangfolge, kein Filter; Länder zuerst DACH, dann ohne Filter.
 _BIAS_LAT, _BIAS_LON = 48.6657, 11.9648
 _HOME_COUNTRIES = "DE,AT,CH"
-# Es gibt mehrere Orte namens Hölskofen (u. a. ~25 km östlich von Josefs Heimatort). Eine Eingabe, die nur aus
-# "Hölskofen" (+ optional Hausnummer) besteht, meint immer den Heimatort → PLZ/Ort ergänzen (der Bias allein reicht nicht).
-_HOME_ALIAS_RE = re.compile(r"^Hölskofen(\s+\d+\s*[a-zA-Z]?)?$", re.IGNORECASE)
-_HOME_ALIAS_SUFFIX = ", 84076 Pfeffenhausen"
+# Es gibt mehrere Orte namens Hölskofen (u. a. ~25 km östlich von Josefs Heimatort), und TomTom löst auch
+# "Hölskofen 12, Pfeffenhausen, Bayern, Deutschland" falsch auf. Eingaben, die nur aus Hölskofen (+ optional
+# Hausnummer, Pfeffenhausen, Bayern, Deutschland) bestehen, meinen immer den Heimatort → auf PLZ-Form normalisieren.
+_HOME_ALIAS_RE = re.compile(
+    r"^Hölskofen(?P<nr>\s+\d+\s*[a-zA-Z]?)?(\s*,\s*(84076\s+)?Pfeffenhausen)?(\s*,\s*Bayern)?(\s*,\s*Deutschland)?$",
+    re.IGNORECASE,
+)
+
 
 _geocode_cache: dict = {}
 
@@ -62,7 +66,8 @@ def _geocode(query: str, key: str) -> tuple:
     q = query.strip()[:_MAX_QUERY_LEN]
     if q in _geocode_cache:
         return _geocode_cache[q]
-    search = q + _HOME_ALIAS_SUFFIX if _HOME_ALIAS_RE.match(q) else q
+    m = _HOME_ALIAS_RE.match(q)
+    search = f"Hölskofen{(m.group('nr') or '').rstrip()}, 84076 Pfeffenhausen" if m else q
     url = _GEOCODE_URL.format(q=urllib.parse.quote(search, safe=""))
     results = []
     for countries in (_HOME_COUNTRIES, None):
