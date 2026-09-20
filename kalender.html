@@ -251,7 +251,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
   </div>
   <div class="hdr-right" style="display:flex;align-items:center;gap:6px">
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px">
-      <span class="ver-lbl" style="margin-right:0">v1.10</span>
+      <span class="ver-lbl" style="margin-right:0">v1.11</span>
       <span style="font-size:9px;color:rgba(255,255,255,.28);letter-spacing:.2px;line-height:1">a sEpp-App</span>
     </div>
     <button class="refresh-btn" onclick="showInfoModal()" title="Info" style="font-size:13px;font-weight:600;letter-spacing:.3px">Info</button>
@@ -378,7 +378,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title" style="width:55%"></div><div class="sk-line sk-ort"></div></div>
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title"></div><div class="sk-line sk-ort" style="width:30%"></div></div>
     </div>
-    <p class="version">Vereinskalender &middot; v1.10 &middot; 2026-09-20 &middot; a sEpp-App</p>
+    <p class="version">Vereinskalender &middot; v1.11 &middot; 2026-09-20 &middot; a sEpp-App</p>
     <p style="font-size:11px;color:var(--text3);text-align:center;padding:0 0 24px;line-height:2">&#127807; Hosting in Finnland mit &Ouml;kostrom &middot; Werbefrei &middot; DSGVO-konform</p>
   </div>
 
@@ -688,6 +688,79 @@ function _migrateGemFavorites(){
   });
   if(changed){favorites=out;saveFavorites();saveActiveFavs();}
 }
+
+/* ── Ortschaft-Identität: Ortsname + Gemeinde (ADR-006) ──
+   Chip-Schlüssel = Anzeige-Label: "Weng" – bei Namensgleichheit in mehreren Gemeinden "Weng (Postau)".
+   Ohne Kollision identisch mit dem bisherigen Schlüssel (kein Migrationsbedarf).
+   _meta[key].ortschaft_gemeinde überschreibt die Gemeinde nur für die Ortschaft-Zuordnung. */
+let _ortOf={},_ortBase={};
+function _ortNameOf(k){
+  const h=(meta[k]||{}).heimatort;
+  if(h)return h;
+  const l=labels[k];
+  if(!l)return "";
+  const parts=l.trim().split(/\s+/);
+  const w=parts[parts.length-1].split("/")[0];
+  return w.length>4?w:"";
+}
+function _ortGemeindeOf(k){
+  const m=meta[k]||{};
+  if(m.ortschaft_gemeinde){
+    const n=_gemNormName(m.ortschaft_gemeinde);
+    if(n)return n+"|"+(m.landkreis||"Landkreis Landshut");
+  }
+  return _gemOf[k]||"";
+}
+function _prepareOrtschaften(){
+  _ortOf={};_ortBase={};allOrteAll={};
+  const byName={};  // Ortsname → {Gemeinde-Schlüssel: [verein_keys]}
+  new Set([...Object.keys(labels),...Object.keys(meta)]).forEach(k=>{
+    const n=_ortNameOf(k);
+    if(!n)return;
+    const g=_ortGemeindeOf(k);
+    const grp=byName[n]=byName[n]||{};
+    (grp[g]=grp[g]||[]).push(k);
+  });
+  Object.entries(byName).forEach(([n,groups])=>{
+    const gems=Object.keys(groups).filter(Boolean);
+    // Vereine ohne Gemeinde → größte Gemeinde-Gruppe dieses Ortsnamens
+    const main=gems.slice().sort((a,b)=>groups[b].length-groups[a].length||a.localeCompare(b))[0]||"";
+    Object.entries(groups).forEach(([g,ks])=>{
+      const eff=g||main;
+      const lbl=gems.length>1?n+" ("+_gemLabel(eff)+")":n;
+      _ortBase[lbl]=n;
+      ks.forEach(k=>{
+        _ortOf[k]=lbl;
+        if(labels[k])(allOrteAll[lbl]=allOrteAll[lbl]||[]).push(k);
+      });
+    });
+  });
+}
+// Alter Ortschaft-Name (localStorage) → aktuelle Labels (nur relevant, wenn ein Name inzwischen mehrdeutig ist)
+function _ortKeysForOld(o){
+  if(allOrteAll[o])return[o];
+  const ks=Object.keys(allOrteAll).filter(l=>_ortBase[l]===o);
+  return ks.length?ks:[o];
+}
+function _migrateOrtFavorites(){
+  let changed=false;
+  const out=[];
+  favorites.forEach(f=>{
+    if((f.type!=="ortschaft"&&f.type!=="ort")||allOrteAll[f.key]){out.push(f);return;}
+    const keys=Object.keys(allOrteAll).filter(l=>_ortBase[l]===f.key);
+    if(!keys.length){out.push(f);return;}
+    changed=true;
+    const oldId=f.type+":"+f.key;
+    const wasActive=activeFavs.has(oldId);
+    activeFavs.delete(oldId);
+    keys.forEach(k=>{
+      if(out.some(x=>x.type===f.type&&x.key===k)||favorites.some(x=>x.type===f.type&&x.key===k))return;
+      out.push({...f,key:k,label:k});
+      if(wasActive)activeFavs.add(f.type+":"+k);
+    });
+  });
+  if(changed){favorites=out;saveFavorites();saveActiveFavs();}
+}
 const secOpen={zeit:false,lk:false,gem:false,ort:false,ver:false,hlp:false};
 const FAV_KEY="vk_favorites";
 const ACTIVE_FAV_KEY="vk_active_favs";
@@ -732,7 +805,7 @@ function loadState(){
         ...Object.keys(allOrteAll),
         ...allT.map(t=>t.ortschaft).filter(Boolean)
       ]);
-      aktOrte=new Set(s.aktOrte.filter(o=>alleOrte.has(o)));
+      aktOrte=new Set(s.aktOrte.flatMap(_ortKeysForOld).filter(o=>alleOrte.has(o)));
     }
     if(s.aktLandkreis){
       const lks=new Set(Object.values(meta).map(m=>m.landkreis).filter(Boolean));
@@ -787,19 +860,8 @@ async function load(){
   rubriken=j.rubriken||{};
   Object.keys(labels).sort().forEach((k,i)=>colors[k]=COLORS[i%COLORS.length]);
 
-  const tmp={};
-  Object.entries(labels).forEach(([k,l])=>{
-    // Explizites meta.heimatort hat Prio; nur wenn nicht gesetzt: letztes Labelwort
-    const m=meta[k]||{};
-    let ort=m.heimatort||"";
-    if(!ort){
-      const parts=l.trim().split(/\s+/);
-      const w=parts[parts.length-1].split("/")[0];
-      if(w.length>4)ort=w;
-    }
-    if(ort){tmp[ort]=tmp[ort]||[];if(!tmp[ort].includes(k))tmp[ort].push(k);}
-  });
-  allOrteAll=tmp;
+  _prepareOrtschaften();
+  _migrateOrtFavorites();
 
   buildLandkreisFilter();
   buildGemeindeFilter();
@@ -1011,11 +1073,9 @@ function resetAll(){
 }
 
 /* ── Ort filter ── */
-// Alle Verein-Keys einer Ortschaft (via allOrteAll-Label + expliziter meta.heimatort)
+// Alle Verein-Keys einer Ortschaft (Ortschaft-Label → _ortOf, siehe _prepareOrtschaften)
 function _vereinsForOrt(o){
-  const s=new Set(allOrteAll[o]||[]);
-  Object.entries(meta).forEach(([k,m])=>{if(m.heimatort===o)s.add(k);});
-  return s;
+  return new Set(Object.keys(_ortOf).filter(k=>_ortOf[k]===o));
 }
 // Gemeinde einer Ortschaft – ermittelt aus den Vereinen die dort beheimatet sind
 function _gemeindeForOrt(o){
@@ -1056,7 +1116,7 @@ function filterVereinListForOrt(){
     const cb=lbl.querySelector("[data-vk]");
     if(cb){
       const k=cb.dataset.vk;
-      const inOrt=!aktOrte.size||[...aktOrte].some(o=>(allOrteAll[o]||[]).includes(k)||(meta[k]||{}).heimatort===o);
+      const inOrt=!aktOrte.size||aktOrte.has(_ortOf[k]);
       const inGem=!gemFilter||aktGemeinden.has(_gemOf[k]||"");
       lbl.style.display=(inOrt&&inGem)?"":"none";
     }
@@ -1287,8 +1347,7 @@ function openFavIcalFeed(){
   favorites.forEach(f=>{
     if(f.type==="verein"){keys.add(f.key);}
     else if(f.type==="ortschaft"){
-      (allOrteAll[f.key]||[]).forEach(k=>keys.add(k));
-      Object.entries(meta).forEach(([k,m])=>{if(m.heimatort===f.key)keys.add(k);});
+      Object.keys(_ortOf).forEach(k=>{if(_ortOf[k]===f.key)keys.add(k);});
     }
     else if(f.type==="gemeinde"){
       Object.keys(_gemOf).forEach(k=>{if(_gemOf[k]===f.key)keys.add(k);});
@@ -1425,8 +1484,7 @@ function _termMatchFav(t,f){
   if(!activeFavs.has(f.type+":"+String(f.key)))return false;
   const k=t.verein;
   if(f.type==="verein")return k===f.key;
-  if(f.type==="ort")return(allOrteAll[f.key]||[]).includes(k);
-  if(f.type==="ortschaft")return(allOrteAll[f.key]||[]).includes(k)||(meta[k]||{}).heimatort===f.key;
+  if(f.type==="ort"||f.type==="ortschaft")return _ortOf[k]===f.key;
   if(f.type==="region")return((meta[k]||{}).landkreis||"Landkreis Landshut")===f.key;
   if(f.type==="gemeinde")return(_gemOf[k]||"")===f.key;
   return false;
@@ -1464,10 +1522,7 @@ function render(){
     if(aktRubrikSet.size>0){const r=rubriken[t.verein]||"Verein";if(!aktRubrikSet.has(r))return false;}
     if(aktLandkreis!==null){const m=meta[t.verein];if(!m||m.landkreis!==aktLandkreis)return false;}
     if(aktGemeinden.size>0&&!aktGemeinden.has(_gemOf[t.verein]||""))return false;
-    if(aktOrte.size>0){
-      const k=t.verein;
-      if(![...aktOrte].some(o=>(allOrteAll[o]||[]).includes(k)||(meta[k]||{}).heimatort===o))return false;
-    }
+    if(aktOrte.size>0&&!aktOrte.has(_ortOf[t.verein]))return false;
     return true;
   });
 
@@ -1478,7 +1533,7 @@ function render(){
     const tChips=searchChips.filter(c=>c.type==="termin");
     out=out.filter(t=>{
       if(vChips.length>0&&!vChips.some(c=>t.verein===c.key))return false;
-      if(oChips.length>0&&!oChips.some(c=>(allOrteAll[c.key]||[]).includes(t.verein)))return false;
+      if(oChips.length>0&&!oChips.some(c=>_ortOf[t.verein]===c.key))return false;
       if(tChips.length>0){
         const match=tChips.some(c=>{
           const orig=allT[c.key];
@@ -3263,7 +3318,7 @@ function showInfoModal(){
       </div>
       <div class="help-row" style="padding:8px 0">
         <span class="help-icon">${icon("mapPin",20)}</span>
-        <div><strong>Ortschaft</strong><span>Mehrfachauswahl m&ouml;glich. Erscheint wenn mehrere Vereine einer Ortschaft vorhanden sind.</span></div>
+        <div><strong>Ortschaft</strong><span>Mehrfachauswahl m&ouml;glich. Erscheint wenn mehrere Vereine einer Ortschaft vorhanden sind. Gibt es denselben Ortsnamen in mehreren Gemeinden, steht die Gemeinde in Klammern dahinter.</span></div>
       </div>
       <div class="help-row" style="padding:8px 0;border-bottom:none">
         <span class="help-icon">${icon("users",20)}</span>
