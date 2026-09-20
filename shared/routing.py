@@ -1,6 +1,7 @@
 """
 routing.py
 Routing mit Live-Verkehr über TomTom (Geocoding + Calculate Route).
+start_name/end_name = Gemeindename aus dem Geocoding-Treffer (für die Kartenbeschriftung, kein Extra-Request).
 Einzige Stelle mit Anbieter-Wissen – PWA (services/verkehr), Cron (traffic_info.py)
 und Telegram-Bot rufen nur get_route() auf. Key: TOMTOM_API_KEY (secrets.env).
 """
@@ -20,7 +21,6 @@ _ROUTE_URL = "https://api.tomtom.com/routing/1/calculateRoute/{o}:{d}/json"
 _TIMEOUT = 15
 _MAX_QUERY_LEN = 200
 _MAX_POINTS = 400
-_MAX_LANDMARKS = 8
 _GEOCODE_CACHE_MAX = 500
 # Josefs Heimatort: Hölskofen, 84092 Bayerbach (Landkreis Landshut). Es gibt weitere Orte namens Hölskofen
 # (u. a. TomTom-Treffer bei Pfeffenhausen, ~25 km westlich) und "Hölskofen 12" ohne Zusatz landet in Tschechien.
@@ -65,6 +65,7 @@ def _get_json(url: str) -> dict:
 
 
 def _geocode(query: str, key: str) -> tuple:
+    """Adresse → (lat, lon, Ortsname)."""
     q = query.strip()[:_MAX_QUERY_LEN]
     if q in _geocode_cache:
         return _geocode_cache[q]
@@ -72,7 +73,7 @@ def _geocode(query: str, key: str) -> tuple:
     if m:
         nr = (m.group("nr") or "").strip()
         if not nr:
-            return (_HOME_LAT, _HOME_LON)
+            return (_HOME_LAT, _HOME_LON, "Hölskofen")
         search = f"Hölskofen {nr}, 84092 Bayerbach"
     else:
         search = q
@@ -88,9 +89,11 @@ def _geocode(query: str, key: str) -> tuple:
     if not results:
         raise RuntimeError(f"Adresse nicht gefunden: {q}")
     pos = results[0]["position"]
+    addr = results[0].get("address") or {}
+    name = addr.get("municipality") or addr.get("localName") or q.split(",")[0].strip()
     if len(_geocode_cache) >= _GEOCODE_CACHE_MAX:
         _geocode_cache.clear()
-    _geocode_cache[q] = (pos["lat"], pos["lon"])
+    _geocode_cache[q] = (pos["lat"], pos["lon"], name)
     return _geocode_cache[q]
 
 
@@ -119,33 +122,8 @@ def _encode_polyline(points: list) -> str:
     return "".join(out)
 
 
-def _landmark_name(ins: dict) -> str:
-    sign = (ins.get("signpostText") or "").strip()
-    if sign:
-        return re.split(r"\s*[/;]\s*", sign)[0].strip()
-    roads = ins.get("roadNumbers") or []
-    return str(roads[0]).strip() if roads else ""
-
-
-def _extract_landmarks(instructions: list) -> list:
-    """Wegweiser-Ziele (Fallback Straßennummer) entlang der Route, max. _MAX_LANDMARKS."""
-    seen = set()
-    found = []
-    for ins in instructions:
-        name = _landmark_name(ins)
-        pt = ins.get("point") or {}
-        if not name or name in seen or "latitude" not in pt or "longitude" not in pt:
-            continue
-        seen.add(name)
-        found.append({"name": name, "lat": pt["latitude"], "lng": pt["longitude"]})
-    if len(found) > _MAX_LANDMARKS:
-        idx = [round(i * (len(found) - 1) / (_MAX_LANDMARKS - 1)) for i in range(_MAX_LANDMARKS)]
-        found = [found[i] for i in idx]
-    return found
-
-
 def get_route(origin: str, destination: str) -> dict:
-    """Adressen → {normal_sek, traffic_sek, dist_m, overview_polyline, landmarks}."""
+    """Adressen → {normal_sek, traffic_sek, dist_m, overview_polyline, start_name, end_name}."""
     key = _api_key()
     o = _geocode(origin, key)
     d = _geocode(destination, key)
@@ -156,7 +134,6 @@ def get_route(origin: str, destination: str) -> dict:
         "travelMode": "car",
         "routeType": "fastest",
         "computeTravelTimeFor": "all",
-        "instructionsType": "text",
         "language": "de-DE",
     })
     url = _ROUTE_URL.format(o=f"{o[0]},{o[1]}", d=f"{d[0]},{d[1]}") + "?" + params
@@ -175,5 +152,6 @@ def get_route(origin: str, destination: str) -> dict:
         "traffic_sek": traffic,
         "dist_m": summary["lengthInMeters"],
         "overview_polyline": _encode_polyline(_downsample(points)),
-        "landmarks": _extract_landmarks((route.get("guidance") or {}).get("instructions") or []),
+        "start_name": o[2],
+        "end_name": d[2],
     }

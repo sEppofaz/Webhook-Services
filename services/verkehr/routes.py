@@ -24,7 +24,8 @@ def api_verkehr():
             "dist_km": round(d["dist_m"] / 1000, 1),
             "ampel": ampel,
             "overview_polyline": d["overview_polyline"],
-            "landmarks": d["landmarks"],
+            "start_name": d["start_name"],
+            "end_name": d["end_name"],
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
