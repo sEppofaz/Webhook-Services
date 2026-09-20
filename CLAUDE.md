@@ -281,7 +281,7 @@ Endpunkt `/telegram` – nur Josefs Chat-ID. Token = `TOKEN` aus `/etc/pka/secre
 | `/pfarrbrief` | Bevorstehende Gottesdienste |
 | `/verein` | Alle Vereinstermine |
 | `/termine-30` | Nächste 30 Tage |
-| `/verkehr <Adresse>` | Verkehrsinfo via Google Directions API |
+| `/verkehr <Adresse>` | Verkehrsinfo via TomTom (`shared/routing.py`, seit 2026-09-20; vorher Google Directions) |
 | `/heimat` | heimat-info.de Import auslösen |
 | `/heimat-add <url>` | Neue Gemeinde via Playwright entdecken |
 | `/stopp-vko` / `/start-vko` | Wartungsmodus ein/aus |
