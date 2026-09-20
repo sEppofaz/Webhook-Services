@@ -36,7 +36,7 @@ _DROPBOX_INVOICE_REFRESH_TOKEN = os.environ.get("DROPBOX_INVOICE_REFRESH_TOKEN",
 _DROPBOX_INVOICE_APP_KEY       = os.environ.get("DROPBOX_INVOICE_APP_KEY", "")
 _DROPBOX_INVOICE_APP_SECRET    = os.environ.get("DROPBOX_INVOICE_APP_SECRET", "")
 _TODOS_FILE_PATH               = "/Apps/Claude/Todo-App/Todos.json"
-_VERKEHR_ORIGIN                = "Hölskofen, Pfeffenhausen, Bayern, Deutschland"
+_VERKEHR_ORIGIN                = "Hölskofen, 84092 Bayerbach"
 _TODO_WEBHOOK_SECRET           = os.environ.get("TODO_WEBHOOK_SECRET", "")
 _QGFB_CALLBACK_TOKEN           = os.environ.get("QGFEEDBACK_CALLBACK_TOKEN", "")
 

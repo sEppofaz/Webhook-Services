@@ -12,7 +12,7 @@ from shared.routing import get_route
 from shared.secrets import load_secrets
 from shared.telegram import send_telegram
 
-ORIGIN      = "Hölskofen, Pfeffenhausen, Bayern, Deutschland"
+ORIGIN      = "Hölskofen, 84092 Bayerbach"
 DESTINATION = "Frankfurter Ring 255, 80807 München"
 LOG         = "/var/log/pka-traffic.log"
 

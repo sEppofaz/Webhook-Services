@@ -22,15 +22,17 @@ _MAX_QUERY_LEN = 200
 _MAX_POINTS = 400
 _MAX_LANDMARKS = 8
 _GEOCODE_CACHE_MAX = 500
-# Mehrdeutige Ortsnamen ("Hölskofen 12") sollen in der Heimat-Region landen, nicht irgendwo in Europa.
-# Bias auf Hölskofen (Pfeffenhausen) – nur Rangfolge, kein Filter; Länder zuerst DACH, dann ohne Filter.
-_BIAS_LAT, _BIAS_LON = 48.6657, 11.9648
+# Josefs Heimatort: Hölskofen, 84092 Bayerbach (Landkreis Landshut). Es gibt weitere Orte namens Hölskofen
+# (u. a. TomTom-Treffer bei Pfeffenhausen, ~25 km westlich) und "Hölskofen 12" ohne Zusatz landet in Tschechien.
+# → Bias auf den Heimatort (nur Rangfolge, kein Filter), Länder zuerst DACH, dann ohne Filter.
+_HOME_LAT, _HOME_LON = 48.68441, 12.288
 _HOME_COUNTRIES = "DE,AT,CH"
-# Es gibt mehrere Orte namens Hölskofen (u. a. ~25 km östlich von Josefs Heimatort), und TomTom löst auch
-# "Hölskofen 12, Pfeffenhausen, Bayern, Deutschland" falsch auf. Eingaben, die nur aus Hölskofen (+ optional
-# Hausnummer, Pfeffenhausen, Bayern, Deutschland) bestehen, meinen immer den Heimatort → auf PLZ-Form normalisieren.
+# Eingaben, die nur aus Hölskofen (+ optional Hausnummer, Pfeffenhausen/Bayerbach, PLZ, Bayern, Deutschland) bestehen,
+# meinen immer den Heimatort. Ohne Hausnummer → feste Koordinaten (auch die alten Default-Routen der PWA in localStorage
+# mit "Hölskofen, Pfeffenhausen, Bayern, Deutschland" landen so korrekt); mit Hausnummer → Suche mit PLZ Bayerbach.
 _HOME_ALIAS_RE = re.compile(
-    r"^Hölskofen(?P<nr>\s+\d+\s*[a-zA-Z]?)?(\s*,\s*(84076\s+)?Pfeffenhausen)?(\s*,\s*Bayern)?(\s*,\s*Deutschland)?$",
+    r"^Hölskofen(?P<nr>\s+\d+\s*[a-zA-Z]?)?(\s*,\s*(?:(?:84076|84092)\s+)?(?:Pfeffenhausen|Bayerbach))?"
+    r"(\s*,\s*Bayern)?(\s*,\s*Deutschland)?$",
     re.IGNORECASE,
 )
 
@@ -67,11 +69,17 @@ def _geocode(query: str, key: str) -> tuple:
     if q in _geocode_cache:
         return _geocode_cache[q]
     m = _HOME_ALIAS_RE.match(q)
-    search = f"Hölskofen{(m.group('nr') or '').rstrip()}, 84076 Pfeffenhausen" if m else q
+    if m:
+        nr = (m.group("nr") or "").strip()
+        if not nr:
+            return (_HOME_LAT, _HOME_LON)
+        search = f"Hölskofen {nr}, 84092 Bayerbach"
+    else:
+        search = q
     url = _GEOCODE_URL.format(q=urllib.parse.quote(search, safe=""))
     results = []
     for countries in (_HOME_COUNTRIES, None):
-        params = {"key": key, "limit": 1, "language": "de-DE", "lat": _BIAS_LAT, "lon": _BIAS_LON}
+        params = {"key": key, "limit": 1, "language": "de-DE", "lat": _HOME_LAT, "lon": _HOME_LON}
         if countries:
             params["countrySet"] = countries
         results = _get_json(url + "?" + urllib.parse.urlencode(params)).get("results") or []
