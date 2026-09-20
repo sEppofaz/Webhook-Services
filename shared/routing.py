@@ -22,6 +22,10 @@ _MAX_QUERY_LEN = 200
 _MAX_POINTS = 400
 _MAX_LANDMARKS = 8
 _GEOCODE_CACHE_MAX = 500
+# Mehrdeutige Ortsnamen ("Hölskofen 12") sollen in der Heimat-Region landen, nicht irgendwo in Europa.
+# Bias auf Hölskofen (Pfeffenhausen) – nur Rangfolge, kein Filter; Länder zuerst DACH, dann ohne Filter.
+_BIAS_LAT, _BIAS_LON = 48.6657, 11.9648
+_HOME_COUNTRIES = "DE,AT,CH"
 
 _geocode_cache: dict = {}
 
@@ -54,9 +58,15 @@ def _geocode(query: str, key: str) -> tuple:
     q = query.strip()[:_MAX_QUERY_LEN]
     if q in _geocode_cache:
         return _geocode_cache[q]
-    params = urllib.parse.urlencode({"key": key, "limit": 1, "language": "de-DE"})
-    url = _GEOCODE_URL.format(q=urllib.parse.quote(q, safe="")) + "?" + params
-    results = _get_json(url).get("results") or []
+    url = _GEOCODE_URL.format(q=urllib.parse.quote(q, safe=""))
+    results = []
+    for countries in (_HOME_COUNTRIES, None):
+        params = {"key": key, "limit": 1, "language": "de-DE", "lat": _BIAS_LAT, "lon": _BIAS_LON}
+        if countries:
+            params["countrySet"] = countries
+        results = _get_json(url + "?" + urllib.parse.urlencode(params)).get("results") or []
+        if results:
+            break
     if not results:
         raise RuntimeError(f"Adresse nicht gefunden: {q}")
     pos = results[0]["position"]
