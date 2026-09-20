@@ -251,7 +251,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
   </div>
   <div class="hdr-right" style="display:flex;align-items:center;gap:6px">
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px">
-      <span class="ver-lbl" style="margin-right:0">v1.8</span>
+      <span class="ver-lbl" style="margin-right:0">v1.9</span>
       <span style="font-size:9px;color:rgba(255,255,255,.28);letter-spacing:.2px;line-height:1">a sEpp-App</span>
     </div>
     <button class="refresh-btn" onclick="showInfoModal()" title="Info" style="font-size:13px;font-weight:600;letter-spacing:.3px">Info</button>
@@ -307,7 +307,9 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
         <div class="f-content" id="zeit-content">
           <div class="chips">
             <span class="chip on" data-z="zukunft">K&#252;nftig</span>
-            <span class="chip" data-z="30">30 Tage</span>
+            <span class="chip" data-z="-14">14 Tage zur&#252;ck</span>
+            <span class="chip" data-z="-30">30 Tage zur&#252;ck</span>
+            <span class="chip" data-z="30">N&#228;chste 30 Tage</span>
             <span class="chip" data-z="90">3 Monate</span>
             <span class="chip" data-z="365">1 Jahr</span>
             <span class="chip" data-z="alle">Alle</span>
@@ -376,7 +378,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title" style="width:55%"></div><div class="sk-line sk-ort"></div></div>
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title"></div><div class="sk-line sk-ort" style="width:30%"></div></div>
     </div>
-    <p class="version">Vereinskalender &middot; v1.8</p>
+    <p class="version">Vereinskalender &middot; v1.9 &middot; 2026-09-20 &middot; a sEpp-App</p>
     <p style="font-size:11px;color:var(--text3);text-align:center;padding:0 0 24px;line-height:2">&#127807; Hosting in Finnland mit &Ouml;kostrom &middot; Werbefrei &middot; DSGVO-konform</p>
   </div>
 
@@ -588,7 +590,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
 const COLORS=["#e74c3c","#27ae60","#2980b9","#9b59b6","#f39c12","#1abc9c","#e67e22","#c0392b","#16a085","#8e44ad"];
 const WD=["So","Mo","Di","Mi","Do","Fr","Sa"];
 const MO=["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
-const ZEIT_LBL={"zukunft":"Künftig","30":"30 Tage","90":"3 Monate","365":"1 Jahr","alle":"Alle"};
+const ZEIT_LBL={"zukunft":"Künftig","-14":"14 Tage zurück","-30":"30 Tage zurück","30":"Nächste 30 Tage","90":"3 Monate","365":"1 Jahr","alle":"Alle"};
 const ICON_PATHS={
   house:`<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`,
   mail:`<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>`,
@@ -636,6 +638,56 @@ function icon(name,size=18,filled=false){
 let allT=[],labels={},colors={},meta={},allOrteAll={},rubriken={};
 let zeitraum="zukunft",aktOrte=new Set(),aktVereine=new Set(),aktLandkreis=null,aktGemeinden=new Set(),ready=false;
 let searchChips=[],srchResults=[],_activePillActions=[];
+let _scrollToToday=true;  // Sprung zum heutigen Datum nur beim ersten Laden / Refresh, nicht bei Filterwechseln
+
+/* ── Gemeinde-Identität: normalisierter Name + Landkreis (deutschlandweit eindeutig) ──
+   Schlüssel z.B. "Postau|Landkreis Landshut". Anzeige = Name; Landkreis-Zusatz nur bei Namensgleichheit
+   in mehreren Landkreisen. "Gemeinde/Markt/Stadt"-Präfix und "bei …"/"b. …"-Zusatz fallen weg. */
+let _gemOf={},_gemLks={};
+function _gemNormName(g){
+  return String(g||"").replace(/^(?:Gemeinde|Markt|Stadt)\s+/i,"").replace(/\s+(?:bei|b\.)\s+.+$/i,"").trim();
+}
+function _prepareGemeinden(){
+  _gemOf={};_gemLks={};
+  Object.entries(meta).forEach(([k,m])=>{
+    const n=_gemNormName(m.gemeinde);
+    if(!n)return;
+    const lk=m.landkreis||"Landkreis Landshut";
+    _gemOf[k]=n+"|"+lk;
+    (_gemLks[n]=_gemLks[n]||new Set()).add(lk);
+  });
+}
+function _gemLabel(key){
+  const i=key.indexOf("|"),n=key.slice(0,i),lk=key.slice(i+1);
+  return(_gemLks[n]&&_gemLks[n].size>1)?n+" ("+lk.replace(/^Landkreis\s+/,"")+")":n;
+}
+// Alte (nur-Name-)Einträge aus localStorage → aktuelle Schlüssel
+function _gemKeysForOld(g){
+  const s=String(g);
+  if(s.includes("|"))return Object.values(_gemOf).includes(s)?[s]:[];
+  const n=_gemNormName(s);
+  return[...new Set(Object.values(_gemOf).filter(k=>k.slice(0,k.indexOf("|"))===n))];
+}
+function _migrateGemFavorites(){
+  let changed=false;
+  const out=[],seen=new Set();
+  favorites.forEach(f=>{
+    if(f.type!=="gemeinde"){out.push(f);return;}
+    const keys=_gemKeysForOld(f.key);
+    if(!keys.length){out.push(f);return;}
+    if(keys.length===1&&keys[0]===f.key&&f.label===_gemLabel(keys[0])){out.push(f);seen.add(f.key);return;}
+    changed=true;
+    const wasActive=activeFavs.has("gemeinde:"+f.key);
+    activeFavs.delete("gemeinde:"+f.key);
+    keys.forEach(k=>{
+      if(seen.has(k))return;
+      seen.add(k);
+      out.push({type:"gemeinde",key:k,label:_gemLabel(k),icon:f.icon});
+      if(wasActive)activeFavs.add("gemeinde:"+k);
+    });
+  });
+  if(changed){favorites=out;saveFavorites();saveActiveFavs();}
+}
 const secOpen={zeit:false,lk:false,gem:false,ort:false,ver:false,hlp:false};
 const FAV_KEY="vk_favorites";
 const ACTIVE_FAV_KEY="vk_active_favs";
@@ -687,8 +739,7 @@ function loadState(){
       aktLandkreis=lks.has(s.aktLandkreis)?s.aktLandkreis:null;
     }
     if(Array.isArray(s.aktGemeinden)){
-      const alleG=new Set(Object.values(meta).map(m=>m.gemeinde).filter(Boolean));
-      aktGemeinden=new Set(s.aktGemeinden.filter(g=>alleG.has(g)));
+      aktGemeinden=new Set(s.aktGemeinden.flatMap(_gemKeysForOld));
     }
     if(Array.isArray(s.deaktivierteVereine)){
       s.deaktivierteVereine.forEach(k=>{if(labels[k])aktVereine.delete(k);});
@@ -731,6 +782,8 @@ async function load(){
   labels=j.labels||{};
   allT=j.termine||[];
   meta=j.meta||{};
+  _prepareGemeinden();
+  _migrateGemFavorites();
   rubriken=j.rubriken||{};
   Object.keys(labels).sort().forEach((k,i)=>colors[k]=COLORS[i%COLORS.length]);
 
@@ -835,7 +888,7 @@ function selectLandkreis(lk){
 function buildGemeindeFilter(){
   const section=document.getElementById("gem-section");
   const container=document.getElementById("gem-chips");
-  const gemeinden=[...new Set(Object.values(meta).map(m=>m.gemeinde).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"de"));
+  const gemeinden=[...new Set(Object.values(_gemOf))].sort((a,b)=>_gemLabel(a).localeCompare(_gemLabel(b),"de"));
   if(!gemeinden.length){section.style.display="none";return;}
   section.style.display="";
   container.innerHTML='<span class="chip on" data-gem="alle">Alle</span><span class="chip" onclick="toggleGemeinde(\'alle\')">Keine</span>';
@@ -843,7 +896,7 @@ function buildGemeindeFilter(){
     const isFav=favorites.some(f=>f.type==="gemeinde"&&f.key===g);
     const c=document.createElement("span");
     c.className="chip"+(aktGemeinden.has(g)?" on":"");c.dataset.gem=g;
-    c.appendChild(document.createTextNode(g.replace(/^(?:Gemeinde|Markt)\s+/,"")+" "));
+    c.appendChild(document.createTextNode(_gemLabel(g)+" "));
     const star=document.createElement("button");
     star.className="fav-star"+(isFav?" on":"");star.innerHTML=icon("heart",14);
     star.title="Als Favorit speichern";
@@ -875,9 +928,7 @@ function toggleGemeinde(g){
 function filterGemeindeChipsForLandkreis(){
   const chips=document.querySelectorAll("[data-gem]:not([data-gem='alle'])");
   if(!aktLandkreis){chips.forEach(c=>c.style.display="");return;}
-  const gemInLk=new Set(
-    Object.values(meta).filter(m=>m.landkreis===aktLandkreis&&m.gemeinde).map(m=>m.gemeinde)
-  );
+  const gemInLk=new Set(Object.values(_gemOf).filter(g=>g.slice(g.indexOf("|")+1)===aktLandkreis));
   chips.forEach(c=>c.style.display=gemInLk.has(c.dataset.gem)?"":"none");
 }
 
@@ -896,7 +947,7 @@ function updateAllBadges(){
   const lkBadge=document.getElementById("lk-badge");
   if(lkBadge)lkBadge.textContent=aktLandkreis||"Alle";
   const gemBadge=document.getElementById("gem-badge");
-  if(gemBadge)gemBadge.textContent=aktGemeinden.size===0?"Alle":aktGemeinden.size===1?[...aktGemeinden][0].replace(/^(?:Gemeinde|Markt)\s+/,""):aktGemeinden.size+" Gemeinden";
+  if(gemBadge)gemBadge.textContent=aktGemeinden.size===0?"Alle":aktGemeinden.size===1?_gemLabel([...aktGemeinden][0]):aktGemeinden.size+" Gemeinden";
   document.getElementById("ort-badge").textContent=aktOrte.size===0?"Alle":aktOrte.size===1?[...aktOrte][0]:aktOrte.size+" Orte";
   const tot=Object.keys(labels).length,act=aktVereine.size;
   document.getElementById("ver-badge").textContent=act===tot?"Alle":act+"/"+tot;
@@ -911,7 +962,7 @@ function renderActiveFilterPills(){
   const pills=[];
   if(zeitraum!=="zukunft")pills.push({label:ZEIT_LBL[zeitraum],fn:()=>{zeitraum="zukunft";document.querySelectorAll("[data-z]").forEach(c=>c.classList.toggle("on",c.dataset.z==="zukunft"));updateAllBadges();render();}});
   if(aktLandkreis)pills.push({label:aktLandkreis.replace(/^Landkreis\s+/,""),fn:()=>selectLandkreis(aktLandkreis)});
-  aktGemeinden.forEach(g=>pills.push({label:g.replace(/^(?:Gemeinde|Markt)\s+/,""),fn:()=>toggleGemeinde(g)}));
+  aktGemeinden.forEach(g=>pills.push({label:_gemLabel(g),fn:()=>toggleGemeinde(g)}));
   aktOrte.forEach(o=>pills.push({label:o,fn:()=>toggleOrt(o)}));
   aktRubrikSet.forEach(r=>pills.push({label:r,fn:()=>setRubrik(r)}));
   const tot=Object.keys(labels).length;
@@ -968,7 +1019,7 @@ function _vereinsForOrt(o){
 }
 // Gemeinde einer Ortschaft – ermittelt aus den Vereinen die dort beheimatet sind
 function _gemeindeForOrt(o){
-  for(const k of _vereinsForOrt(o)){const g=(meta[k]||{}).gemeinde;if(g)return g;}
+  for(const k of _vereinsForOrt(o)){const g=_gemOf[k];if(g)return g;}
   return "";
 }
 
@@ -1006,7 +1057,7 @@ function filterVereinListForOrt(){
     if(cb){
       const k=cb.dataset.vk;
       const inOrt=!aktOrte.size||[...aktOrte].some(o=>(allOrteAll[o]||[]).includes(k)||(meta[k]||{}).heimatort===o);
-      const inGem=!gemFilter||aktGemeinden.has((meta[k]||{}).gemeinde||"");
+      const inGem=!gemFilter||aktGemeinden.has(_gemOf[k]||"");
       lbl.style.display=(inOrt&&inGem)?"":"none";
     }
   });
@@ -1221,7 +1272,7 @@ function toggleFavRegion(lk){
 }
 
 function toggleFavGemeinde(g){
-  const gLabel=g.replace(/^(?:Gemeinde|Markt)\s+/,"");
+  const gLabel=_gemLabel(g);
   const fi=favorites.findIndex(f=>f.type==="gemeinde"&&f.key===g);
   if(fi>=0){favorites.splice(fi,1);activeFavs.delete("gemeinde:"+g);}
   else{favorites.push({type:"gemeinde",key:g,label:gLabel,icon:icon("mapPin")});activeFavs.add("gemeinde:"+g);}
@@ -1240,7 +1291,7 @@ function openFavIcalFeed(){
       Object.entries(meta).forEach(([k,m])=>{if(m.heimatort===f.key)keys.add(k);});
     }
     else if(f.type==="gemeinde"){
-      Object.entries(meta).forEach(([k,m])=>{if(m.gemeinde===f.key)keys.add(k);});
+      Object.keys(_gemOf).forEach(k=>{if(_gemOf[k]===f.key)keys.add(k);});
     }
   });
   if(keys.size===0){alert("Noch keine Favoriten gespeichert.\nBitte erst Vereine oder Ortschaften mit dem Herz-Symbol markieren.");return;}
@@ -1377,13 +1428,14 @@ function _termMatchFav(t,f){
   if(f.type==="ort")return(allOrteAll[f.key]||[]).includes(k);
   if(f.type==="ortschaft")return(allOrteAll[f.key]||[]).includes(k)||(meta[k]||{}).heimatort===f.key;
   if(f.type==="region")return((meta[k]||{}).landkreis||"Landkreis Landshut")===f.key;
-  if(f.type==="gemeinde")return((meta[k]||{}).gemeinde||"")===f.key;
+  if(f.type==="gemeinde")return(_gemOf[k]||"")===f.key;
   return false;
 }
 
 /* ── Render events ── */
 function render(){
   if(!ready)return;
+  const doScroll=_scrollToToday;_scrollToToday=false;
   const h=new Date();h.setHours(0,0,0,0);
   const _now=new Date();
   const todayStr=_now.toISOString().slice(0,10);
@@ -1395,8 +1447,15 @@ function render(){
     const d=pd(t.datum);
     if(zeitraum==="zukunft"&&d<h)return false;
     if(zeitraum!=="alle"&&zeitraum!=="zukunft"){
-      const b=new Date(h);b.setDate(b.getDate()+parseInt(zeitraum));
-      if(d<h||d>b)return false;
+      const n=parseInt(zeitraum);
+      if(n<0){
+        // "N Tage zurück": ab heute-N bis in die Zukunft (offen)
+        const a=new Date(h);a.setDate(a.getDate()+n);
+        if(d<a)return false;
+      }else{
+        const b=new Date(h);b.setDate(b.getDate()+n);
+        if(d<h||d>b)return false;
+      }
     }
     // Favoriten überschreiben alle anderen Filter vollständig
     if(hasFavs)return favorites.some(f=>_termMatchFav(t,f));
@@ -1404,7 +1463,7 @@ function render(){
     if(!aktVereine.has(t.verein))return false;
     if(aktRubrikSet.size>0){const r=rubriken[t.verein]||"Verein";if(!aktRubrikSet.has(r))return false;}
     if(aktLandkreis!==null){const m=meta[t.verein];if(!m||m.landkreis!==aktLandkreis)return false;}
-    if(aktGemeinden.size>0){const m=meta[t.verein];if(!m||!aktGemeinden.has(m.gemeinde))return false;}
+    if(aktGemeinden.size>0&&!aktGemeinden.has(_gemOf[t.verein]||""))return false;
     if(aktOrte.size>0){
       const k=t.verein;
       if(![...aktOrte].some(o=>(allOrteAll[o]||[]).includes(k)||(meta[k]||{}).heimatort===o))return false;
@@ -1477,7 +1536,7 @@ function render(){
       +(quelleBadge?`<span class="ev-badge" style="background:var(--bg2);color:var(--text2);margin-left:3px">${quelleBadge}</span>`:"");
     const idx=allT.indexOf(t);
     const isFav=favorites.some(f=>f.type==="verein"&&f.key===t.verein);
-    const sep=t.datum!==_lastDatum?`<div class="ev-date-sep">${fmt(t.datum)}</div>`:"";
+    const sep=t.datum!==_lastDatum?`<div class="ev-date-sep" data-d="${escHtml(t.datum)}">${fmt(t.datum)}</div>`:"";
     _lastDatum=t.datum;
     const isPast=t.datum===todayStr&&!!t.uhrzeit&&(()=>{const[hh,mm]=(t.uhrzeit).split(":").map(Number);return hh*60+mm<nowMin;})();
     const flyerBtn=t.flyer_url?`<button class="ev-icon-btn ev-flyer js-ev-flyer-btn" data-flyer-url="${escHtml(t.flyer_url)}" title="Flyer öffnen">${icon("paperclip",20)}</button>`:"";
@@ -1492,14 +1551,11 @@ function render(){
     </div>`;
   }).join("")+
   `<div class="cta-card" style="margin-top:8px">Hast du die gesuchten Termine gefunden? Falls Termine fehlen &ndash; <a href="mailto:Vereinskalender@icloud.com" style="color:var(--accent)">einfach schreiben</a> oder als Verantwortlicher <a href="/verein/register" style="color:var(--accent)">registrieren</a> und selbst aktualisieren.</div>`;
-  // Scroll zum ersten nicht-vergangenen Termin (nur beim initialen Render des heutigen Tages)
-  requestAnimationFrame(()=>{
-    const firstComing=el.querySelector('.ev-card:not(.ev-card--past)');
-    if(firstComing){
-      let sep=firstComing.previousElementSibling;
-      while(sep&&!sep.classList.contains('ev-date-sep'))sep=sep.previousElementSibling;
-      (sep||firstComing).scrollIntoView({behavior:'instant',block:'start'});
-    }
+  // Scroll zum ersten Datumsblock ab heute – nur beim ersten Laden / Refresh, nicht bei Filterwechseln
+  if(doScroll)requestAnimationFrame(()=>{
+    const ld=_now.getFullYear()+"-"+String(_now.getMonth()+1).padStart(2,"0")+"-"+String(_now.getDate()).padStart(2,"0");
+    const sep=[...el.querySelectorAll('.ev-date-sep')].find(x=>x.dataset.d>=ld);
+    if(sep)sep.scrollIntoView({behavior:'instant',block:'start'});
   });
   saveState();
 }
@@ -1519,6 +1575,7 @@ async function doRefresh(){
   const btn=document.getElementById("refresh-btn");
   btn.classList.add("spin");
   ready=false;
+  _scrollToToday=true;
   try{await load();}finally{btn.classList.remove("spin");}
 }
 
@@ -3194,7 +3251,7 @@ function showInfoModal(){
       </div>
       <div class="help-row" style="padding:8px 0">
         <span class="help-icon">${icon("clock",20)}</span>
-        <div><strong>Zeitraum</strong><span><strong>K&uuml;nftig</strong> ab heute &middot; <strong>30T/3M/1J</strong> begrenzt &middot; <strong>Alle</strong> inkl. vergangene Termine.</span></div>
+        <div><strong>Zeitraum</strong><span><strong>K&uuml;nftig</strong> ab heute &middot; <strong>14/30 Tage zur&uuml;ck</strong> zeigt zus&auml;tzlich die letzten Tage &middot; <strong>N&auml;chste 30 Tage/3M/1J</strong> begrenzt &middot; <strong>Alle</strong> inkl. aller vergangenen Termine.</span></div>
       </div>
       <div class="help-row" style="padding:8px 0">
         <span class="help-icon">${icon("map",20)}</span>
