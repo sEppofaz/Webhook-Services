@@ -638,7 +638,9 @@ def telegram_webhook():
                 approve = cb_data.startswith("verein_approve:")
                 with db_conn() as conn:
                     row = conn.execute(
-                        """SELECT v.verein_name, u.email FROM vereine_accounts v
+                        """SELECT v.verein_name, v.verein_key, v.plz, v.gemeinde,
+                                  v.landkreis, v.heimatort, v.rubrik, u.email
+                           FROM vereine_accounts v
                            JOIN vk_users u ON u.verein_id = v.id AND u.role='admin'
                            WHERE v.id = ? AND v.status = 'pending'""",
                         (verein_id,),
@@ -654,6 +656,11 @@ def telegram_webhook():
                                 (verein_id,),
                             )
                             send_welcome_email(row["email"], row["verein_name"])
+                            # Gleicher Schritt wie im API-Endpunkt: ohne Eintrag in
+                            # vereinstermine.json bleibt der Verein in der Übersicht
+                            # unsichtbar, bis er seinen ersten Termin anlegt.
+                            from shared.kalender_store import register_verein
+                            register_verein(row["verein_key"], row["verein_name"], row)
                             answer_telegram_callback(cb_id, "✅ Freigegeben")
                             send_telegram(TELEGRAM_CHAT_ID, f"✅ Verein freigegeben: {row['verein_name']}")
                         else:

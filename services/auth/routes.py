@@ -719,8 +719,10 @@ def approve_verein(verein_id: int):
         return {"error": "Unauthorized"}, 401
     with db_conn() as conn:
         row = conn.execute(
-            """SELECT v.verein_name, u.email FROM vereine_accounts v
-               JOIN vk_users u ON u.verein_id = v.id
+            """SELECT v.verein_name, v.verein_key, v.plz, v.gemeinde, v.landkreis,
+                      v.heimatort, v.rubrik, u.email
+               FROM vereine_accounts v
+               JOIN vk_users u ON u.verein_id = v.id AND u.role = 'admin'
                WHERE v.id = ? AND v.status = 'pending'""",
             (verein_id,),
         ).fetchone()
@@ -731,6 +733,10 @@ def approve_verein(verein_id: int):
             (verein_id,),
         )
         send_welcome_email(row["email"], row["verein_name"])
+
+    from shared.kalender_store import register_verein
+    register_verein(row["verein_key"], row["verein_name"], row)
+
     return {"ok": True}
 
 
