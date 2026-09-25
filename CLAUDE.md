@@ -401,3 +401,55 @@ with db_conn() as c:
 ```
 
 Stand 2026-09-25: `fkk_musendorf` fehlt (aktiv, aber nicht in `_labels`/`_meta`).
+
+---
+
+## Service läuft unter gunicorn (seit 2026-09-25, ADR-010)
+
+Vorher: `ExecStart=/opt/rename-webhook/bin/python3 /opt/rename-webhook/webhook.py`
+(Flask-Dev-Server, Warnung in den Logs). Jetzt:
+
+```ini
+ExecStart=/opt/rename-webhook/bin/gunicorn -w 1 --threads 8 -k gthread \
+    -b 127.0.0.1:5000 --timeout 120 --graceful-timeout 30 \
+    --access-logfile - --error-logfile - webhook:app
+```
+
+`webhook.py` war dafür schon vorbereitet – `app = create_app()` auf Modulebene.
+
+### ⚠️ `-w 1` ist Pflicht, nicht Geschmack
+
+`_import_lock` (`services/kalender/routes.py`) und `_preauth_lock`
+(`services/auth/routes.py`) sind `threading.Lock` und wirken **nur prozessintern**. Mit
+`-w 2` könnten zwei Requests zwei heimat-Importe gleichzeitig auf derselben JSON-Datei
+fahren. Wer auf mehrere Worker will, muss diese Locks zuerst auf `fcntl` umstellen
+(`KalenderStore` macht es bereits richtig). Begründung und verworfene Alternativen: ADR-010.
+
+Ebenfalls bewusst weggelassen:
+- **kein `--max-requests`** – viele Endpoints starten Fire-and-Forget-Daemon-Threads
+  (Telegram-Antworten, heimat-Import, Verkehr) und antworten sofort. Worker-Recycling
+  würde die mitten im Lauf abschneiden, ohne Fehler und ohne Log.
+- **kein `--preload`**
+
+### ⚠️ Beim Testen: App lässt sich nicht ohne systemd importieren
+
+`shared/kalender_core.py` liest `os.environ["CLAUDE_API_KEY"]` beim Import. Ein
+`python3 -c "from webhook import app"` auf der Shell scheitert deshalb mit
+`KeyError: 'CLAUDE_API_KEY'` – die Variable kommt aus `EnvironmentFile=/etc/pka/secrets.env`
+und **darf nicht** von Hand gesourct werden. Routen prüft man am laufenden Service
+(`curl http://127.0.0.1:5000/…`) oder per grep über die `@*_bp.route`-Dekoratoren.
+
+### ⚠️ Nicht jede Route hängt an jeder Domain
+
+Beim Prüfen nach dem Umstellen leicht als Ausfall fehlzudeuten:
+
+| URL | umbenennen.duckdns.org | vereinskalender.online | direkt :5000 |
+|---|---|---|---|
+| `/` | 200 | 200 | 404 |
+| `/verein/dashboard` | **404** | 302 (Login) | 302 |
+
+`/verein/**` hängt an `vereinskalender.online`, nicht an `umbenennen.duckdns.org`. Ein 404
+dort ist normal. Entscheidend beim Verifizieren ist der direkte Aufruf auf `127.0.0.1:5000`.
+Weitere existierende Pfade, die man leicht falsch rät: `/aktien-search` (nicht `/aktien/`),
+`/autoquartett/car-lookup` (POST, nicht `/autoquartett/`), `/telegram` (nur POST → GET
+liefert korrekt 405; ein 502 hieße, der Service ist tot).
