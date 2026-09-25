@@ -173,12 +173,12 @@ Alle Jobs als `root`-Crontab. Timezone: `Europe/Berlin`. Logs: `/var/log/pka-*.l
 
 ## Datenstruktur `vereinstermine.json`
 
-- **`_labels`**: `{vereinKey: "Anzeigename"}` – letztes Wort > 4 Zeichen = Heimatort-Fallback
+- **`_labels`**: `{vereinKey: "Anzeigename"}` – letztes Wort > 4 Zeichen = Heimatort-Fallback. **Maßgeblich für die Sichtbarkeit:** `/api/vereine` iteriert über `_labels`, nicht über die DB. Kein Label = der Verein existiert für den Kalender nicht.
 - **`_meta[key]`**: `{plz, gemeinde, landkreis, heimatort?, selbstverwaltung?}`
 - **`_ortschaften`**: `{gemeinde_map: {...}}` – Mapping Ortschaft→Gemeinde
 
 ### Pitfalls `vereinstermine.json`
-- **`approve`-Endpunkt legt keinen JSON-Eintrag an:** `POST /api/admin/vereine/<id>/approve` setzt nur `status=aktiv` in der DB. Wenn ein freigegebener Verein noch nie Termine importiert hat, fehlt er in `_labels`/`_meta` → unsichtbar in Vereinsübersicht. Fix: `_labels` + `_meta` (mit `selbstverwaltung: true`) manuell via `KalenderStore.update()` nachtragen. (Vorfall 2026-06-18: FFW Paindlkofen)
+- **✅ Behoben 2026-09-25 – Freigabe legt den JSON-Eintrag jetzt selbst an:** Vorher setzte die Freigabe nur `status=aktiv` in der DB; ein freigegebener Verein ohne eigene Termine fehlte in `_labels`/`_meta` und war in der Vereinsübersicht unsichtbar (Vorfall 2026-06-18: FFW Paindlkofen, musste manuell nachgetragen werden). Beide Freigabe-Wege rufen jetzt `shared/kalender_store.register_verein()` – siehe Abschnitt „Vereinsfreigabe" unten. **Achtung bei Altbestand:** Vereine, die *vor* dem Fix freigegeben wurden, sind weiterhin unsichtbar und müssen einmalig nachgetragen werden (Abgleich: `status='aktiv'` in `vereine_accounts` gegen die Keys in `_labels`).
 - **`_heimat_aliases` (Stand 2026-07-16):** `{heimat_key: account_key}` in `vereinstermine.json`. `admin_transfer_key()` (`services/auth/routes.py`) schreibt hier automatisch rein. `heimat_import.py` löst den bei jedem Import frisch aus dem Veranstalter-Namen berechneten `verein_key` (`_slugify(veranst)`) zuerst gegen diese Map auf – sonst entsteht bei abweichender Schreibweise auf heimat-info.de erneut ein Duplikat-Key für einen bereits transferierten Verein. Selbstverwaltende Vereine werden von heimat-info NICHT mehr komplett ausgeschlossen, sondern normal dedupliziert (heimat-info bleibt Ergänzungsquelle, siehe ADR-003). (Vorfall 2026-07-16: FFW Paindlkofen / Freiwillige Feuerwehr Paindlkofen, doppeltes Weißwurstfrühstück)
 - **Vereinsname-Umbenennung muss `_labels[verein_key]` mitziehen:** Der im Kalender angezeigte Vereinsname kommt ausschließlich aus `_labels[verein_key]` in `vereinstermine.json` – nicht aus `vereine_accounts.verein_name`. Jede Stelle, die `verein_name` in der DB ändert (`verein_profil()` in `services/verein/routes.py`, `admin_update_verein()` in `services/auth/routes.py`), muss bei geändertem Namen zusätzlich `_labels[verein_key]` per `KalenderStore.update()` nachziehen, sonst zeigt der Kalender weiter den alten Namen. (Gefixt 2026-07-15)
 - **`KalenderStore.update()` als `root` → Owner-Problem:** Direkter Python-Aufruf als root ändert den Datei-Owner auf `root` → App-User `webhook` bekommt `Permission denied`. Danach immer: `chown webhook:webhook /opt/rename-webhook/vereinstermine.json`
@@ -344,3 +344,60 @@ Prüft **alle** venvs unter `/opt` (dynamisch erkannt, seit 2026-09-20 – vorhe
   - **`--dry-run`:** `/opt/rename-webhook/bin/python3 /opt/rename-webhook/pip_update_audit.py --dry-run` gibt den Report aus, **ohne** `secrets.env` zu lesen oder zu senden (~40 s) – so wird das Script getestet, ohne Telegram-Spam und ohne Secrets.
   - **Pitfall:** Beim Sichten von `pip-audit`-Ausgaben nie mit `tail` kürzen – der erste Blick am 2026-09-20 zeigte durch `tail -n 6` nur einen Teil der CVEs von `sentiment-scanner` (real: pillow 13, anyio 3, soupsieve 2, pip 6 Advisories).
   - **Gehaltene Pakete (Commit `2eed541`):** `held_back()` prüft im Python des jeweiligen venvs (pip-eigenes `packaging`), ob ein installiertes Paket die neueste Version per Requirement ausschließt; solche Pakete zählen nicht in die Ampel und stehen gesammelt in der Inventar-Zeile ⏸. Endet der Pin, erscheint das Paket automatisch wieder normal – es kann nichts still vergessen werden. Keine feste Liste zu pflegen.
+
+---
+
+## Vereinsfreigabe (seit 2026-09-25)
+
+Eine Freigabe muss **zwei** Dinge tun: `status='aktiv'` in `vereine_accounts` setzen **und**
+den Verein in `vereinstermine.json` bekannt machen. Ohne den zweiten Schritt ist er in der
+Vereinsübersicht unsichtbar, weil `/api/vereine` über `_labels` iteriert und nicht über die
+DB (Vorfall 2026-06-18: FFW Paindlkofen).
+
+**Zentral in `shared/kalender_store.register_verein(verein_key, verein_name, row=None)`:**
+
+- `_labels[verein_key] = verein_name`
+- `_meta[verein_key]["selbstverwaltung"] = True`
+- aus `row` (der `sqlite3.Row` aus `vereine_accounts`) zusätzlich `plz`, `gemeinde`,
+  `landkreis`, `heimatort`, `rubrik` – ohne die steht der Verein ohne Ort da und fällt
+  aus dem Regionsfilter. Leere DB-Spalten werden nicht geschrieben.
+- **durchgehend `setdefault`** → idempotent, überschreibt nie einen bestehenden Wert
+  (ein Verein mit `selbstverwaltung: false` behält `false`)
+- legt **keine** leere Terminliste `data[verein_key]` an – `nTermine` fällt in
+  `/api/vereine` ohnehin auf 0 zurück
+
+### ⚠️ Es gibt ZWEI Freigabe-Wege
+
+| Weg | Datei |
+|---|---|
+| `POST /api/admin/vereine/<id>/approve` | `services/auth/routes.py` → `approve_verein()` |
+| Telegram-Button „✅ Freigeben" (`callback_data` `verein_approve:<id>:<name>`) | `services/telegram/routes.py` |
+
+Der Telegram-Weg **dupliziert die Freigabe-Logik** (eigene Query, eigenes
+`UPDATE … status='aktiv'`, eigener Mailversand) und ist der real genutzte. Wer die
+Freigabe ändert, muss beide Stellen anfassen – genau deshalb liegt der JSON-Teil jetzt in
+einer gemeinsamen Funktion und nicht zweimal inline. Die Query muss `v.verein_key` und die
+Ortsspalten mitselektieren, sonst kommt `register_verein` nicht an die Daten.
+
+**Beide Queries joinen `vk_users` mit `AND u.role='admin'`** – ohne den Filter geht die
+Willkommensmail bei einem Verein mit mehreren Nutzern an einen beliebigen davon (war im
+API-Endpunkt bis 2026-09-25 der Fall, der Telegram-Weg hatte es schon richtig).
+
+### Altbestand prüfen
+
+Vereine, die vor dem Fix freigegeben wurden, bleiben unsichtbar. Abgleich:
+
+```bash
+ssh root@89.167.104.145 '/opt/rename-webhook/bin/python3 -c "
+import sys, json; sys.path.insert(0, \"/opt/rename-webhook\")
+from shared.kalender_store import VEREINSTERMINE_FILE
+from shared.vk_db import db_conn
+labels = json.loads(VEREINSTERMINE_FILE.read_text()).get(\"_labels\", {})
+with db_conn() as c:
+    for r in c.execute(\"SELECT verein_key, verein_name FROM vereine_accounts WHERE status=\x27aktiv\x27\"):
+        if r[\"verein_key\"] not in labels:
+            print(\"FEHLT:\", r[\"verein_key\"], r[\"verein_name\"])
+"'
+```
+
+Stand 2026-09-25: `fkk_musendorf` fehlt (aktiv, aber nicht in `_labels`/`_meta`).
