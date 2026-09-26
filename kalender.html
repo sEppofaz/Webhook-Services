@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#1c1c1e">
+<meta name="theme-color" content="#6D28D9" id="theme-color-meta">
 <meta name="apple-mobile-web-app-title" content="Vereinskalender" id="apple-app-title">
 <title>Vereinskalender</title>
 <script>if(location.hostname.includes("veranstaltungen.website")){document.title="Veranstaltungen";var _at=document.getElementById("apple-app-title");if(_at)_at.content="Veranstaltungen";}</script>
@@ -23,13 +23,21 @@
   --tab:#6D28D9;--radius:12px;
   --fav-dim:.35;
 }
-@media(prefers-color-scheme:dark){:root{
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#1c1c1e;--bg2:#2c2c2e;--bg3:#3a3a3c;
   --text:#f2f2f7;--text2:#aeaeb2;--text3:#636366;
   --border:rgba(255,255,255,0.1);--border2:rgba(255,255,255,0.2);
   --card:#2c2c2e;--accent:#8B5CF6;--tab:#A78BFA;--hdr:#5B21B6;
   --fav-dim:.65;
 }}
+/* identische Dark-Werte für das manuelle Umschalten unabhängig vom System (BKM: PWA-Standards) */
+:root[data-theme="dark"]{
+  --bg:#1c1c1e;--bg2:#2c2c2e;--bg3:#3a3a3c;
+  --text:#f2f2f7;--text2:#aeaeb2;--text3:#636366;
+  --border:rgba(255,255,255,0.1);--border2:rgba(255,255,255,0.2);
+  --card:#2c2c2e;--accent:#8B5CF6;--tab:#A78BFA;--hdr:#5B21B6;
+  --fav-dim:.65;
+}
 html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif}
 .app{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 
@@ -181,6 +189,11 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
 .help-row strong{display:block;font-size:14px;font-weight:600;color:var(--text);margin-bottom:2px}
 .help-row span{font-size:13px;color:var(--text2);line-height:1.4}
 .version{font-size:12px;color:var(--text3);text-align:center;padding:20px 0 8px;border-top:.5px solid var(--border);margin-top:8px}
+.theme-switch-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0 4px;border-top:1.5px solid var(--border);margin-top:4px;font-size:14px;font-weight:600;color:var(--text)}
+.theme-switch{width:46px;height:26px;border-radius:13px;background:var(--bg3);border:none;position:relative;padding:0;cursor:pointer;transition:background .2s;flex-shrink:0;-webkit-appearance:none}
+.theme-switch[aria-checked="true"]{background:var(--accent)}
+.theme-switch-knob{position:absolute;top:2px;left:2px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .2s}
+.theme-switch[aria-checked="true"] .theme-switch-knob{transform:translateX(20px)}
 
 /* ── Search ── */
 .srch-wrap{padding:10px 14px 6px;position:relative}
@@ -243,6 +256,18 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
 .rubrik-chip{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:20px;font-size:13px;font-weight:500;cursor:pointer;border:1.5px solid var(--border2);background:var(--bg);color:var(--text2);transition:all .15s;white-space:nowrap}
 .rubrik-chip.on{background:var(--accent);color:#fff;border-color:var(--accent)}
 </style>
+<script>
+/* Anti-Flacker: gespeicherte Theme-Wahl anwenden bevor gerendert wird (BKM: PWA-Standards) */
+(function(){
+  try{
+    var t=localStorage.getItem("vk_theme");
+    if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);
+    var dark=t==="dark"||(t!=="light"&&window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);
+    var m=document.getElementById("theme-color-meta");
+    if(m)m.setAttribute("content",dark?"#5B21B6":"#6D28D9");
+  }catch(e){}
+})();
+</script>
 </head>
 <body>
 <div class="app">
@@ -265,7 +290,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
   </div>
   <div class="hdr-right" style="display:flex;align-items:center;gap:6px">
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px">
-      <span class="ver-lbl" style="margin-right:0">v1.20</span>
+      <span class="ver-lbl" style="margin-right:0">v1.21</span>
       <span style="font-size:9px;color:rgba(255,255,255,.28);letter-spacing:.2px;line-height:1">a sEpp-App</span>
     </div>
     <button class="refresh-btn" onclick="showInfoModal()" title="Info" style="font-size:13px;font-weight:600;letter-spacing:.3px">Info</button>
@@ -393,7 +418,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title" style="width:55%"></div><div class="sk-line sk-ort"></div></div>
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title"></div><div class="sk-line sk-ort" style="width:30%"></div></div>
     </div>
-    <p class="version">Vereinskalender &middot; v1.20 &middot; 2026-09-26 &middot; a sEpp-App</p>
+    <p class="version">Vereinskalender &middot; v1.21 &middot; 2026-09-26 &middot; a sEpp-App</p>
     <p style="font-size:11px;color:var(--text3);text-align:center;padding:0 0 24px;line-height:2">&#127807; Hosting in Finnland mit &Ouml;kostrom &middot; Werbefrei &middot; DSGVO-konform</p>
   </div>
 
@@ -620,6 +645,7 @@ const ICON_PATHS={
   clock:`<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>`,
   map:`<polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/>`,
   mapPin:`<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>`,
+  moon:`<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>`,
   users:`<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`,
   paperclip:`<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>`,
   scale:`<path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21H17"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>`,
@@ -1721,8 +1747,6 @@ async function doRefresh(){
 if(ADMIN){
   document.getElementById("admin-import-btn").style.display="";
   document.title="VKO Admin";
-  const tc=document.querySelector('meta[name="theme-color"]');
-  if(tc)tc.setAttribute("content","#6D28D9");
 }
 
 /* ── Vereinsadmin-Stift-Icon ── */
@@ -3415,9 +3439,41 @@ function showInfoModal(){
         <span class="help-icon">${icon("scale",20)}</span>
         <div><strong>Impressum</strong><span>Josef Fischer &middot; H&ouml;lskofen 13 &middot; 84092 Bayerbach b. Ergoldsbach<br><a href="mailto:Vereinskalender@icloud.com" style="color:var(--accent);text-decoration:none">Vereinskalender@icloud.com</a></span></div>
       </div>
+      <div class="theme-switch-row">
+        <span style="display:inline-flex;align-items:center;gap:8px">${icon("moon",18)} Dunkelmodus</span>
+        <button class="theme-switch" id="theme-toggle" role="switch" aria-checked="false" aria-label="Dunkelmodus umschalten"><span class="theme-switch-knob"></span></button>
+      </div>
       <button onclick="document.getElementById('info-modal').remove()" style="width:100%;margin-top:16px;padding:12px;background:none;border:1.5px solid var(--border2);border-radius:12px;font-size:14px;color:var(--text2);cursor:pointer">Schlie&szlig;en</button>
     </div>`;
   document.body.appendChild(m);
+  setupThemeToggle();
+}
+
+/* ── Dark-/Hell-Modus-Umschalter (BKM: PWA-Standards) ── */
+function systemPrefersDark(){
+  return !!(window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);
+}
+function getStoredTheme(){
+  try{return localStorage.getItem("vk_theme");}catch(e){return null;}
+}
+function applyTheme(theme){
+  if(theme==="light"||theme==="dark")document.documentElement.setAttribute("data-theme",theme);
+  else document.documentElement.removeAttribute("data-theme");
+  const dark=theme==="light"?false:theme==="dark"?true:systemPrefersDark();
+  const meta=document.getElementById("theme-color-meta");
+  if(meta)meta.setAttribute("content",dark?"#5B21B6":"#6D28D9");
+}
+function setupThemeToggle(){
+  const btn=document.getElementById("theme-toggle");
+  if(!btn)return;
+  const effective=getStoredTheme()||(systemPrefersDark()?"dark":"light");
+  btn.setAttribute("aria-checked",effective==="dark"?"true":"false");
+  btn.addEventListener("click",()=>{
+    const next=btn.getAttribute("aria-checked")==="true"?"light":"dark";
+    btn.setAttribute("aria-checked",next==="dark"?"true":"false");
+    try{localStorage.setItem("vk_theme",next);}catch(e){}
+    applyTheme(next);
+  });
 }
 
 async function doConfirmImport(){
