@@ -189,7 +189,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
 .help-row strong{display:block;font-size:14px;font-weight:600;color:var(--text);margin-bottom:2px}
 .help-row span{font-size:13px;color:var(--text2);line-height:1.4}
 .version{font-size:12px;color:var(--text3);text-align:center;padding:20px 0 8px;border-top:.5px solid var(--border);margin-top:8px}
-.theme-switch-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0 4px;border-top:1.5px solid var(--border);margin-top:4px;font-size:14px;font-weight:600;color:var(--text)}
+.theme-switch-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:2px 0 12px;border-bottom:1.5px solid var(--border);margin-bottom:4px;font-size:14px;font-weight:600;color:var(--text)}
 .theme-switch{width:46px;height:26px;border-radius:13px;background:var(--bg3);border:none;position:relative;padding:0;cursor:pointer;transition:background .2s;flex-shrink:0;-webkit-appearance:none}
 .theme-switch[aria-checked="true"]{background:var(--accent)}
 .theme-switch-knob{position:absolute;top:2px;left:2px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .2s}
@@ -290,7 +290,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
   </div>
   <div class="hdr-right" style="display:flex;align-items:center;gap:6px">
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:1px">
-      <span class="ver-lbl" style="margin-right:0">v1.21</span>
+      <span class="ver-lbl" style="margin-right:0">v1.22</span>
       <span style="font-size:9px;color:rgba(255,255,255,.28);letter-spacing:.2px;line-height:1">a sEpp-App</span>
     </div>
     <button class="refresh-btn" onclick="showInfoModal()" title="Info" style="font-size:13px;font-weight:600;letter-spacing:.3px">Info</button>
@@ -418,7 +418,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title" style="width:55%"></div><div class="sk-line sk-ort"></div></div>
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title"></div><div class="sk-line sk-ort" style="width:30%"></div></div>
     </div>
-    <p class="version">Vereinskalender &middot; v1.21 &middot; 2026-09-26 &middot; a sEpp-App</p>
+    <p class="version">Vereinskalender &middot; v1.22 &middot; 2026-09-26 &middot; a sEpp-App</p>
     <p style="font-size:11px;color:var(--text3);text-align:center;padding:0 0 24px;line-height:2">&#127807; Hosting in Finnland mit &Ouml;kostrom &middot; Werbefrei &middot; DSGVO-konform</p>
   </div>
 
@@ -3371,6 +3371,10 @@ function showInfoModal(){
         <div class="modal-title" style="margin-bottom:0;display:flex;align-items:center;gap:6px">${icon("info",18)} Info &amp; Hilfe</div>
         <button onclick="document.getElementById('info-modal').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text2);line-height:1;padding:0 2px">&times;</button>
       </div>
+      <div class="theme-switch-row">
+        <span style="display:inline-flex;align-items:center;gap:8px">${icon("moon",18)} Dunkelmodus</span>
+        <button class="theme-switch" id="theme-toggle" role="switch" aria-checked="false" aria-label="Dunkelmodus umschalten"><span class="theme-switch-knob"></span></button>
+      </div>
       <div class="help-row" style="padding:8px 0 12px;border-bottom:1.5px solid var(--border);margin-bottom:4px">
         <span class="help-icon">${icon("userPlus",20)}</span>
         <div><strong><a href="/verein/register" style="color:var(--accent);text-decoration:none">Euren Verein eintragen</a></strong><span>Termine selbst eintragen und verwalten &ndash; kostenlos, direkt, ohne Wartezeit. <a href="/verein/register" style="color:var(--accent);font-weight:600">Jetzt registrieren &rarr;</a><br><span style="color:var(--text3);font-size:.9em">Bereits registriert? <a href="/verein/login" style="color:var(--accent)">Zum Login &rarr;</a></span></span></div>
@@ -3438,10 +3442,6 @@ function showInfoModal(){
       <div class="help-row" style="padding:12px 0 8px;border-top:1.5px solid var(--border);margin-top:4px;border-bottom:none">
         <span class="help-icon">${icon("scale",20)}</span>
         <div><strong>Impressum</strong><span>Josef Fischer &middot; H&ouml;lskofen 13 &middot; 84092 Bayerbach b. Ergoldsbach<br><a href="mailto:Vereinskalender@icloud.com" style="color:var(--accent);text-decoration:none">Vereinskalender@icloud.com</a></span></div>
-      </div>
-      <div class="theme-switch-row">
-        <span style="display:inline-flex;align-items:center;gap:8px">${icon("moon",18)} Dunkelmodus</span>
-        <button class="theme-switch" id="theme-toggle" role="switch" aria-checked="false" aria-label="Dunkelmodus umschalten"><span class="theme-switch-knob"></span></button>
       </div>
       <button onclick="document.getElementById('info-modal').remove()" style="width:100%;margin-top:16px;padding:12px;background:none;border:1.5px solid var(--border2);border-radius:12px;font-size:14px;color:var(--text2);cursor:pointer">Schlie&szlig;en</button>
     </div>`;
