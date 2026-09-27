@@ -312,7 +312,13 @@ Deshalb bestimmt jetzt der Code das Jahr – siehe `ADR/ADR-012`.
 
 **Zum Merken:** `gottesdienste.json` gehört `webhook:webhook`. `write_text()` schreibt
 in-place, ein Lauf als `root` kippt die Rechte also **nicht** – ein atomarer Write per
-`tempfile` + `os.replace()` würde es dagegen tun.
+`tempfile` + `os.replace()` würde es dagegen tun. **Neu angelegte Dateien sind aber sehr wohl
+betroffen:** `gottesdienste.json.bak` und `pfarrbrief_last_raw.json` entstanden bei einem
+root-Lauf am 2026-09-27 als `root:root` und wurden nachträglich auf `webhook:webhook` gesetzt.
+Nach einem manuellen Lauf als `root` deshalb `ls -la /opt/rename-webhook/` prüfen – sonst
+scheitert ein späterer Lauf als `webhook` still am Schreiben (der Backup-Fehler wird nur als
+Warnung ausgegeben). `pfarrbrief_last_raw.json` steht in `.gitignore`, damit `git status` im
+Deployment leer bleibt (Regel aus PKA-Todo #410).
 
 **Weitere Fallen, alle am 2026-09-27 aufgetreten:**
 - **API-Timeout war 60s** – zu knapp für ein 2,7-MB-PDF mit ~90 Terminen, der Lauf endete im
