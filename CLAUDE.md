@@ -324,6 +324,8 @@ Endpunkt `/telegram` – nur Josefs Chat-ID. Token = `TOKEN` aus `/etc/pka/secre
 | `/stopp-vko` / `/start-vko` | Wartungsmodus ein/aus |
 | *(beliebiger Text)* | → `Todos.json` als `kategorie: pka` |
 
+**Todo-Schema (`_save_todo()`):** Das Schema gehört dem Ziel-Projekt, nicht diesem Repo – maßgeblich ist `~/Developer/PKA-Todos/CLAUDE.md`; dort sind drei Vorfälle mit fehlenden bzw. falsch benannten Feldern dokumentiert. Seit 2026-09-27 (PKA-Todo #409): `prio: "mittel"` statt `"niedrig"` (Telegram **und** Siri-Webhook laufen über dieselbe Funktion), dazu `faelligkeit` und `faelligkeit_uhrzeit` explizit auf `None`. Vor jeder Änderung an diesem Dict die PKA-Todos-CLAUDE.md lesen.
+
 **Pitfall – Callback-Guard:** Bei `callback_query`-Updates gibt es kein `message`-Objekt → Guard greift nur wenn `not data.get("callback_query")`.
 **Pitfall – `send_telegram`:** Signatur `send_telegram(chat_id, text)` – nur 2 Argumente!
 
