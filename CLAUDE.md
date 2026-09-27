@@ -238,6 +238,41 @@ Alle Jobs als `root`-Crontab. Timezone: `Europe/Berlin`. Logs: `/var/log/pka-*.l
 
 ---
 
+## ⚠️ Globale Funktionen nicht durch lokale Variablen verdecken (Vorfall 2026-09-27)
+
+`kalender.html` hat **107 globale Funktionen** in einem einzigen `<script>`-Block. Eine lokale
+Variable mit demselben Namen verdeckt die Funktion im ganzen Funktionsrumpf – JavaScript meldet
+das nicht, der Fehler taucht erst zur Laufzeit auf.
+
+**Der Vorfall:** In `startUpload()` und `doConfirmImport()` stand
+
+```js
+const icon = document.getElementById("uz-icon");   // verdeckt die Funktion icon()
+icon.innerHTML = icon("timer", 32);                // TypeError: icon is not a function
+```
+
+Die lokale `const icon` gab es seit dem Initial Commit; kaputt wurde sie erst mit `835f530`
+(2026-06-08), als die Lucide-Umstellung die globale Funktion `icon(name,size)` einführte.
+
+**Warum es so lange unbemerkt blieb:** Der TypeError fliegt **vor** dem `try`-Block – also
+nachdem die Fortschrittsanzeige eingeblendet wurde, aber bevor `fetch("/upload")` startet. Der
+Upload sieht deshalb nicht nach Fehler aus, sondern nach „hängt": stehen bleibt der statische
+Default-Text **„Verarbeite…"** aus `<div class="prog-lbl">`. Kein Fehler-Icon, keine Meldung,
+kein Request im Netzwerk-Tab. Der Admin-Upload war so **knapp vier Monate** unbenutzbar.
+
+**Regel:** Lokale DOM-Referenzen bekommen das Suffix `El` (`iconEl`, `lblEl`), nie den Namen
+einer globalen Funktion. Gilt besonders für kurze Namen wie `icon`, `lbl`, `f`, `l`.
+
+**Prüfung vor dem Deploy** (statisch, kein Browser nötig): Script-Block extrahieren, alle
+globalen Funktionsnamen sammeln (`^function name(` und `^const name = (…) =>`), dann je
+Funktionsrumpf prüfen, ob eine lokale `const/let/var` einen dieser Namen belegt **und** derselbe
+Name im selben Rumpf als Funktion aufgerufen wird. Nur diese Kombination ist ein echter Fehler –
+eine bloße Namensgleichheit ohne Aufruf ist harmlos (in dieser Datei 21 Namensgleichheiten, davon
+2 echte Fehler). Danach `node --check` auf den extrahierten Block.
+
+Dasselbe Muster ist am selben Tag im Vokabeltrainer aufgetreten (dort `tr()` statt `t()`, weil
+`t` viermal als lokaler Parameter belegt war) – siehe `PKA/BKM/PWA-Standards.md`.
+
 ## Upload-Workflow (zweistufig)
 
 1. PDF/Foto → Claude Vision extrahiert Termine (verein, datum, ort, ortschaft, bezeichnung)
