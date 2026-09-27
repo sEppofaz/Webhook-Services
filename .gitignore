@@ -19,6 +19,7 @@ cursor.txt
 invoice_cursor.txt
 last_import.json
 gottesdienste.json
+pfarrbrief_last_raw.json
 
 # Backups / alte Versionen
 *.bak
