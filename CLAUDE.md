@@ -7,6 +7,7 @@
 - **Auf Server:** `/opt/rename-webhook/` – zieht per `git pull` von GitHub
 - **Credentials:** ausschließlich in `/etc/pka/secrets.env` (via EnvironmentFile im Service)
 - **Deployment-SOP:** `PKA/SOPs/Vereinskalender-Deployment.md`
+- **Server-Arbeitsverzeichnis sauber halten:** `git status` in `/opt/rename-webhook` muss leer sein. Am 2026-09-27 lagen dort vier Monate lang eine Debug-Zeile in `services/rename/routes.py`, eine `routes.py.bak_debug` und eine nicht eingecheckte Modusänderung – der Server lief damit teilweise mit Code, der nicht auf GitHub steht. Bereinigt per `git stash push -u` (liegt als `stash@{0}` weiter auf dem Server, mit #410 im Text), **nicht** per `rm`/`checkout` – so bleibt alles zurückholbar.
 
 ### Deployment-Flow (Mac → GitHub → Hetzner)
 ```bash
