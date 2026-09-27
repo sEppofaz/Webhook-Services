@@ -13,7 +13,7 @@ import re
 import sys
 import tempfile
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import anthropic
@@ -152,6 +152,63 @@ def save_gottesdienste(data: dict) -> None:
     GOTTESDIENSTE_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2))
 
 
+RAW_DUMP_FILE = Path("/opt/rename-webhook/pfarrbrief_last_raw.json")
+_JAHR_TOLERANZ_TAGE = 30   # so weit darf ein Termin in der Vergangenheit liegen
+
+
+def save_raw_dump(filename: str, termine: list) -> None:
+    """Rohergebnis der Extraktion sichern – vor jeder Nachbearbeitung.
+
+    Damit sind Änderungen an der Jahreslogik ohne neuen (kostenpflichtigen)
+    Claude-Call prüfbar. Am 2026-09-27 kostete genau das drei Läufe, weil bei
+    jedem Abbruch das Rohergebnis verloren ging.
+    """
+    try:
+        RAW_DUMP_FILE.write_text(json.dumps(
+            {"datei": filename, "zeitpunkt": datetime.now().isoformat(timespec="seconds"),
+             "termine": termine},
+            ensure_ascii=False, indent=2))
+    except Exception as e:
+        print(f"   ⚠️ Rohdaten nicht gesichert (nicht kritisch): {e}")
+
+
+def normalisiere_jahre(termine: list) -> int:
+    """Setzt das Jahr jedes Termins auf das nächste Vorkommen von Tag+Monat.
+
+    Tag und Monat liest das Modell zuverlässig aus dem Dokument, das Jahr steht
+    dort meist nicht – am 2026-09-27 lieferte dieselbe Datei erst 2009, dann 2020,
+    beides aus Wochentags-Rückschlüssen. Ein Pfarrbrief kündigt künftige
+    Gottesdienste an, also ist das nächste Vorkommen die richtige Antwort. Diese
+    Regel ist deterministisch und damit dem Raten des Modells überlegen.
+
+    Preis dieser Entscheidung: ein Dokument, das absichtlich Rückschau hält,
+    würde nach vorn verschoben. Für Pfarrbriefe ist das kein realer Fall.
+
+    Gibt die Anzahl der korrigierten Termine zurück.
+    """
+    heute   = datetime.now().date()
+    fruehst = heute - timedelta(days=_JAHR_TOLERANZ_TAGE)
+    geaendert = 0
+    for t in termine:
+        rohdatum = t.get("datum") or ""
+        try:
+            d = datetime.strptime(rohdatum, "%Y-%m-%d").date()
+        except ValueError:
+            continue                      # unparsbar: unangetastet lassen
+        for jahr in (heute.year - 1, heute.year, heute.year + 1, heute.year + 2):
+            try:
+                kandidat = d.replace(year=jahr)
+            except ValueError:
+                continue                  # 29.02. in einem Nicht-Schaltjahr
+            if kandidat >= fruehst:
+                neu_datum = kandidat.isoformat()
+                if neu_datum != rohdatum:
+                    t["datum"] = neu_datum
+                    geaendert += 1
+                break
+    return geaendert
+
+
 def merge_termine(bestehende: list, neue: list, verworfen: list | None = None) -> list:
     """Fügt neue Termine hinzu und entfernt vergangene.
 
@@ -199,6 +256,17 @@ def main():
     # Termine extrahieren
     alle_termine = extract_gottesdienste(api_key, file_bytes, filename)
     print(f"   {len(alle_termine)} Termine gefunden")
+
+    # Rohergebnis sichern, BEVOR daran gerechnet wird – macht Folgeänderungen
+    # an der Jahreslogik ohne neuen Claude-Call prüfbar.
+    save_raw_dump(filename, alle_termine)
+
+    # Jahr deterministisch setzen. Das Modell liest Tag und Monat zuverlässig,
+    # das Jahr steht im Pfarrbrief meist nicht und wird geraten (2026-09-27:
+    # erst 2009, dann 2020 – beides Wochentags-Rückschlüsse).
+    korrigiert = normalisiere_jahre(alle_termine)
+    if korrigiert:
+        print(f"   🔧 {korrigiert} von {len(alle_termine)} Terminen: Jahr korrigiert")
 
     # Filtern
     hk = filter_hk(alle_termine)
