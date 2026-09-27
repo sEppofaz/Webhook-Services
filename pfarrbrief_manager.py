@@ -65,10 +65,20 @@ def extract_gottesdienste(api_key: str, file_bytes: bytes, filename: str) -> lis
     block_type = "document" if ext == ".pdf" else "image"
     data_b64   = b64mod.standard_b64encode(file_bytes).decode("utf-8")
 
-    prompt = """Lies dieses Dokument vollständig durch alle Seiten.
+    heute = datetime.now().strftime("%Y-%m-%d")
+    prompt = f"""Lies dieses Dokument vollständig durch alle Seiten.
 Extrahiere ALLE Gottesdienst-Termine. Achte besonders auf Ortsangaben wie Hölskofen und Paindlkofen.
 Gib das Ergebnis als JSON-Array zurück:
-[{"datum":"YYYY-MM-DD","uhrzeit":"HH:MM","ort":"Ortsname","art":"Art des Gottesdienstes"}]
+[{{"datum":"YYYY-MM-DD","uhrzeit":"HH:MM","ort":"Ortsname","art":"Art des Gottesdienstes"}}]
+
+Zum Jahr im Feld "datum" (heute ist {heute}):
+- Steht im Dokument ein Jahr (Titel, Gültigkeitszeitraum, Kopfzeile), nimm dieses.
+- Steht bei einem Termin nur Tag und Monat, ergänze das Jahr so, dass der Termin
+  NICHT in der Vergangenheit liegt – ein Pfarrbrief kündigt künftige Gottesdienste an.
+- Schließe NIEMALS vom Wochentag auf das Jahr. Ein Wochentag passt auf viele Jahre;
+  das führt zu Terminen, die Jahre zurückliegen.
+- Nur wenn das Dokument selbst erkennbar alt ist, dürfen Termine in der Vergangenheit liegen.
+
 Nur das JSON-Array, nichts anderes. Wenn kein Termin gefunden: []."""
 
     payload = json.dumps({
@@ -126,10 +136,26 @@ def load_gottesdienste() -> dict:
 
 
 def save_gottesdienste(data: dict) -> None:
+    # Vorherigen Stand sichern – am 2026-09-27 ging der Altstand bei einem
+    # manuellen Lauf verloren, weil write_text() direkt überschreibt.
+    if GOTTESDIENSTE_FILE.exists():
+        try:
+            GOTTESDIENSTE_FILE.with_suffix(".json.bak").write_text(
+                GOTTESDIENSTE_FILE.read_text()
+            )
+        except Exception as e:
+            print(f"   ⚠️ Backup fehlgeschlagen (nicht kritisch): {e}")
     GOTTESDIENSTE_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2))
 
 
-def merge_termine(bestehende: list, neue: list) -> list:
+def merge_termine(bestehende: list, neue: list, verworfen: list | None = None) -> list:
+    """Fügt neue Termine hinzu und entfernt vergangene.
+
+    `verworfen` sammelt (optional) die wegen Datum entfernten Termine. Ohne das
+    war der Filter stumm: am 2026-09-27 lieferte die Extraktion 21 Termine mit
+    Jahr 2009 (Wochentags-Rückschluss), alle wurden verworfen – die
+    Telegram-Meldung behauptete trotzdem Erfolg und listete sie auf.
+    """
     keys = {(t["datum"], t["uhrzeit"], t["ort"]) for t in bestehende}
     for t in neue:
         k = (t["datum"], t["uhrzeit"], t["ort"])
@@ -137,6 +163,11 @@ def merge_termine(bestehende: list, neue: list) -> list:
             bestehende.append(t)
             keys.add(k)
     heute = datetime.now().strftime("%Y-%m-%d")
+    if verworfen is not None:
+        # Nur die NEU gelieferten Termine melden. Würde man hier über `bestehende`
+        # laufen, meldete jeder normale Lauf auch die inzwischen abgelaufenen
+        # Termine aus der Datei als "ignoriert" – Dauer-Fehlalarm.
+        verworfen.extend(t for t in neue if t.get("datum", "") < heute)
     bestehende = [t for t in bestehende if t["datum"] >= heute]
     bestehende.sort(key=lambda t: (t["datum"], t["uhrzeit"]))
     return bestehende
@@ -171,12 +202,37 @@ def main():
     ok = filter_ok(alle_termine)
     print(f"   {len(hk)} Termine Hölskofen, {len(pk)} Paindlkofen, {len(ok)} Oberköllnbach")
 
+    # Plausibilitätsprüfung VOR Speichern und Verschieben.
+    # Ein Pfarrbrief kündigt künftige Gottesdienste an. Liegt kein einziger
+    # extrahierter Termin in der Zukunft, ist nicht der Pfarrbrief alt, sondern
+    # die Extraktion gescheitert (2026-09-27: alle 89 Termine mit Jahr 2009).
+    # Dann nichts speichern, nichts verschieben – sonst muss die Datei hinterher
+    # aus dem Zielordner zurückgeholt werden.
+    heute = datetime.now().strftime("%Y-%m-%d")
+    kuenftig = [t for t in alle_termine if t.get("datum", "") >= heute]
+    if alle_termine and not kuenftig:
+        jahre = sorted({(t.get("datum") or "????")[:4] for t in alle_termine})
+        print(f"   ❌ Kein einziger Termin in der Zukunft – Jahre im Ergebnis: {', '.join(jahre)}")
+        send_telegram(tg_token, chat_id,
+            f"❌ Pfarrbrief NICHT verarbeitet: {filename}\n\n"
+            f"{len(alle_termine)} Termine erkannt, aber keiner liegt in der Zukunft "
+            f"(Jahre im Ergebnis: {', '.join(jahre)}).\n\n"
+            f"Das ist ein Extraktionsfehler, kein alter Pfarrbrief. Es wurde nichts "
+            f"gespeichert, die Datei liegt unverändert an ihrem Platz.")
+        print("⚠️ Abgebrochen – nichts gespeichert, nichts verschoben")
+        return
+
     # Gottesdienste.json aktualisieren
+    verworfen: list = []
     data = load_gottesdienste()
-    data["hk"] = merge_termine(data["hk"], hk)
-    data["pk"] = merge_termine(data["pk"], pk)
-    data["ok"] = merge_termine(data["ok"], ok)
+    data["hk"] = merge_termine(data["hk"], hk, verworfen)
+    data["pk"] = merge_termine(data["pk"], pk, verworfen)
+    data["ok"] = merge_termine(data["ok"], ok, verworfen)
     save_gottesdienste(data)
+    gespeichert_hk = [t for t in data["hk"] if t in hk]
+    gespeichert_pk = [t for t in data["pk"] if t in pk]
+    if verworfen:
+        print(f"   ⚠️ {len(verworfen)} Termine wegen Datum in der Vergangenheit verworfen")
 
     # Pfarrbrief in Zielordner verschieben (Dateiname vom Rename-Job bereits korrekt)
     ziel_path = f"{DROPBOX_ZIELORDNER}/{filename}"
@@ -188,13 +244,18 @@ def main():
 
     # Telegram-Bestätigung
     zeilen = [f"📋 Pfarrbrief verarbeitet: {filename}\n"]
-    if hk or pk:
-        for t in sorted(hk + pk, key=lambda x: (x["datum"], x["uhrzeit"])):
+    if gespeichert_hk or gespeichert_pk:
+        for t in sorted(gespeichert_hk + gespeichert_pk, key=lambda x: (x["datum"], x["uhrzeit"])):
             datum = datetime.strptime(t["datum"], "%Y-%m-%d").strftime("%d.%m.%Y")
             zeilen.append(f"• {datum} {t['uhrzeit']} Uhr – {t['ort']}: {t['art']}")
     else:
-        zeilen.append("ℹ️ Keine Termine in Hölskofen/Paindlkofen.")
-    zeilen.append(f"\n📍 {len(ok)} Termine Oberköllnbach gespeichert (/Pfarrbrief-ok)")
+        zeilen.append("ℹ️ Keine künftigen Termine in Hölskofen/Paindlkofen gespeichert.")
+    zeilen.append(f"\n📍 {len([t for t in data['ok'] if t in ok])} Termine Oberköllnbach gespeichert (/Pfarrbrief-ok)")
+    if verworfen:
+        jahre = sorted({t["datum"][:4] for t in verworfen})
+        zeilen.append(f"\n⚠️ {len(verworfen)} Termine ignoriert (Datum in der Vergangenheit, "
+                      f"Jahre: {', '.join(jahre)}) – bei einem aktuellen Pfarrbrief ein Hinweis "
+                      f"auf falsch erkannte Jahre.")
 
     send_telegram(tg_token, chat_id, "\n".join(zeilen))
     print("✅ Fertig")

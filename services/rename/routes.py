@@ -215,8 +215,21 @@ Regeln:
                 else:
                     raise
 
-        if not re.match(r"^\d{4}[-_]", new_name):
-            log(f"⚠️  Ungültiger Name: {new_name!r} – übersprungen")
+        # Dieselbe Prüfung wie is_already_renamed() – bewusst identisch.
+        # Vorfall 2026-09-27: hier stand nur ^\d{4}[-_], wodurch "2026-11_Pfarrbrief.pdf"
+        # akzeptiert wurde. is_already_renamed() erkennt so einen Namen nicht als fertig,
+        # also löste die Umbenennung selbst den nächsten Webhook und damit einen weiteren
+        # Claude-Call aus – drei Läufe hintereinander, am Ende war das Datum aus dem Namen
+        # verschwunden. Jede Abweichung zwischen Schreib- und Leseprüfung ist eine Schleife.
+        if not is_already_renamed(new_name):
+            log(f"⚠️  Name entspricht nicht dem Namensschema, nicht umbenannt: {new_name!r}")
+            send_telegram(
+                TELEGRAM_CHAT_ID,
+                f"⚠️ Umbenennung abgebrochen: {filename}\n\n"
+                f"Vorgeschlagen war:\n{new_name}\n\n"
+                f"Das entspricht nicht dem Schema JJJJ-MM-TT_… (oder JJJJ_… für Jahreskalender). "
+                f"Die Datei bleibt unverändert liegen – bitte manuell benennen.",
+            )
             return
 
         folder   = str(Path(dropbox_path).parent)
