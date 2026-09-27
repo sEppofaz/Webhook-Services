@@ -99,7 +99,11 @@ Nur das JSON-Array, nichts anderes. Wenn kein Termin gefunden: []."""
             "content-type": "application/json",
         },
     )
-    with urllib.request.urlopen(req, timeout=60) as r:
+    # 60s waren zu knapp: ein 2,7-MB-Pfarrbrief mit ~90 Terminen lief am 2026-09-27
+    # in einen TimeoutError – der API-Call wird dabei trotzdem abgerechnet, das
+    # Ergebnis ist aber verloren. Bewusst KEIN automatischer Retry: jeder Versuch
+    # kostet erneut, ein stiller Wiederholungsloop würde unbemerkt Geld verbrennen.
+    with urllib.request.urlopen(req, timeout=300) as r:
         result = json.loads(r.read())
 
     text = result["content"][0]["text"].strip()
