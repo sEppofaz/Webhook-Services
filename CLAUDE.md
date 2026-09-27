@@ -281,9 +281,25 @@ und die Termine auflistete. Der Prompt gab kein Bezugsjahr mit; bei Einträgen w
 **2009**. `merge_termine()` filtert `datum >= heute` und verwarf damit korrekt alles – nur
 sagte es niemandem. Erfolgsmeldung ohne Ergebnis.
 
+**Die Streuung ist der eigentliche Befund:** Dieselbe Datei lieferte in drei Läufen drei
+verschiedene Jahre – **2009** (ohne Jahresangabe im Prompt), **2020** (mit heutigem Datum und
+ausdrücklichem Verbot des Wochentags-Rückschlusses) und **2026** (korrekt, derselbe Prompt).
+Ein verschärfter Prompt verringert die Wahrscheinlichkeit, schließt den Fehler aber nicht aus.
+Deshalb bestimmt jetzt der Code das Jahr – siehe `ADR/ADR-012`.
+
 **Was jetzt gilt:**
-- Der Prompt nennt das heutige Datum, verlangt das Jahr aus dem Dokument und **verbietet
-  ausdrücklich den Rückschluss vom Wochentag** (ein Wochentag passt auf viele Jahre).
+- **`normalisiere_jahre()` setzt das Jahr, nicht das Modell.** Tag und Monat bleiben, das Jahr
+  wird auf das **nächste Vorkommen** gesetzt (Toleranz: 30 Tage in die Vergangenheit,
+  `_JAHR_TOLERANZ_TAGE`). Über den Jahreswechsel hinweg korrekt: November → dieses Jahr,
+  Januar → nächstes. Ein 29.02. wandert ins nächste Schaltjahr. Unparsbare oder leere
+  Datumsfelder bleiben unangetastet. Idempotent – ein schon korrektes Jahr bleibt stehen.
+- **`save_raw_dump()` sichert das Rohergebnis** nach `pfarrbrief_last_raw.json`, **bevor**
+  daran gerechnet wird. Damit sind Änderungen an der Jahreslogik gegen echte Modellausgaben
+  prüfbar, **ohne** einen neuen Claude-Call. Ohne diesen Dump kostete jede Iteration Geld
+  (am 2026-09-27 drei Läufe auf einer Datei). Die Datei hält nur den **letzten** Lauf – für
+  einen Vergleich vorher wegkopieren.
+- Der Prompt nennt weiterhin das heutige Datum und verbietet den Wochentags-Rückschluss –
+  als erste Verteidigungslinie, nicht als Verlass.
 - **Plausibilitätsprüfung vor Speichern und Verschieben:** Liegt kein einziger extrahierter
   Termin in der Zukunft, ist die Extraktion gescheitert und nicht der Pfarrbrief alt. Das
   Skript bricht ab, speichert nichts, **verschiebt nichts** und meldet die gefundenen Jahre.
@@ -297,6 +313,16 @@ sagte es niemandem. Erfolgsmeldung ohne Ergebnis.
 **Zum Merken:** `gottesdienste.json` gehört `webhook:webhook`. `write_text()` schreibt
 in-place, ein Lauf als `root` kippt die Rechte also **nicht** – ein atomarer Write per
 `tempfile` + `os.replace()` würde es dagegen tun.
+
+**Weitere Fallen, alle am 2026-09-27 aufgetreten:**
+- **API-Timeout war 60s** – zu knapp für ein 2,7-MB-PDF mit ~90 Terminen, der Lauf endete im
+  `TimeoutError`. Jetzt 300s. **Bewusst kein automatischer Retry:** der Call wird trotzdem
+  abgerechnet, ein stiller Wiederholungsloop würde unbemerkt Geld verbrennen.
+- **Selbst-Move:** Bei einem Wiederholungslauf liegt die Datei schon in
+  `/Dokumente/Pfarrbriefe`. Ohne Prüfung hätte `files_move_v2(autorename=True)` eine Dublette
+  `… (1).pdf` angelegt. Quelle == Ziel wird jetzt erkannt.
+- **Die Extraktionsmenge schwankt** (89 / 67 / 91 Termine bei derselben Datei). Wer Zahlen
+  zwischen Läufen vergleicht, vergleicht keine stabile Größe.
 
 ---
 
