@@ -103,10 +103,12 @@ def _save_todo(text: str, kategorie: str = "pka") -> None:
         "nr": next_nr,
         "datum": datum,
         "aufgabe": text,
-        "prio": "niedrig",
+        "prio": "mittel",
         "kategorie": kategorie,
         "erledigt": False,
         "erledigt_am": None,
+        "faelligkeit": None,
+        "faelligkeit_uhrzeit": None,
     })
     dbx.files_upload(
         json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8"),
