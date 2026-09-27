@@ -239,6 +239,67 @@ Alle Jobs als `root`-Crontab. Timezone: `Europe/Berlin`. Logs: `/var/log/pka-*.l
 
 ---
 
+## ⚠️ Dateiname-Prüfung: Schreib- und Leseseite müssen identisch sein (Vorfall 2026-09-27)
+
+`rename_via_claude()` validiert den von Claude vorgeschlagenen Namen mit **derselben**
+Funktion `is_already_renamed()`, die auch `process_changes()` benutzt. Das ist keine
+Doppelung, sondern Absicht – siehe `ADR/ADR-011`.
+
+**Warum:** Vorher akzeptierte die Schreibseite jeden Namen mit `^\d{4}[-_]`, die Leseseite
+verlangte `YYYY-MM-DD_` oder `YYYY_`. `2026-11_Pfarrbrief.pdf` passierte die Umbenennung,
+wurde danach nicht als fertig erkannt – und **die Umbenennung selbst löst den nächsten
+Dropbox-Webhook aus**. Am 2026-09-27 wurde dieselbe Datei so dreimal umbenannt
+(`2026-11_Pfarrbrief` → `2026-11_bis_2026-12_Pfarrbrief` → `2026_Pfarrgemeinde_Pfarrbrief`),
+drei Claude-Calls statt einem, und im Endnamen fehlte das Datum komplett.
+
+**Konsequenz für künftige Änderungen:** Wer im Rename-Prompt eine **neue Namensform**
+einführt (wie damals `YYYY_Vereinsname_Jahreskalender`), muss `is_already_renamed()`
+mitändern. Sonst lehnt der Service korrekt erzeugte Namen ab und benennt nicht mehr um.
+Testrezept ohne API: Funktion per `ast` aus der Datei ziehen, gegen alle im Prompt
+beschriebenen Formen prüfen (Rechnung, Pfarrbrief-Zeitraum, Jahreskalender, Kontoauszug)
+**und** gegen Scanner-Rohnamen, die weiterhin als „offen" gelten müssen.
+
+Bei schemawidrigem Vorschlag wird nicht umbenannt: Telegram-Warnung, Datei bleibt liegen.
+Das ist der ruhige Zustand – ohne Ordneränderung kommt kein neuer Webhook, also kein
+weiterer Call.
+
+---
+
+## ⚠️ pfarrbrief_manager.py – Jahresbezug und stille Filter (Vorfall 2026-09-27)
+
+Aufruf ist **manuell**, mit dem Dropbox-Pfad als Argument – es gibt keinen automatischen
+Trigger:
+
+```bash
+/opt/rename-webhook/bin/python3 /opt/rename-webhook/pfarrbrief_manager.py '/Dokumente/Pfarrbriefe/<datei>.pdf'
+```
+
+**Der Vorfall:** 89 Termine erkannt, 21 davon in Hölskofen/Paindlkofen/Oberköllnbach –
+und **null gespeichert**, während die Telegram-Nachricht „Pfarrbrief verarbeitet" meldete
+und die Termine auflistete. Der Prompt gab kein Bezugsjahr mit; bei Einträgen wie
+„So., 1. November" schloss das Modell vom **Wochentag** auf das Jahr und landete bei
+**2009**. `merge_termine()` filtert `datum >= heute` und verwarf damit korrekt alles – nur
+sagte es niemandem. Erfolgsmeldung ohne Ergebnis.
+
+**Was jetzt gilt:**
+- Der Prompt nennt das heutige Datum, verlangt das Jahr aus dem Dokument und **verbietet
+  ausdrücklich den Rückschluss vom Wochentag** (ein Wochentag passt auf viele Jahre).
+- **Plausibilitätsprüfung vor Speichern und Verschieben:** Liegt kein einziger extrahierter
+  Termin in der Zukunft, ist die Extraktion gescheitert und nicht der Pfarrbrief alt. Das
+  Skript bricht ab, speichert nichts, **verschiebt nichts** und meldet die gefundenen Jahre.
+  Die Datei bleibt liegen und kann nach einer Prompt-Korrektur erneut verarbeitet werden.
+- `merge_termine()` sammelt verworfene Termine in einer Liste und nennt sie in der Meldung.
+  Bewusst nur die **neu gelieferten** – zählte man über `bestehende`, meldete jeder normale
+  Lauf die inzwischen abgelaufenen Termine aus der Datei als „ignoriert" (Dauer-Fehlalarm).
+- `save_gottesdienste()` legt vorher `gottesdienste.json.bak` an. `write_text()` überschreibt
+  direkt; am 2026-09-27 ging der Altstand bei einem manuellen Lauf verloren.
+
+**Zum Merken:** `gottesdienste.json` gehört `webhook:webhook`. `write_text()` schreibt
+in-place, ein Lauf als `root` kippt die Rechte also **nicht** – ein atomarer Write per
+`tempfile` + `os.replace()` würde es dagegen tun.
+
+---
+
 ## ⚠️ Globale Funktionen nicht durch lokale Variablen verdecken (Vorfall 2026-09-27)
 
 `kalender.html` hat **107 globale Funktionen** in einem einzigen `<script>`-Block. Eine lokale
