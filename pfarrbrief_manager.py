@@ -236,11 +236,17 @@ def main():
 
     # Pfarrbrief in Zielordner verschieben (Dateiname vom Rename-Job bereits korrekt)
     ziel_path = f"{DROPBOX_ZIELORDNER}/{filename}"
-    try:
-        dbx.files_move_v2(dropbox_path, ziel_path, autorename=True)
-        print(f"   Verschoben nach {ziel_path}")
-    except Exception as e:
-        print(f"   ⚠️ Verschieben fehlgeschlagen: {e}")
+    if dropbox_path.lower() == ziel_path.lower():
+        # Die Datei liegt schon im Zielordner – das ist der Normalfall bei einem
+        # Wiederholungslauf. Ohne diese Prüfung würde files_move_v2(autorename=True)
+        # eine Dublette "… (1).pdf" anlegen.
+        print(f"   Liegt bereits im Zielordner, kein Verschieben nötig")
+    else:
+        try:
+            dbx.files_move_v2(dropbox_path, ziel_path, autorename=True)
+            print(f"   Verschoben nach {ziel_path}")
+        except Exception as e:
+            print(f"   ⚠️ Verschieben fehlgeschlagen: {e}")
 
     # Telegram-Bestätigung
     zeilen = [f"📋 Pfarrbrief verarbeitet: {filename}\n"]
