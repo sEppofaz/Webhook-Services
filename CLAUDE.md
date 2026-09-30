@@ -315,12 +315,20 @@ python3 tests/test_geo.py --register  # Register mit Herkunft und Nutzung je Ort
   soll, gehört aus demselben Grund **nicht** in `kalender_core`.
 - **Kill-Switch:** Ohne `orte.json` liefert `geo_fuer_termin()` `None` → altes Verhalten.
 - **Register erweitern ist Faktenarbeit, nicht Codearbeit.** Eine falsche Gemeinde fällt
-  nicht auf, sie zeigt still die falschen Termine. Nie aus dem Gedächtnis befüllen. Und
-  zwei Nominatim-Fallstricke beachten (ausführlich in ADR-014): `municipality` liefert die
-  **Verwaltungsgemeinschaft** statt der Gemeinde, `village`/`town` den Ort selbst – die
-  Gemeinde steht verlässlich im **`display_name`** vor der VGem bzw. vor dem Landkreis.
-  Und jede Abfrage braucht Gemeinde + Landkreis im Suchstring, sonst trifft sie
-  gleichnamige Orte in ganz Bayern.
+  nicht auf, sie zeigt still die falschen Termine. Nie aus dem Gedächtnis befüllen.
+  Quellenrangfolge (ausführlich in ADR-014):
+  1. **BayernAtlas** (`geoportal.bayern.de/bayernatlas`) – amtliche Gemeinde- und
+     Gemarkungsgrenzen, für dieses Gebiet die verlässlichste Quelle. Bei Zweifeln fragen,
+     Josef schaut dort nach.
+  2. **Vereins-Metadaten** – massgeblich für die *Schreibweisen*, nicht für die
+     Zugehörigkeit (sie beschreiben teils den Zuständigkeitsbereich eines Vereins).
+  3. **Nominatim/OSM** – nur Lückenfüller. Zwei Fallstricke: `municipality` liefert die
+     **Verwaltungsgemeinschaft** statt der Gemeinde, `village`/`town` den Ort selbst –
+     verlässlich ist der **`display_name`** (Gemeinde steht vor der VGem bzw. vor dem
+     Landkreis). Und jede Abfrage braucht Gemeinde + Landkreis im Suchstring, sonst trifft
+     sie gleichnamige Orte in ganz Bayern. Kleine Ortsteile fehlen dort ganz.
+- Bestätigte Einträge tragen `geprueft: "<Datum>"`; `--register` weist sie aus, damit sie
+  nicht erneut geprüft werden.
 - **`t.ortschaft` ist als Ortsangabe unzuverlässig:** `heimat_import.py:398` schreibt dort
   die Gemeinde, wenn kein Ort erkannt wurde (`e.get("ortschaft","") or e["_gemeinde"]`).
   Unter den künftigen Terminen stand dort 41× „Ergoldsbach" und 38× „Bayerbach", aber nur
