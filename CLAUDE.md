@@ -98,6 +98,18 @@ Alle Jobs als `root`-Crontab. Timezone: `Europe/Berlin`. Logs: `/var/log/pka-*.l
 | täglich 06:30 | `logbuch_summary.py` | Logbuch-Eintrag per Telegram (nicht im Repo) |
 | täglich 18:00 | `event_reminder.py` | Erinnerung morgige Gottesdienste + Vereinstermine |
 | täglich 18:00 | `kalender_erinnerung.py` | Telegram-Erinnerungen für Bot-Abonnenten |
+
+**Die beiden 18:00-Jobs sind nicht dasselbe und nutzen verschiedene Bots** – bei „warum kam
+die Meldung über Bot X und nicht Y" zuerst hier nachsehen:
+
+| | `event_reminder.py` | `kalender_erinnerung.py` |
+|---|---|---|
+| Bot | `secrets["TOKEN"]` → **sEpp-hetzner-bot** (nur Josef) | `KALENDER_BOT_TOKEN` → **Veranstaltungen** (Abonnenten) |
+| Liest | `gottesdienste.json` **und** `vereinstermine.json` | **nur** `vereinstermine.json` |
+
+Gottesdienste aus `gottesdienste.json` erreichen die Abonnenten also **nicht**. Am
+2026-09-30 war das ein Glücksfall: 23 erfundene Messen gingen nur an Josef.
+
 | täglich 00:10, 20:00 | `kalender_report.py` | Vereinskalender-Bericht (verifiziert, DE) |
 | täglich 00:05 | `stats_collector.py` | Besucherstatistik → `page_stats`-Tabelle |
 | wöchentlich Mi 07:00 (`0 7 * * 3`) | `heimat_import.py` | heimat-info.de alle Gemeinden fetchen |
@@ -265,6 +277,31 @@ weiterer Call.
 
 ---
 
+## Pfarr-Termine: zwei Quellen, und der Ortschafts-Filter hängt am Verein
+
+**Zwei unabhängige Einspeisewege** beschreiben dieselbe Pfarrgemeinde:
+`pfarrbrief_manager.py` → `gottesdienste.json` (`hk`/`pk`/`ok`) und der Kalender-Import über
+Dropbox → `vereinstermine.json` unter `pfarrgemeinde*`. Bis 2026-09-30 unterdrückte ein
+Guard die erste Quelle vollständig, sobald die zweite irgendeinen `pfarrgemeinde*`-Key
+hatte – auch einen ohne künftige Termine. Seit ADR-013 werden beide über
+`shared/kalender_core.py::gottesdienste_eintraege()` zusammengeführt (Dublettenschlüssel
+`datum + uhrzeit + ort`), API und iCal-Feed nutzen dieselbe Funktion.
+
+**⚠️ Der Ortschafts-Filter im Frontend hängt am Verein, nicht am Termin.**
+`kalender.html:1642` filtert über `_ortOf[t.verein]`; `_ortOf` entsteht aus
+`meta[k].heimatort` und fällt, wenn der fehlt, auf das **letzte Wort des Labels** zurück
+(`_ortNameOf`, Zeile 761). Folgen:
+
+- „FF Hölskofen" → Ortschaft *Hölskofen* (über den Label-Fallback, ohne `heimatort`)
+- „Pfarrgemeinde Postau" → Ortschaft *Postau*
+
+Eine Pfarrei feiert aber reihum in allen Kirchen des Verbands. Ein Filter auf Ortschaft
+*Hölskofen* findet die Hölskofener Messe deshalb **nicht** – das Feld `ort` des Termins
+spielt für diesen Filter keine Rolle. Bei „Termin ist in der API, erscheint aber nicht in
+der App" ist das die erste Stelle zum Nachsehen.
+
+---
+
 ## ⚠️ pfarrbrief_manager.py – Jahresbezug und stille Filter (Vorfall 2026-09-27)
 
 Aufruf ist **manuell**, mit dem Dropbox-Pfad als Argument – es gibt keinen automatischen
@@ -319,6 +356,45 @@ Nach einem manuellen Lauf als `root` deshalb `ls -la /opt/rename-webhook/` prüf
 scheitert ein späterer Lauf als `webhook` still am Schreiben (der Backup-Fehler wird nur als
 Warnung ausgegeben). `pfarrbrief_last_raw.json` steht in `.gitignore`, damit `git status` im
 Deployment leer bleibt (Regel aus PKA-Todo #410).
+
+### ⚠️ Der Ort steht nur in der ersten Zeile des Tages (Vorfall 2026-09-30)
+
+Im Pfarrbrief hat ein Tag mehrere Zeilen, aber der Ortsname steht **einmal**:
+
+```
+Dienstag, 06.10
+Hölskofen 18.30 Oktoberrosenkranz
+19.00 hl. M. Alfons und Erika Gahr f. + Eltern
+```
+
+Die 19:00-Messe findet in Hölskofen statt – die Zeile beginnt direkt mit der Uhrzeit.
+Das Modell hat diesen Bezug nicht hergestellt und dort **konstant „Hölskofen" eingesetzt:
+25 Messen statt 2.** Begünstigt hat das der Prompt selbst, der lautete: „Achte besonders
+auf Ortsangaben wie Hölskofen und Paindlkofen." Die Rangfolge der Falschtreffer entsprach
+exakt der Reihenfolge der Nennung (Hölskofen 25×, Paindlkofen 11×) – klassisches Priming.
+
+**Regel: Im Prompt keine Ortsnamen als „besonders beachten" nennen.** Was man dem Modell
+als wichtig verkauft, setzt es im Zweifel ein, statt die Lücke zu melden. Der Prompt
+erklärt jetzt stattdessen die Ortsvererbung innerhalb eines Tages, weist „Keine
+Abendmesse" als terminlosen Tag aus und verlangt `""` statt eines geratenen Orts.
+
+**`pruefe_ortsverteilung()` als zweite Verteidigungslinie** warnt (ohne Abbruch), wenn ein
+Ort den zweithäufigsten um Faktor 1,8 übertrifft. Geprüft wird bewusst der **Abstand zum
+Zweiten, nicht der Anteil am Ganzen**: Hölskofen lag bei 27 % von 91 Terminen und wäre
+unter einer 30-%-Schwelle durchgerutscht. Gemessen an echten Daten – kaputter Lauf 25 zu 11
+(schlägt an), korrekter Pfarrbrief 16 zu 15 (bleibt still). „Keine Abendmesse" wird vorher
+herausgefiltert, sonst stünde es mit 13 selbst auf Platz 2.
+
+**Zur Fehlersuche:** Das PDF ist ein reiner Scan (`get_text()` liefert 0 Zeichen auf allen
+vier Seiten) – deshalb Vision. Zum Gegenlesen **ohne** neuen API-Call die Seiten rendern
+und selbst anschauen; die Seiten sind gedreht, Seite 1/3 brauchen `prerotate(270)`,
+Seite 2 ebenfalls, Seite 4 `prerotate(180)`:
+
+```python
+import fitz
+d = fitz.open("…/2026_Pfarrgemeinde_Pfarrbrief.pdf")
+pix = d[0].get_pixmap(matrix=fitz.Matrix(2.6, 2.6).prerotate(270))
+```
 
 **Weitere Fallen, alle am 2026-09-27 aufgetreten:**
 - **API-Timeout war 60s** – zu knapp für ein 2,7-MB-PDF mit ~90 Terminen, der Lauf endete im
