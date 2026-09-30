@@ -1,0 +1,403 @@
+[
+  {
+    "ort": "Adlkofen",
+    "plz": "84166",
+    "gemeinde": "Adlkofen",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": true,
+    "alias": []
+  },
+  {
+    "ort": "Ahrain",
+    "plz": "84051",
+    "gemeinde": "Essenbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": []
+  },
+  {
+    "ort": "Altdorf",
+    "plz": "84032",
+    "gemeinde": "Altdorf",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": true,
+    "alias": []
+  },
+  {
+    "ort": "Altheim",
+    "plz": "84051",
+    "gemeinde": "Essenbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": []
+  },
+  {
+    "ort": "Artlkofen",
+    "plz": "84051",
+    "gemeinde": "Essenbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": []
+  },
+  {
+    "ort": "Bayerbach",
+    "plz": "84092",
+    "gemeinde": "Bayerbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": true,
+    "alias": [
+      "Schloss Peuerbach",
+      "Schloß Peuerbach"
+    ]
+  },
+  {
+    "ort": "Ergolding",
+    "plz": "84030",
+    "gemeinde": "Ergolding",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": true,
+    "alias": []
+  },
+  {
+    "ort": "Ergoldsbach",
+    "plz": "84061",
+    "gemeinde": "Ergoldsbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": true,
+    "alias": []
+  },
+  {
+    "ort": "Essenbach",
+    "plz": "84051",
+    "gemeinde": "Essenbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": true,
+    "alias": []
+  },
+  {
+    "ort": "Feuchten",
+    "plz": "84092",
+    "gemeinde": "Bayerbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": []
+  },
+  {
+    "ort": "Furth",
+    "plz": "84095",
+    "gemeinde": "Obersüßbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": []
+  },
+  {
+    "ort": "Gerabach",
+    "plz": "84092",
+    "gemeinde": "Bayerbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": []
+  },
+  {
+    "ort": "Greilsberg",
+    "plz": "84092",
+    "gemeinde": "Bayerbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": []
+  },
+  {
+    "ort": "Grießenbach",
+    "plz": "84103",
+    "gemeinde": "Postau",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": []
+  },
+  {
+    "ort": "Hinzlbach",
+    "plz": "84187",
+    "gemeinde": "Weng",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": []
+  },
+  {
+    "ort": "Hölskofen",
+    "plz": "84092",
+    "gemeinde": "Bayerbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": []
+  },
+  {
+    "ort": "Iffelkofen",
+    "plz": "84061",
+    "gemeinde": "Ergoldsbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": []
+  },
+  {
+    "ort": "Jellenkofen",
+    "plz": "84061",
+    "gemeinde": "Ergoldsbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": []
+  },
+  {
+    "ort": "Kläham",
+    "plz": "84061",
+    "gemeinde": "Ergoldsbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": []
+  },
+  {
+    "ort": "Kumhausen",
+    "plz": "84036",
+    "gemeinde": "Kumhausen",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": true,
+    "alias": []
+  },
+  {
+    "ort": "Langenhettenbach",
+    "plz": "84061",
+    "gemeinde": "Ergoldsbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": []
+  },
+  {
+    "ort": "Martinshaun",
+    "plz": "84061",
+    "gemeinde": "Ergoldsbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": []
+  },
+  {
+    "ort": "Mausham",
+    "plz": "84092",
+    "gemeinde": "Bayerbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [
+      "Maush."
+    ]
+  },
+  {
+    "ort": "Mettenbach",
+    "plz": "84051",
+    "gemeinde": "Essenbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": []
+  },
+  {
+    "ort": "Mirskofen",
+    "plz": "84051",
+    "gemeinde": "Essenbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": []
+  },
+  {
+    "ort": "Moosthann",
+    "plz": "84103",
+    "gemeinde": "Postau",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": []
+  },
+  {
+    "ort": "Niederaichbach",
+    "plz": "84100",
+    "gemeinde": "Niederaichbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": true,
+    "alias": []
+  },
+  {
+    "ort": "Oberahrain",
+    "plz": "84051",
+    "gemeinde": "Essenbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": []
+  },
+  {
+    "ort": "Oberköllnbach",
+    "plz": "84103",
+    "gemeinde": "Postau",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": []
+  },
+  {
+    "ort": "Obermünchen",
+    "plz": "84101",
+    "gemeinde": "Obersüßbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": []
+  },
+  {
+    "ort": "Obersüßbach",
+    "plz": "84101",
+    "gemeinde": "Obersüßbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": true,
+    "alias": []
+  },
+  {
+    "ort": "Paindlkofen",
+    "plz": "84061",
+    "gemeinde": "Ergoldsbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": []
+  },
+  {
+    "ort": "Penk",
+    "plz": "84092",
+    "gemeinde": "Bayerbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": []
+  },
+  {
+    "ort": "Postau",
+    "plz": "84103",
+    "gemeinde": "Postau",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": true,
+    "alias": []
+  },
+  {
+    "ort": "Prinkofen",
+    "plz": "84061",
+    "gemeinde": "Ergoldsbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": []
+  },
+  {
+    "ort": "Reisbach",
+    "plz": "94419",
+    "gemeinde": "Reisbach",
+    "landkreis": "Landkreis Dingolfing-Landau",
+    "bundesland": "Bayern",
+    "hauptort": true,
+    "alias": []
+  },
+  {
+    "ort": "Siegensdorf",
+    "plz": "84061",
+    "gemeinde": "Ergoldsbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": []
+  },
+  {
+    "ort": "Unholzing",
+    "plz": "84103",
+    "gemeinde": "Postau",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": []
+  },
+  {
+    "ort": "Unterköllnbach",
+    "plz": "84103",
+    "gemeinde": "Postau",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": []
+  },
+  {
+    "ort": "Unterröhrenbach",
+    "plz": "84051",
+    "gemeinde": "Essenbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": []
+  },
+  {
+    "ort": "Veitsbuch",
+    "plz": "84187",
+    "gemeinde": "Weng",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": []
+  },
+  {
+    "ort": "Vilsheim",
+    "plz": "84186",
+    "gemeinde": "Vilsheim",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": true,
+    "alias": []
+  },
+  {
+    "ort": "Weng",
+    "plz": "84187",
+    "gemeinde": "Weng",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": true,
+    "alias": []
+  },
+  {
+    "ort": "Wörth a. d. Isar",
+    "plz": "84109",
+    "gemeinde": "Wörth a.d.Isar",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": true,
+    "alias": []
+  }
+]
