@@ -166,7 +166,12 @@ def register_anzeigen(termine, meta, labels):
     print("%-18s %-7s %-16s %-26s %-9s %-8s %s" %
           ("Ort", "PLZ", "Gemeinde", "Landkreis", "Hauptort", "Termine", "Alias / Beleg"))
     for e in sorted(register, key=lambda x: x["ort"]):
-        beleg = "aus Vereinsdaten" if heimat.get(e["ort"]) else "nur Nominatim – prüfen"
+        if e.get("geprueft"):
+            beleg = "von Josef bestätigt %s" % e["geprueft"]
+        elif heimat.get(e["ort"]):
+            beleg = "aus Vereinsdaten"
+        else:
+            beleg = "nur Nominatim – prüfen"
         alias = ", ".join(e.get("alias") or [])
         print("%-18s %-7s %-16s %-26s %-9s %-8s %s" % (
             e["ort"], e.get("plz") or "—", e.get("gemeinde", ""), e.get("landkreis", ""),

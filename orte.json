@@ -63,7 +63,8 @@
     "landkreis": "Landkreis Landshut",
     "bundesland": "Bayern",
     "hauptort": true,
-    "alias": []
+    "alias": [],
+    "geprueft": "2026-09-30"
   },
   {
     "ort": "Ergoldsbach",
@@ -162,7 +163,8 @@
     "landkreis": "Landkreis Landshut",
     "bundesland": "Bayern",
     "hauptort": false,
-    "alias": []
+    "alias": [],
+    "geprueft": "2026-09-30"
   },
   {
     "ort": "Kläham",
@@ -171,7 +173,8 @@
     "landkreis": "Landkreis Landshut",
     "bundesland": "Bayern",
     "hauptort": false,
-    "alias": []
+    "alias": [],
+    "geprueft": "2026-09-30"
   },
   {
     "ort": "Kumhausen",
@@ -198,7 +201,8 @@
     "landkreis": "Landkreis Landshut",
     "bundesland": "Bayern",
     "hauptort": false,
-    "alias": []
+    "alias": [],
+    "geprueft": "2026-09-30"
   },
   {
     "ort": "Mausham",
@@ -209,7 +213,8 @@
     "hauptort": false,
     "alias": [
       "Maush."
-    ]
+    ],
+    "geprueft": "2026-09-30"
   },
   {
     "ort": "Mettenbach",
@@ -218,7 +223,8 @@
     "landkreis": "Landkreis Landshut",
     "bundesland": "Bayern",
     "hauptort": false,
-    "alias": []
+    "alias": [],
+    "geprueft": "2026-09-30"
   },
   {
     "ort": "Mirskofen",
@@ -335,7 +341,8 @@
     "landkreis": "Landkreis Landshut",
     "bundesland": "Bayern",
     "hauptort": false,
-    "alias": []
+    "alias": [],
+    "geprueft": "2026-09-30"
   },
   {
     "ort": "Unholzing",
@@ -353,7 +360,8 @@
     "landkreis": "Landkreis Landshut",
     "bundesland": "Bayern",
     "hauptort": false,
-    "alias": []
+    "alias": [],
+    "geprueft": "2026-09-30"
   },
   {
     "ort": "Unterröhrenbach",
@@ -371,7 +379,8 @@
     "landkreis": "Landkreis Landshut",
     "bundesland": "Bayern",
     "hauptort": false,
-    "alias": []
+    "alias": [],
+    "geprueft": "2026-09-30"
   },
   {
     "ort": "Vilsheim",
