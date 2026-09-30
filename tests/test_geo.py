@@ -154,8 +154,32 @@ def bericht(termine, meta, labels):
             print("  %s  %-30s  %-14s -> %s" % (t["datum"], (t.get("ort") or "")[:30], h, ", ".join(o)))
 
 
+def register_anzeigen(termine, meta, labels):
+    """Das Register zur Durchsicht – mit Herkunft und Nutzung je Ort."""
+    from shared.geo import _lade
+    register, _ = _lade()
+    kuenftig = [t for t in termine if t.get("datum", "") >= STICHTAG]
+    nutzung = Counter(o for t in kuenftig for o in orte_von(t, meta, labels))
+    heimat = Counter(h for k, m in meta.items()
+                     if (h := heimatort_of(m, labels.get(k, ""))))
+    print("\norte.json – %d Orte" % len(register))
+    print("%-18s %-7s %-16s %-26s %-9s %-8s %s" %
+          ("Ort", "PLZ", "Gemeinde", "Landkreis", "Hauptort", "Termine", "Alias / Beleg"))
+    for e in sorted(register, key=lambda x: x["ort"]):
+        beleg = "aus Vereinsdaten" if heimat.get(e["ort"]) else "nur Nominatim – prüfen"
+        alias = ", ".join(e.get("alias") or [])
+        print("%-18s %-7s %-16s %-26s %-9s %-8s %s" % (
+            e["ort"], e.get("plz") or "—", e.get("gemeinde", ""), e.get("landkreis", ""),
+            "ja" if e.get("hauptort") else "", nutzung.get(e["ort"], 0) or "—",
+            (alias + "  " if alias else "") + beleg))
+    print("\nDatei: %s" % (Path(__file__).resolve().parent.parent / "orte.json"))
+
+
 def main():
     termine, meta, labels, rubriken = laden()
+    if "--register" in sys.argv:
+        register_anzeigen(termine, meta, labels)
+        return 0
     print("Fixture: %d Termine, %d Vereine" % (len(termine), len(labels)))
     test_regeln()
     test_abdeckung(termine, meta, labels)

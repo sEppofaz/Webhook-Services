@@ -287,18 +287,44 @@ hatte – auch einen ohne künftige Termine. Seit ADR-013 werden beide über
 `shared/kalender_core.py::gottesdienste_eintraege()` zusammengeführt (Dublettenschlüssel
 `datum + uhrzeit + ort`), API und iCal-Feed nutzen dieselbe Funktion.
 
-**⚠️ Der Ortschafts-Filter im Frontend hängt am Verein, nicht am Termin.**
-`kalender.html:1642` filtert über `_ortOf[t.verein]`; `_ortOf` entsteht aus
-`meta[k].heimatort` und fällt, wenn der fehlt, auf das **letzte Wort des Labels** zurück
-(`_ortNameOf`, Zeile 761). Folgen:
+**⚠️ Der Ortschafts-Filter im Frontend hängt noch am Verein, nicht am Termin.**
+`kalender.html:1631` filtert über `_ortOf[t.verein]` (Such-Chips: `:1642`); `_ortOf`
+entsteht aus `meta[k].heimatort` und fällt sonst auf das **letzte Wort des Labels** zurück
+(`_ortNameOf`, Zeile 761). Eine Pfarrei feiert aber reihum in allen Kirchen des Verbands –
+ein Filter auf Ortschaft *Hölskofen* findet die Hölskofener Messe deshalb **nicht**.
+Bei „Termin ist in der API, erscheint aber nicht in der App" ist das die erste Stelle
+zum Nachsehen.
 
-- „FF Hölskofen" → Ortschaft *Hölskofen* (über den Label-Fallback, ohne `heimatort`)
-- „Pfarrgemeinde Postau" → Ortschaft *Postau*
+**Die Ablösung ist vorbereitet (ADR-014, Stufe 0 fertig am 2026-09-30):**
 
-Eine Pfarrei feiert aber reihum in allen Kirchen des Verbands. Ein Filter auf Ortschaft
-*Hölskofen* findet die Hölskofener Messe deshalb **nicht** – das Feld `ort` des Termins
-spielt für diesen Filter keine Rolle. Bei „Termin ist in der API, erscheint aber nicht in
-der App" ist das die erste Stelle zum Nachsehen.
+| Datei | Zweck |
+|---|---|
+| `orte.json` | Ortsregister, 44 Orte mit PLZ, Gemeinde, Landkreis, Bundesland, `hauptort`, `alias` |
+| `shared/geo.py` | `geo_fuer_termin()` → `{orte, plz, gemeinden, landkreise, bundeslaender}` |
+| `tests/test_geo.py` | Offline-Abnahme gegen `tests/fixtures/termine.json` |
+
+```bash
+python3 tests/test_geo.py             # Prüfungen
+python3 tests/test_geo.py --bericht   # Differenzliste heute vs. neu
+python3 tests/test_geo.py --register  # Register mit Herkunft und Nutzung je Ort
+```
+
+- **`shared/geo.py` ist bewusst stdlib-only.** `kalender_core` erzwingt beim Import
+  `os.environ["CLAUDE_API_KEY"]` und zieht Dropbox/PIL mit – ein Resolver dort wäre ohne
+  Secrets nicht lauffähig und damit nicht offline testbar. Neue Logik, die getestet werden
+  soll, gehört aus demselben Grund **nicht** in `kalender_core`.
+- **Kill-Switch:** Ohne `orte.json` liefert `geo_fuer_termin()` `None` → altes Verhalten.
+- **Register erweitern ist Faktenarbeit, nicht Codearbeit.** Eine falsche Gemeinde fällt
+  nicht auf, sie zeigt still die falschen Termine. Nie aus dem Gedächtnis befüllen. Und
+  zwei Nominatim-Fallstricke beachten (ausführlich in ADR-014): `municipality` liefert die
+  **Verwaltungsgemeinschaft** statt der Gemeinde, `village`/`town` den Ort selbst – die
+  Gemeinde steht verlässlich im **`display_name`** vor der VGem bzw. vor dem Landkreis.
+  Und jede Abfrage braucht Gemeinde + Landkreis im Suchstring, sonst trifft sie
+  gleichnamige Orte in ganz Bayern.
+- **`t.ortschaft` ist als Ortsangabe unzuverlässig:** `heimat_import.py:398` schreibt dort
+  die Gemeinde, wenn kein Ort erkannt wurde (`e.get("ortschaft","") or e["_gemeinde"]`).
+  Unter den künftigen Terminen stand dort 41× „Ergoldsbach" und 38× „Bayerbach", aber nur
+  2× „Hölskofen". Nie ungeprüft als Ort übernehmen.
 
 ---
 
