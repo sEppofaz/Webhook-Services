@@ -14,7 +14,6 @@ from flask import Blueprint, Response, request
 
 from shared.vk_db import db_conn
 from shared.kalender_core import (
-    GOTTESDIENSTE_FILE,
     ICON_192_FILE,
     ICON_512_FILE,
     KALENDER_HTML_FILE,
@@ -22,12 +21,12 @@ from shared.kalender_core import (
     MEDIA_TYPES,
     VEREINSTERMINE_FILE,
     _HEIC_SUPPORTED,
-    _PG_KEYS,
     _PG_LABELS,
     _do_save_import,
     _make_verein_key,
     cleanup_stale_pending,
     find_similar_keys,
+    gottesdienste_eintraege,
     import_pdf_bytes,
     log,
     parse_excel_bytes,
@@ -875,28 +874,9 @@ def api_termine():
             t_public = {k: v for k, v in t.items() if k not in _TERMIN_INTERNE_FELDER}
             termine.append({**t_public, "verein": key})
 
-    _hat_pfarrgemeinde = any(k.startswith("pfarrgemeinde") for k in raw if not k.startswith("_"))
-    gf = GOTTESDIENSTE_FILE
-    if gf.exists() and not _hat_pfarrgemeinde:
-        try:
-            gd = json.loads(gf.read_text())
-            for bereich, items in gd.items():
-                if not isinstance(items, list):
-                    continue
-                vkey = _PG_KEYS.get(bereich)
-                if not vkey:
-                    continue
-                labels[vkey] = _PG_LABELS[vkey]
-                for t in items:
-                    termine.append({
-                        "datum":       t.get("datum", ""),
-                        "uhrzeit":     t.get("uhrzeit", ""),
-                        "ort":         t.get("ort", ""),
-                        "bezeichnung": t.get("art", ""),
-                        "verein":      vkey,
-                    })
-        except Exception as e:
-            log(f"⚠️  Gottesdienste in API: {e}")
+    for vkey, t in gottesdienste_eintraege(raw):
+        labels[vkey] = _PG_LABELS[vkey]
+        termine.append({**t, "verein": vkey})
 
     json_meta   = raw.get("_meta", {})
 
@@ -1129,29 +1109,10 @@ def api_ical_feed():
                 continue
             alle.append({**t, "_vkey": key})
 
-    _hat_pfarrgemeinde = any(k.startswith("pfarrgemeinde") for k in raw if not k.startswith("_"))
-    gf = GOTTESDIENSTE_FILE
-    if gf.exists() and not _hat_pfarrgemeinde and (not filter_vereine or filter_vereine & set(_PG_KEYS.values())):
-        try:
-            gd = json.loads(gf.read_text())
-            for bereich, items in gd.items():
-                if not isinstance(items, list):
-                    continue
-                vkey = _PG_KEYS.get(bereich)
-                if not vkey:
-                    continue
-                if filter_vereine and vkey not in filter_vereine:
-                    continue
-                for t in items:
-                    alle.append({
-                        "datum":       t.get("datum", ""),
-                        "uhrzeit":     t.get("uhrzeit", ""),
-                        "ort":         t.get("ort", ""),
-                        "bezeichnung": t.get("art", ""),
-                        "_vkey":       vkey,
-                    })
-        except Exception:
-            pass
+    for vkey, t in gottesdienste_eintraege(raw):
+        if filter_vereine and vkey not in filter_vereine:
+            continue
+        alle.append({**t, "_vkey": vkey})
 
     kuenftige = sorted(
         [t for t in alle if t.get("datum", "") >= heute.strftime("%Y-%m-%d")

@@ -48,6 +48,73 @@ _PG_LABELS = {"pfarrgemeinde": "Pfarrgemeinde Postau"}
 _kalender_pending: dict = {}
 
 
+def _gd_key(t: dict) -> tuple:
+    """Vergleichsschlüssel für Gottesdienst-Dubletten."""
+    return (
+        (t.get("datum") or "").strip(),
+        (t.get("uhrzeit") or "").strip(),
+        (t.get("ort") or "").strip().lower(),
+    )
+
+
+def gottesdienste_eintraege(raw: dict) -> list[tuple[str, dict]]:
+    """Termine aus `gottesdienste.json` als (verein_key, termin)-Paare.
+
+    Die Pfarrbrief-Termine haben zwei unabhängige Einspeisewege: den manuellen
+    `pfarrbrief_manager.py` (→ gottesdienste.json) und den Kalender-Import über
+    Dropbox (→ vereinstermine.json unter einem `pfarrgemeinde*`-Key). Bis
+    2026-09-30 schlossen die beiden sich gegenseitig aus: Sobald
+    vereinstermine.json IRGENDEINEN `pfarrgemeinde*`-Key enthielt, wurde
+    gottesdienste.json in API und iCal-Feed komplett unterdrückt – unabhängig
+    davon, ob dieser Key überhaupt künftige Termine hatte. Am 2026-09-30 war
+    genau das der Fall: `pfarrgemeinde_postaumoosthanno` endete am 12.07.2026,
+    und die App zeigte für Hölskofen deshalb gar nichts an, obwohl die aktuellen
+    Termine in gottesdienste.json standen.
+
+    Jetzt werden beide Quellen zusammengeführt und nur echte Dubletten
+    (gleiches Datum, gleiche Uhrzeit, gleicher Ort) verworfen. Damit bleiben
+    ältere `pfarrgemeinde*`-Einträge als Historie erhalten, ohne die aktuellen
+    Termine zu verdecken. Entdoppelt wird auch über die Bereiche hk/pk/ok
+    hinweg – derselbe Gottesdienst kann in mehreren stehen (wie in
+    `event_reminder.py`).
+    """
+    gf = GOTTESDIENSTE_FILE
+    if not gf.exists():
+        return []
+    try:
+        gd = json.loads(gf.read_text())
+    except Exception as e:
+        log(f"⚠️  Gottesdienste lesen: {e}")
+        return []
+
+    gesehen = {
+        _gd_key(t)
+        for key, events in raw.items()
+        if not key.startswith("_") and key.startswith("pfarrgemeinde") and isinstance(events, list)
+        for t in events
+    }
+
+    eintraege: list[tuple[str, dict]] = []
+    for bereich, items in gd.items():
+        if not isinstance(items, list):
+            continue
+        vkey = _PG_KEYS.get(bereich)
+        if not vkey:
+            continue
+        for t in items:
+            k = _gd_key(t)
+            if k in gesehen:
+                continue
+            gesehen.add(k)
+            eintraege.append((vkey, {
+                "datum":       t.get("datum", ""),
+                "uhrzeit":     t.get("uhrzeit", ""),
+                "ort":         t.get("ort", ""),
+                "bezeichnung": t.get("art", ""),
+            }))
+    return eintraege
+
+
 def log(msg: str) -> None:
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{ts}] {msg}", flush=True)

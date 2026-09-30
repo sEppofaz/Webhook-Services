@@ -67,9 +67,23 @@ def extract_gottesdienste(api_key: str, file_bytes: bytes, filename: str) -> lis
 
     heute = datetime.now().strftime("%Y-%m-%d")
     prompt = f"""Lies dieses Dokument vollständig durch alle Seiten.
-Extrahiere ALLE Gottesdienst-Termine. Achte besonders auf Ortsangaben wie Hölskofen und Paindlkofen.
+Extrahiere ALLE Gottesdienst-Termine.
 Gib das Ergebnis als JSON-Array zurück:
 [{{"datum":"YYYY-MM-DD","uhrzeit":"HH:MM","ort":"Ortsname","art":"Art des Gottesdienstes"}}]
+
+Zum Feld "ort" – der häufigste Fehler steckt hier:
+- Ein Tag hat oft mehrere Zeilen, aber der Ortsname steht nur EINMAL, nämlich in der
+  ersten Zeile des Tages. Beispiel:
+      Dienstag, 06.10
+      Hölskofen 18.30 Oktoberrosenkranz
+      19.00 hl. M. Alfons und Erika Gahr f. + Eltern
+  Beide Termine finden in Hölskofen statt. Beginnt eine Zeile direkt mit der Uhrzeit,
+  gilt der Ort der Zeile darüber – innerhalb desselben Tages.
+- Steht unter einem Datum "Keine Abendmesse", gibt es an diesem Tag keinen Abendtermin.
+  Gib für diesen Tag KEINE Messe aus.
+- Rate NIEMALS einen Ortsnamen. Lässt sich der Ort nicht aus dem Dokument belegen,
+  gib "" zurück. Ein leerer Ort ist richtig, ein erfundener ist ein Falschtermin,
+  zu dem Leute hinfahren.
 
 Zum Jahr im Feld "datum" (heute ist {heute}):
 - Steht im Dokument ein Jahr (Titel, Gültigkeitszeitraum, Kopfzeile), nimm dieses.
@@ -234,6 +248,46 @@ def merge_termine(bestehende: list, neue: list, verworfen: list | None = None) -
     return bestehende
 
 
+def pruefe_ortsverteilung(termine: list, faktor: float = 1.8, mindest: int = 8) -> str | None:
+    """Warnt, wenn ein Ort die übrigen unplausibel weit hinter sich lässt.
+
+    Die Abendmesse rotiert im Pfarrverband über rund acht Kirchen – die
+    Häufigkeiten der Orte liegen deshalb dicht beieinander. Ein Ort, der den
+    Zweitplatzierten klar abhängt, ist das Signatur-Muster einer erfundenen
+    Ortsangabe: Am 2026-09-27 stand der Ort im Pfarrbrief nur in der ersten
+    Zeile des Tages, die 19:00-Messe darunter begann direkt mit der Uhrzeit –
+    und das Modell setzte dort konstant "Hölskofen" ein, 25× statt 2×.
+    Begünstigt durch den damaligen Prompt, der Hölskofen und Paindlkofen
+    namentlich als "besonders beachten" nannte; die Reihenfolge der Nennung
+    entsprach exakt der Rangfolge der Falschtreffer (25× / 11×).
+
+    Geprüft wird bewusst der **Abstand zum Zweiten**, nicht der Anteil am
+    Ganzen: Der Anteil trennt nicht. Im kaputten Lauf lag Hölskofen bei 27 %
+    von 91 Terminen und wäre unter einer 30-%-Schwelle durchgerutscht.
+    Gemessen an echten Daten: kaputter Lauf 25 zu 11 (Faktor 2,3), korrekter
+    Pfarrbrief 16 zu 15 (Faktor 1,1). Die Schwelle 1,8 liegt dazwischen.
+
+    Gibt eine Warnzeile zurück oder None. Bricht bewusst NICHT ab: Die
+    Verteilung ist ein Verdacht, kein Beweis – anders als "kein Termin in der
+    Zukunft", wo die Extraktion nachweislich gescheitert ist.
+    """
+    from collections import Counter
+    # "Keine Abendmesse" ist kein Ort, sondern ein Tag ohne Termin – würde die
+    # Rangfolge verfälschen (im Lauf vom 2026-09-27 stand es mit 13 auf Platz 2).
+    orte = [o for t in termine
+            if (o := (t.get("ort") or "").strip()) and not o.lower().startswith("keine")]
+    zaehler = Counter(orte)
+    if len(zaehler) < 3:
+        return None
+    (ort, n), (_, zweiter) = zaehler.most_common(2)
+    if n < mindest or zweiter == 0 or n < faktor * zweiter:
+        return None
+    return (f"⚠️ Prüfen: „{ort}“ stellt {n} Termine, der nächsthäufigste Ort nur "
+            f"{zweiter}. Die Abendmesse rotiert über die Kirchen des Pfarrverbands – "
+            f"ein solcher Ausreißer deutet auf geratene Ortsangaben hin, typisch bei "
+            f"Zeilen, die im Pfarrbrief ohne Ortsnamen direkt mit der Uhrzeit beginnen.")
+
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: pfarrbrief_manager.py <dropbox_path>")
@@ -267,6 +321,11 @@ def main():
     korrigiert = normalisiere_jahre(alle_termine)
     if korrigiert:
         print(f"   🔧 {korrigiert} von {len(alle_termine)} Terminen: Jahr korrigiert")
+
+    # Ortsverteilung prüfen (nur Warnung, kein Abbruch – siehe Funktionsdoku)
+    ort_warnung = pruefe_ortsverteilung(alle_termine)
+    if ort_warnung:
+        print(f"   {ort_warnung}")
 
     # Filtern
     hk = filter_hk(alle_termine)
@@ -334,6 +393,8 @@ def main():
         zeilen.append(f"\n⚠️ {len(verworfen)} Termine ignoriert (Datum in der Vergangenheit, "
                       f"Jahre: {', '.join(jahre)}) – bei einem aktuellen Pfarrbrief ein Hinweis "
                       f"auf falsch erkannte Jahre.")
+    if ort_warnung:
+        zeilen.append(f"\n{ort_warnung}")
 
     send_telegram(tg_token, chat_id, "\n".join(zeilen))
     print("✅ Fertig")
