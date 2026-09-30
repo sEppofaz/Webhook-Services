@@ -145,7 +145,10 @@
     "landkreis": "Landkreis Landshut",
     "bundesland": "Bayern",
     "hauptort": false,
-    "alias": []
+    "alias": [
+      "Winklmoos"
+    ],
+    "geprueft": "2026-09-30"
   },
   {
     "ort": "Iffelkofen",
