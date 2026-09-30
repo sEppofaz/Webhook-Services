@@ -95,10 +95,10 @@
   {
     "ort": "Furth",
     "plz": "84095",
-    "gemeinde": "Obersüßbach",
+    "gemeinde": "Furth",
     "landkreis": "Landkreis Landshut",
     "bundesland": "Bayern",
-    "hauptort": false,
+    "hauptort": true,
     "alias": []
   },
   {
