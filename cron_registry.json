@@ -1,5 +1,5 @@
 {
-  "_hinweis": "Soll-Zustand aller Cronjobs. Ein Job steht automatisch unter Aufsicht, sobald er über cronwrap.py zum ersten Mal gelaufen ist (erster Heartbeat). `aktiv_seit` (ISO mit Uhrzeit) ist nur nötig, um einen Job schon VOR seinem ersten Heartbeat zu überwachen. Zeiten: Europe/Berlin, days: Mo=0 … So=6, fehlt = täglich. Noch nicht erfasst (Zeit/Takt laut Doku unklar): pip_update_audit (sonntags), e-Rechnungen-Retry (täglich), OrgKompass-Erinnerungen, cron.weekly/sicherheitsupdates, plz_update (Baustein B).",
+  "_hinweis": "Soll-Zustand aller Cronjobs. Ein Job steht automatisch unter Aufsicht, sobald er über cronwrap.py zum ersten Mal gelaufen ist (erster Heartbeat). `aktiv_seit` (ISO mit Uhrzeit) ist nur nötig, um einen Job schon VOR seinem ersten Heartbeat zu überwachen. Zeiten: Europe/Berlin, days: Mo=0 … So=6, fehlt = täglich. Noch nicht erfasst: update_geoip.sh (monatlich am 1., der Takt-Typ „Monatstag“ fehlt noch), plz_update (Baustein B), e-Rechnungen-Retry und OrgKompass-Erinnerungen (laufen nicht im Crontab, vermutlich App-intern). **pip_update_audit.py steht in keinem Crontab** (Stand 2026-10-02) – der in der Doku beschriebene Sonntagsreport läuft also nicht.",
   "jobs": [
     {
       "name": "logbuch_summary",
@@ -76,9 +76,7 @@
         3
       ],
       "projekt": "Verkehr",
-      "beschreibung": "Verkehrsinfo Di+Do",
-      "signal": "log",
-      "log_pfad": "/var/log/pka-traffic.log",
+      "beschreibung": "Verkehrsinfo Di+Do 06:00",
       "grace_min": 10,
       "aktiv_seit": null
     },
@@ -105,8 +103,6 @@
       ],
       "projekt": "Life-Doku",
       "beschreibung": "Export-Cron",
-      "signal": "log",
-      "log_pfad": "/var/log/pka-life-doku-export.log",
       "grace_min": 10,
       "aktiv_seit": null
     },
@@ -117,8 +113,6 @@
       ],
       "projekt": "Server",
       "beschreibung": "Server-Backup (SOPs/Server-Backup.md)",
-      "signal": "log",
-      "log_pfad": "/var/log/pka-backup.log",
       "max_laufzeit_min": 90,
       "grace_min": 10,
       "aktiv_seit": null
@@ -136,10 +130,10 @@
       "every_min": 10,
       "zeitfenster": [
         "06:00",
-        "22:00"
+        "22:50"
       ],
       "projekt": "Netatmo-Alert",
-      "beschreibung": "/etc/cron.d/netatmo-alert (6-22 Uhr, loggt nur bei Zustandswechsel)",
+      "beschreibung": "/etc/cron.d/netatmo-alert (*/10, Stunden 6-22, loggt nur bei Zustandswechsel)",
       "grace_min": 10,
       "aktiv_seit": null
     },
