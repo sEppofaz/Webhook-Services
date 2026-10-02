@@ -12,6 +12,7 @@ from pathlib import Path
 
 from flask import Blueprint, Response, request
 
+from shared.geo import geo_fuer_termin
 from shared.vk_db import db_conn
 from shared.kalender_core import (
     ICON_192_FILE,
@@ -905,6 +906,18 @@ def api_termine():
             merged_meta[key] = m
 
     rubriken    = {k: _get_rubrik(k, v, merged_meta.get(k, {})) for k, v in labels.items()}
+
+    # Geo-Zuordnung am Termin (ADR-014). Ein Fehler im Resolver darf die Terminliste nie kippen;
+    # ohne _geo (orte.json fehlt = Kill-Switch) fällt das Frontend auf das Verein-Verhalten zurück.
+    for t in termine:
+        try:
+            g = geo_fuer_termin(t, merged_meta.get(t["verein"]), labels.get(t["verein"], ""))
+        except Exception as ex:
+            log(f"⚠️  geo_fuer_termin: {ex}")
+            g = None
+        if g is not None:
+            t["_geo"] = g
+
     return (
         json.dumps({"labels": labels, "termine": termine, "meta": merged_meta,
                     "rubriken": rubriken}, ensure_ascii=False),
@@ -1114,10 +1127,20 @@ def api_ical_feed():
             continue
         alle.append({**t, "_vkey": vkey})
 
+    def _ort_passt(t):
+        if not filter_ort:
+            return True
+        # Ortschaft des Termins laut Register (ADR-014), sonst wie bisher Substring auf ort/ortschaft
+        try:
+            g = geo_fuer_termin(t, raw.get("_meta", {}).get(t.get("_vkey")), labels.get(t.get("_vkey"), ""))
+        except Exception:
+            g = None
+        if g and g.get("orte"):
+            return any(filter_ort == o.lower() for o in g["orte"]) or filter_ort in t.get("ort", "").lower()
+        return filter_ort in t.get("ort", "").lower() or filter_ort in t.get("ortschaft", "").lower()
+
     kuenftige = sorted(
-        [t for t in alle if t.get("datum", "") >= heute.strftime("%Y-%m-%d")
-         and (not filter_ort or filter_ort in t.get("ort", "").lower()
-              or filter_ort in t.get("ortschaft", "").lower())],
+        [t for t in alle if t.get("datum", "") >= heute.strftime("%Y-%m-%d") and _ort_passt(t)],
         key=lambda t: (t["datum"], t.get("uhrzeit", ""))
     )
 
