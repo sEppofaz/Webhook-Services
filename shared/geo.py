@@ -257,6 +257,17 @@ def postorte_fuer_plz(plz: str) -> list[str]:
     return list(((_lade_plz().get("plz") or {}).get(plz or "") or {}).get("p", []))
 
 
+def stadtteile_fuer_plz(plz: str) -> list[dict]:
+    """Stadtbezirke/-teile aus OSM (nur wo gepflegt): [{name, gemeinde, landkreis}]."""
+    d = _lade_plz()
+    gem = d.get("gemeinden") or {}
+    out = []
+    for name, ags in ((d.get("plz") or {}).get(plz or "") or {}).get("t", []):
+        if ags in gem:
+            out.append({"name": name, "gemeinde": gem[ags]["name"], "landkreis": gem[ags]["landkreis"]})
+    return out
+
+
 def _register_mit_name(name: str) -> list[dict]:
     """Alle Register-Einträge mit diesem Namen oder Alias (Namensgleichheit möglich)."""
     register, _ = _lade()
@@ -284,6 +295,8 @@ def orte_fuer_plz(plz: str) -> dict:
             namen.setdefault(e["ort"].casefold(), e["ort"])
     for g in gemeinden:
         namen.setdefault(g["name"].casefold(), g["name"])
+    for t in stadtteile_fuer_plz(plz):
+        namen.setdefault(t["name"].casefold(), t["name"])
     for p in postorte_fuer_plz(plz):
         # „Bayerbach bei Ergoldsbach" ist derselbe Ort wie „Bayerbach"
         if _gem_norm(p).casefold() not in namen:
@@ -314,6 +327,14 @@ def ortschaft_aufloesen(name: str, plz: str) -> dict:
         e = passend[0]
         return {"gemeinde": e.get("gemeinde", ""), "landkreis": e.get("landkreis", ""),
                 "hinweise": hinweise}
+    # Stadtbezirk/-teil dieser PLZ (OSM)? Gilt als bekannt – kein Register-Hinweis,
+    # sonst meldete jede Registrierung aus einer Großstadt „nicht im Register".
+    if not treffer:
+        teil = next((t for t in stadtteile_fuer_plz(plz)
+                     if t["name"].casefold() == (name or "").strip().casefold()), None)
+        if teil:
+            return {"gemeinde": teil["gemeinde"], "landkreis": teil["landkreis"], "hinweise": hinweise}
+
     # Ortschaft = Gemeindename dieser PLZ?
     n = _gem_norm(name).casefold()
     gleich = [g for g in gemeinden if g["name"].casefold() == n]

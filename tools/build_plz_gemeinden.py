@@ -12,7 +12,11 @@ Quelle (Josefs Wahl 2026-10-02, Gate A0 aus Todo #418): **OpenPLZ API**
   (~11.000 Gemeinden, ~230 Seitenabrufe).
 
 Ortsteile stehen **nicht** drin – die gibt es amtlich nicht bundesweit mit PLZ.
-Die kommen aus der kuratierten `orte.json` (ADR-014).
+Die kommen aus der kuratierten `orte.json` (ADR-014). **Ausnahme Städte:** Die
+OSM-Spalten `Borough` (Stadtbezirk) und `Suburb` (Stadtteil) werden je PLZ als
+`t` übernommen – gepflegt nur in rund 1.100 PLZ (Berlin, Hamburg, München, Köln,
+Stuttgart …), in Landshut/Regensburg/Nürnberg leer. Münchner Stadtteile sind dort
+nur Nummern („11.3“) und werden verworfen.
 
 Läuft lokal (Mac), nicht auf dem Server. Stdlib-only.
 
@@ -27,6 +31,7 @@ import csv
 import datetime
 import json
 import os
+import re
 import sys
 import tempfile
 import time
@@ -78,7 +83,6 @@ def gemeinde_name(amtlich: str) -> str:
     Bewusst nur die Zusätze, die Verwechslungen nicht auflösen: „a.d.Isar"
     bleibt, weil es Wörth a.d.Isar von Wörth a.d.Donau unterscheidet.
     """
-    import re
     s = amtlich.split(",")[0].strip()
     s = re.sub(r"\s+b\.\s*.+$", "", s)          # „b.Ergoldsbach", „b. Landshut"
     s = re.sub(r"\s+bei\s+.+$", "", s)
@@ -124,6 +128,7 @@ def lade_strassen(pfad: Path | None) -> Path:
 def baue(strassen: Path, gemeinden: dict) -> dict:
     zaehler = collections.defaultdict(collections.Counter)   # plz → Counter(ags)
     postorte = collections.defaultdict(collections.Counter)  # plz → Counter(Postort)
+    teile = collections.defaultdict(collections.Counter)     # plz → Counter((Stadtteil, ags))
     with open(strassen, encoding="utf-8", newline="") as f:
         for z in csv.DictReader(f):
             plz, ags = z.get("PostalCode", ""), z.get("RegionalKey", "")
@@ -132,6 +137,11 @@ def baue(strassen: Path, gemeinden: dict) -> dict:
             zaehler[plz][ags] += 1
             if z.get("Locality"):
                 postorte[plz][z["Locality"].strip()] += 1
+            for spalte in ("Borough", "Suburb"):
+                name = (z.get(spalte) or "").strip()
+                # Münchner Stadtteile sind Nummern („11.3“) – wertlos als Ortsangabe
+                if name and re.search(r"[A-Za-zÄÖÜäöüß]", name):
+                    teile[plz][(name, ags)] += 1
 
     plz_map, unbekannt = {}, set()
     for plz in sorted(zaehler):
@@ -147,14 +157,25 @@ def baue(strassen: Path, gemeinden: dict) -> dict:
             "g": bekannt,
             "p": [p for p, n in postorte[plz].most_common() if n >= MIN_STRASSEN or len(postorte[plz]) == 1],
         }
+        # Stadtbezirke/-teile: [Name, AGS], ohne Dubletten und ohne den Gemeindenamen selbst
+        t, gesehen = [], set()
+        for (name, ags), n in teile[plz].most_common():
+            if n < MIN_STRASSEN or ags not in bekannt or name.casefold() in gesehen \
+                    or name.casefold() == gemeinden[ags]["name"].casefold():
+                continue
+            gesehen.add(name.casefold())
+            t.append([name, ags])
+        if t:
+            plz_map[plz]["t"] = t
     genutzt = {a for e in plz_map.values() for a in e["g"]}
     if unbekannt:
         print(f"Warnung: {len(unbekannt)} Gemeindeschlüssel ohne Gemeinde-Eintrag (verworfen)", file=sys.stderr)
     return {
         "_quelle": "OpenPLZ API (openplzapi.org), Daten © OpenStreetMap-Mitwirkende, ODbL-1.0",
         "_stand": datetime.date.today().isoformat(),
-        "_hinweis": "Erzeugt mit tools/build_plz_gemeinden.py. g = Gemeindeschlüssel (AGS), p = Postorte. "
-                    "Ortsteile stehen in orte.json, nicht hier.",
+        "_hinweis": "Erzeugt mit tools/build_plz_gemeinden.py. g = Gemeindeschlüssel (AGS), p = Postorte, "
+                    "t = Stadtbezirke/-teile aus OSM [Name, AGS] (nur wo gepflegt). "
+                    "Ortsteile auf dem Land stehen in orte.json, nicht hier.",
         "plz": plz_map,
         "gemeinden": {a: gemeinden[a] for a in sorted(genutzt)},
     }

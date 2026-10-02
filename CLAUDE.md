@@ -322,7 +322,7 @@ Der iCal-Feed filtert `?ort=` über dieselbe Zuordnung (exakter Ortsname), der F
 | `orte_frei.json` | **Orte** (alles Mögliche: Lokale, Gebäude, falsche Schreibweisen) → Ortschaft. Winklmoos → Hölskofen. Wird vor `orte.json` geprüft |
 | `shared/geo.py` | `geo_fuer_termin()` → `{orte, plz, gemeinden, landkreise, bundeslaender}` |
 | `tests/test_geo.py` | Offline-Abnahme gegen `tests/fixtures/termine.json` (inkl. PLZ-Prüfungen) |
-| `plz_gemeinden.json` | **PLZ → Gemeinde(n)**, Landkreis, Bundesland, Postorte – bundesweit, aus OpenPLZ (ODbL). Keine Ortsteile. Neu bauen: `python3 tools/build_plz_gemeinden.py` (lokal, ~230 API-Abrufe) |
+| `plz_gemeinden.json` | **PLZ → Gemeinde(n)**, Landkreis, Bundesland, Postorte – bundesweit, aus OpenPLZ (ODbL). Seit v1.31 zusätzlich `t` = Stadtbezirke/-teile aus OSM (`Borough`/`Suburb`, ≥ 2 Straßen, Nummern wie Münchens „11.3“ verworfen) für ~2.800 PLZ – in Landshut/Regensburg/Nürnberg leer. Ein gewählter Stadtteil gilt als bekannt (kein Telegram-Hinweis). Ländliche Ortsteile weiter aus `orte.json`. Neu bauen: `python3 tools/build_plz_gemeinden.py` (lokal, ~230 API-Abrufe) |
 
 ```bash
 python3 tests/test_geo.py             # Prüfungen

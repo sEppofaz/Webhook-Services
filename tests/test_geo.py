@@ -224,6 +224,18 @@ def test_plz():
     pruefe(a["gemeinde"] == "" and any("mehreren Gemeinden" in h for h in a["hinweise"]),
            "mehrdeutige PLZ → leer (Rückfall Nominatim) + Hinweis", a)
 
+    # Städte: Stadtbezirke/-teile aus OSM
+    orte = g.orte_fuer_plz("80807")["orte"]
+    pruefe("Schwabing-Freimann" in orte and "Milbertshofen-Am Hart" in orte and "München" in orte,
+           "80807 bietet Schwabing-Freimann und Milbertshofen-Am Hart an", orte)
+    pruefe(not any(c.isdigit() for o in orte for c in o), "keine Münchner Stadtteilnummern („11.3“)", orte)
+    pruefe("Ramersdorf-Perlach" not in g.orte_fuer_plz("81825")["orte"],
+           "Ausreißer mit nur einer Straße entfällt (81825)")
+    a = g.ortschaft_aufloesen("Schwabing-Freimann", "80807")
+    pruefe((a["gemeinde"], a["landkreis"], a["hinweise"]) == ("München", "Stadt München", []),
+           "Stadtteil → München, kein Register-Hinweis", a)
+    pruefe(g.stadtteile_fuer_plz("84092") == [], "Land (84092): keine OSM-Stadtteile, Register zählt")
+
     alt = g._plz_daten
     g._plz_daten = {}
     try:
