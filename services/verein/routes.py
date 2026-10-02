@@ -12,7 +12,7 @@ from flask import Blueprint, make_response, redirect, request
 from shared.kalender_store import KalenderStore
 from shared.kalender_core import (
     VEREINSTERMINE_FILE, _HEIC_SUPPORTED, _do_save_import,
-    cleanup_stale_pending, import_pdf_bytes, lookup_plz, parse_excel_bytes,
+    cleanup_stale_pending, import_pdf_bytes, parse_excel_bytes,
 )
 from shared.flyer_store import upload_flyer, delete_flyer
 from shared.csrf import csrf_field, get_csrf_token, validate_csrf
@@ -20,7 +20,11 @@ from shared.vk_db import (
     db_conn, get_session_user, log_audit,
     get_upload_count, increment_upload_quota,
 )
-from services.auth.routes import _CSS, _page, _session_token, require_verein_login
+from services.auth.routes import (
+    _CSS, _ORTSCHAFT_JS, _PLZ_QUELLE, _ortschaft_felder, _page, _session_token,
+    _telegram_ortschaft_hinweis, ortschaft_geo, require_verein_login,
+)
+from shared.geo import plz_gueltig
 
 verein_bp = Blueprint("verein", __name__)
 
@@ -875,18 +879,15 @@ def verein_profil(user):
             error = "Vereinsname muss mindestens 3 Zeichen haben."
         elif new_rubrik not in RUBRIKEN:
             error = "Bitte eine gültige Rubrik wählen."
+        elif not plz_gueltig(new_plz):
+            error = "Bitte die PLZ angeben (5 Ziffern, z.B. 84092)."
         elif not new_heimatort or len(new_heimatort) < 2:
-            error = "Bitte einen Heimatort angeben."
-        elif new_plz and not re.match(r"^\d{5}$", new_plz):
-            error = "PLZ muss 5 Ziffern haben."
+            error = "Bitte die Ortschaft angeben."
         else:
-            new_gemeinde = new_landkreis = ""
-            if new_plz and new_plz != plz:
-                geo = lookup_plz(new_plz)
-                new_gemeinde  = geo.get("gemeinde", "")
-                new_landkreis = geo.get("landkreis", "")
-            elif not new_plz:
-                new_gemeinde = new_landkreis = ""
+            if new_plz != plz or new_heimatort != heimatort or not gemeinde:
+                new_gemeinde, new_landkreis, hinweise = ortschaft_geo(new_heimatort, new_plz)
+                if hinweise:
+                    _telegram_ortschaft_hinweis(new_name, new_plz, new_heimatort, hinweise)
             else:
                 new_gemeinde  = gemeinde
                 new_landkreis = landkreis
@@ -936,14 +937,13 @@ def verein_profil(user):
   <select name="rubrik" required>
     {rubrik_opts}
   </select>
-  <label>Heimatort</label>
-  <input name="heimatort" type="text" required placeholder="z.B. Musterdorf" value="{html.escape(heimatort)}">
-  <label>PLZ <span class="hint">(optional)</span></label>
-  <input name="plz" type="text" inputmode="numeric" maxlength="5" placeholder="z.B. 83308" value="{html.escape(plz)}">
+{_ortschaft_felder(plz, heimatort)}
   {geo_hint}
   <label>Telefon Ansprechpartner <span class="hint">(optional)</span></label>
   <input name="telefon" type="tel" autocomplete="tel" placeholder="z.B. 0172 1234567" value="{html.escape(telefon or '')}">
   <button class="btn" type="submit">Speichern</button>
 </form>
-{_BACK_DASH}"""
+{_BACK_DASH}
+{_PLZ_QUELLE}
+{_ORTSCHAFT_JS}"""
     return _page("Vereinsprofil", body)

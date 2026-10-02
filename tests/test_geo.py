@@ -185,6 +185,56 @@ def test_killswitch():
         g._register, g._muster = alt_reg, alt_mus
 
 
+# ── Registrierung: PLZ → Ortschaft (Todo #418) ──────────────────────────────
+def test_plz():
+    print("\nRegistrierung PLZ → Ortschaft")
+    import shared.geo as g
+    pruefe(g._lade_plz().get("plz"), "plz_gemeinden.json vorhanden und lesbar")
+    gem = g.gemeinden_fuer_plz("84092")
+    pruefe([(x["name"], x["landkreis"]) for x in gem] == [("Bayerbach", "Landkreis Landshut")],
+           "84092 → Bayerbach, Landkreis Landshut", gem)
+    pruefe([x["landkreis"] for x in g.gemeinden_fuer_plz("94137")] == ["Landkreis Rottal-Inn"],
+           "94137 → das andere Bayerbach (Rottal-Inn)")
+    pruefe({x["landkreis"] for x in g.gemeinden_fuer_plz("84036")} == {"Stadt Landshut", "Landkreis Landshut"},
+           "84036 → zwei Gemeinden, Stadt und Landkreis getrennt")
+    pruefe(g.gemeinden_fuer_plz("10115") and g.gemeinden_fuer_plz("20095"),
+           "Stadtstaaten Berlin/Hamburg vorhanden")
+    pruefe(g.gemeinden_fuer_plz("99999") == [], "unbekannte PLZ → leer")
+
+    orte = g.orte_fuer_plz("84092")["orte"]
+    pruefe("Hölskofen" in orte and "Winkelmoos" in orte and "Bayerbach" in orte,
+           "Vorschläge 84092 enthalten Hölskofen, Winkelmoos, Bayerbach")
+    pruefe("Paindlkofen" not in orte, "Vorschläge 84092 ohne Ortschaften anderer PLZ")
+    pruefe("Bayerbach bei Ergoldsbach" not in orte, "Postort-Dublette „bei …“ entfällt")
+    pruefe(g.orte_fuer_plz("8409")["orte"] == [], "ungültige PLZ → keine Vorschläge")
+
+    a = g.ortschaft_aufloesen("Hölskofen", "84092")
+    pruefe((a["gemeinde"], a["landkreis"], a["hinweise"]) == ("Bayerbach", "Landkreis Landshut", []),
+           "Hölskofen/84092 → Bayerbach ohne Hinweis", a)
+    a = g.ortschaft_aufloesen("Hölskofen", "84061")
+    pruefe(a["gemeinde"] == "Ergoldsbach" and any("passt nicht" in h for h in a["hinweise"]),
+           "falsche PLZ → Gemeinde aus der PLZ, Hinweis „passt nicht“", a)
+    a = g.ortschaft_aufloesen("Bayerbach", "94137")
+    pruefe(a["landkreis"] == "Landkreis Rottal-Inn" and not any("passt nicht" in h for h in a["hinweise"]),
+           "gleichnamiger Ort anderswo → kein „passt nicht“", a)
+    a = g.ortschaft_aufloesen("Musterdorf", "84092")
+    pruefe(a["gemeinde"] == "Bayerbach" and any("nicht im Register" in h for h in a["hinweise"]),
+           "unbekannte Ortschaft → Gemeinde der PLZ + Hinweis", a)
+    a = g.ortschaft_aufloesen("Irgendwo", "84036")
+    pruefe(a["gemeinde"] == "" and any("mehreren Gemeinden" in h for h in a["hinweise"]),
+           "mehrdeutige PLZ → leer (Rückfall Nominatim) + Hinweis", a)
+
+    alt = g._plz_daten
+    g._plz_daten = {}
+    try:
+        pruefe(g.ortschaft_aufloesen("Musterdorf", "84092")["gemeinde"] == "",
+               "Kill-Switch: ohne Schnappschuss leer → Rückfall Nominatim")
+        pruefe(g.orte_fuer_plz("84092")["orte"][:1] == ["Bayerbach"],
+               "Kill-Switch: Vorschläge weiter aus orte.json")
+    finally:
+        g._plz_daten = alt
+
+
 # ── Bericht ─────────────────────────────────────────────────────────────────
 def ohne_treffer(termine):
     """Veranstaltungsorte ohne Registertreffer – fehlende Orte werden sichtbar."""
@@ -253,6 +303,7 @@ def main():
     test_kernfaelle(termine, meta, labels, rubriken)
     test_orte_und_ortschaften()
     test_killswitch()
+    test_plz()
     ohne_treffer(termine)
     if "--bericht" in sys.argv:
         bericht(termine, meta, labels)

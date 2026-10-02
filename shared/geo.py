@@ -214,3 +214,121 @@ def geo_fuer_termin(termin: dict, meta_eintrag: dict | None = None,
         "landkreise":    sammeln("landkreis"),
         "bundeslaender": sammeln("bundesland"),
     }
+
+
+# ── Registrierung: PLZ → Gemeinde → Ortschaft (Todo #418, Baustein A) ─────────
+#
+# Zwei Schichten: `plz_gemeinden.json` (amtlich, bundesweit, aus OpenPLZ, ODbL)
+# kennt PLZ → Gemeinde(n), Landkreis, Bundesland und Postorte – aber keine
+# Ortsteile. Die kommen aus `orte.json`. Ohne Schnappschuss-Datei (Kill-Switch)
+# fällt die Registrierung auf `lookup_plz()` (Nominatim) zurück wie bisher.
+
+PLZ_FILE = Path(__file__).resolve().parent.parent / "plz_gemeinden.json"
+_plz_daten: dict | None = None
+
+
+def _lade_plz() -> dict:
+    global _plz_daten
+    if _plz_daten is None:
+        try:
+            _plz_daten = json.loads(PLZ_FILE.read_text(encoding="utf-8"))
+            if not isinstance(_plz_daten, dict):
+                _plz_daten = {}
+        except Exception:
+            _plz_daten = {}
+    return _plz_daten
+
+
+def plz_gueltig(plz: str) -> bool:
+    return bool(re.fullmatch(r"\d{5}", plz or ""))
+
+
+def gemeinden_fuer_plz(plz: str) -> list[dict]:
+    """Gemeinden einer PLZ: [{name, landkreis, bundesland}], leer wenn unbekannt."""
+    d = _lade_plz()
+    eintrag = (d.get("plz") or {}).get(plz or "")
+    if not eintrag:
+        return []
+    gem = d.get("gemeinden") or {}
+    return [dict(gem[a]) for a in eintrag.get("g", []) if a in gem]
+
+
+def postorte_fuer_plz(plz: str) -> list[str]:
+    return list(((_lade_plz().get("plz") or {}).get(plz or "") or {}).get("p", []))
+
+
+def _register_mit_name(name: str) -> list[dict]:
+    """Alle Register-Einträge mit diesem Namen oder Alias (Namensgleichheit möglich)."""
+    register, _ = _lade()
+    n = (name or "").strip().casefold()
+    if not n:
+        return []
+    return [e for e in register
+            if e.get("ort", "").casefold() == n
+            or any(a.casefold() == n for a in (e.get("alias") or []))]
+
+
+def orte_fuer_plz(plz: str) -> dict:
+    """Vorschläge fürs Formular: Ortschaften (Register) + Gemeinde- und Postortnamen.
+
+    Aus dem Register nur Einträge mit genau dieser PLZ – eine Gemeinde mit
+    mehreren PLZ bietet so nur die Ortschaften an, die zur eingegebenen gehören.
+    """
+    if not plz_gueltig(plz):
+        return {"plz": plz, "bekannt": False, "gemeinden": [], "orte": []}
+    register, _ = _lade()
+    gemeinden = gemeinden_fuer_plz(plz)
+    namen: dict[str, str] = {}
+    for e in register:
+        if e.get("plz") == plz and e.get("ort"):
+            namen.setdefault(e["ort"].casefold(), e["ort"])
+    for g in gemeinden:
+        namen.setdefault(g["name"].casefold(), g["name"])
+    for p in postorte_fuer_plz(plz):
+        # „Bayerbach bei Ergoldsbach" ist derselbe Ort wie „Bayerbach"
+        if _gem_norm(p).casefold() not in namen:
+            namen.setdefault(p.casefold(), p)
+    return {
+        "plz": plz,
+        "bekannt": bool(gemeinden) or bool(namen),
+        "gemeinden": [{"name": g["name"], "landkreis": g["landkreis"]} for g in gemeinden],
+        "orte": sorted(namen.values(), key=str.casefold),
+    }
+
+
+def ortschaft_aufloesen(name: str, plz: str) -> dict:
+    """Gemeinde/Landkreis zu Ortschaft + PLZ, dazu Hinweise für Josef.
+
+    Rückgabe `{gemeinde, landkreis, hinweise: [..]}`. Leere `gemeinde` heisst:
+    nicht eindeutig bestimmbar → Aufrufer fällt auf `lookup_plz()` zurück.
+    Lehnt nie ab – die Hinweise gehen in die Telegram-Freigabemeldung.
+    """
+    hinweise: list[str] = []
+    gemeinden = gemeinden_fuer_plz(plz)
+    if not gemeinden and _lade_plz():
+        hinweise.append(f"PLZ {plz} ist im PLZ-Verzeichnis unbekannt.")
+
+    treffer = _register_mit_name(name)
+    passend = [e for e in treffer if e.get("plz") == plz]
+    if passend:
+        e = passend[0]
+        return {"gemeinde": e.get("gemeinde", ""), "landkreis": e.get("landkreis", ""),
+                "hinweise": hinweise}
+    # Ortschaft = Gemeindename dieser PLZ?
+    n = _gem_norm(name).casefold()
+    gleich = [g for g in gemeinden if g["name"].casefold() == n]
+    if treffer and not gleich:
+        hinweise.append(f"PLZ {plz} passt nicht zur Ortschaft „{name}“ "
+                        f"(Register: {treffer[0].get('plz')} {treffer[0].get('gemeinde')}).")
+    else:
+        # auch bei Namensgleichheit mit einem Register-Ort anderswo
+        # (Bayerbach 94137, Landkreis Rottal-Inn ≠ Bayerbach 84092)
+        hinweise.append(f"Ortschaft „{name}“ ({plz}) steht nicht im Register (orte.json).")
+
+    wahl = gleich[0] if gleich else (gemeinden[0] if len(gemeinden) == 1 else None)
+    if wahl:
+        return {"gemeinde": wahl["name"], "landkreis": wahl["landkreis"], "hinweise": hinweise}
+    if len(gemeinden) > 1:
+        hinweise.append("PLZ gehört zu mehreren Gemeinden ("
+                        + ", ".join(g["name"] for g in gemeinden) + ") – Gemeinde bitte prüfen.")
+    return {"gemeinde": "", "landkreis": "", "hinweise": hinweise}

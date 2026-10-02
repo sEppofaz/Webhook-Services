@@ -9,7 +9,7 @@ from difflib import SequenceMatcher
 from functools import wraps
 
 import bcrypt
-from flask import Blueprint, make_response, redirect, request
+from flask import Blueprint, jsonify, make_response, redirect, request
 
 from shared.vk_db import SESSION_TIMEOUT_HOURS, create_session, db_conn, delete_session, get_session_user, init_db
 from shared.kalender_core import lookup_plz, _make_verein_key
@@ -20,7 +20,8 @@ from shared.vk_mail import (
     send_verify_email,
     send_welcome_email,
 )
-from shared.flask_notify import send_telegram_inline
+from shared.flask_notify import send_telegram, send_telegram_inline
+from shared.geo import orte_fuer_plz, ortschaft_aufloesen, plz_gueltig
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -170,12 +171,17 @@ def _valid_email(email: str) -> bool:
 
 
 def _telegram_approve_msg(verein_id: int, verein_name: str, email: str,
-                           rubrik: str = "", heimatort: str = "", telefon: str = "") -> None:
+                           rubrik: str = "", heimatort: str = "", telefon: str = "",
+                           plz: str = "", gemeinde: str = "", landkreis: str = "",
+                           hinweise: list[str] | None = None) -> None:
     lines = [f"🏛 Neuer Verein wartet auf Freigabe:\n<b>{verein_name}</b>"]
     if rubrik:
         lines.append(f"Rubrik: {rubrik}")
     if heimatort:
-        lines.append(f"Ort: {heimatort}")
+        lines.append(f"Ort: {plz} {heimatort}".replace("  ", " ").strip()
+                     + (f" ({gemeinde}, {landkreis})" if gemeinde else ""))
+    for h in hinweise or []:
+        lines.append(f"⚠️ {h}")
     lines.append(f"E-Mail: {email}")
     if telefon:
         lines.append(f"Telefon: {telefon}")
@@ -238,6 +244,84 @@ def _telegram_suggest_links(verein_id: int, verein_name: str, verein_key: str) -
 
 # ── Register ────────────────────────────────────────────────────────────────
 
+# ── PLZ + Ortschaft (Todo #418, ADR-016) ─────────────────────────────────────
+# Erst die PLZ, dann die Ortschaft mit Vorschlagsliste (<datalist>) aus
+# /api/orte. Freitext bleibt erlaubt; unbekannte Ortschaften gehen als Hinweis
+# an Josef (Telegram), abgelehnt wird nie. Genutzt von Registrierung und Profil.
+_ORTSCHAFT_JS = """<script>
+(function(){
+  var plz=document.querySelector('input[name=plz]'),ort=document.querySelector('input[name=heimatort]');
+  var liste=document.getElementById('ort-liste'),info=document.getElementById('plz-info');
+  if(!plz||!ort||!liste||!info)return;
+  var zuletzt='',ctl=null;
+  function zeige(t,warn){info.textContent=t;info.style.color=warn?'#ff9f0a':'#8e8e93';}
+  function laden(){
+    var v=plz.value.trim();
+    if(!/^\\d{5}$/.test(v)){if(v!==zuletzt){liste.innerHTML='';zeige('',false);}zuletzt=v;return;}
+    if(v===zuletzt)return;zuletzt=v;
+    if(ctl)ctl.abort();ctl=('AbortController' in window)?new AbortController():null;
+    fetch('/api/orte?plz='+v,ctl?{signal:ctl.signal}:{}).then(function(r){return r.json();}).then(function(d){
+      if(d.plz!==plz.value.trim())return;
+      liste.innerHTML='';
+      (d.orte||[]).forEach(function(o){var op=document.createElement('option');op.value=o;liste.appendChild(op);});
+      if(d.gemeinden&&d.gemeinden.length){
+        zeige(d.gemeinden.map(function(g){return g.name+' · '+g.landkreis;}).join(' / '),false);
+      }else{zeige('Diese PLZ kennen wir nicht. Bitte prüfen – speichern geht trotzdem.',true);}
+    }).catch(function(){});
+  }
+  plz.addEventListener('input',laden);plz.addEventListener('change',laden);laden();
+})();
+</script>"""
+
+
+def _telegram_ortschaft_hinweis(verein_name: str, plz: str, ort: str, hinweise: list[str]) -> None:
+    """Profiländerung mit unbekannter/unpassender Ortschaft → kurze Meldung an Josef."""
+    text = (f"📍 Vereinsprofil geändert: {verein_name}\n"
+            f"Ort: {plz} {ort}\n"
+            + "\n".join(f"⚠️ {h}" for h in hinweise))
+    try:
+        send_telegram(os.environ.get("CHAT_ID", ""), text)
+    except Exception:
+        pass
+
+
+def _ortschaft_felder(plz: str, heimatort: str) -> str:
+    """PLZ- und Ortschaftsfeld, beide Pflicht. DB-Feld bleibt `heimatort`."""
+    return f"""
+  <label>PLZ</label>
+  <input name="plz" type="text" inputmode="numeric" pattern="[0-9]{{5}}" maxlength="5" required autocomplete="postal-code" placeholder="z.B. 84092" value="{html.escape(plz)}">
+  <p class="hint" id="plz-info" aria-live="polite" style="margin:.35rem 0 0"></p>
+  <label>Ortschaft <span class="hint">(Heimatort des Vereins)</span></label>
+  <input name="heimatort" type="text" required list="ort-liste" autocomplete="off" placeholder="erst PLZ eingeben, dann auswählen" value="{html.escape(heimatort)}">
+  <datalist id="ort-liste"></datalist>
+  <p class="hint" style="margin:.35rem 0 0">Deine Ortschaft steht nicht in der Liste? Einfach eintippen.</p>"""
+
+
+_PLZ_QUELLE = ('<p class="hint">PLZ-Verzeichnis: <a href="https://www.openplzapi.org/">OpenPLZ API</a>, '
+               '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap-Mitwirkende</a>, ODbL.</p>')
+
+
+def ortschaft_geo(heimatort: str, plz: str) -> tuple[str, str, list[str]]:
+    """Gemeinde, Landkreis, Hinweise – Register/Schnappschuss, sonst Nominatim."""
+    r = ortschaft_aufloesen(heimatort, plz)
+    gemeinde, landkreis = r["gemeinde"], r["landkreis"]
+    if not gemeinde:
+        geo = lookup_plz(plz)
+        gemeinde, landkreis = geo.get("gemeinde", ""), geo.get("landkreis", "")
+    return gemeinde, landkreis, r["hinweise"]
+
+
+@auth_bp.route("/api/orte", methods=["GET"])
+def api_orte():
+    """Öffentlich, nur lesend: Gemeinden + Ortschafts-Vorschläge zu einer PLZ."""
+    plz = (request.args.get("plz") or "").strip()
+    if not plz_gueltig(plz):
+        return jsonify({"plz": plz, "bekannt": False, "gemeinden": [], "orte": []}), 400
+    resp = jsonify(orte_fuer_plz(plz))
+    resp.headers["Cache-Control"] = "public, max-age=3600"
+    return resp
+
+
 @auth_bp.route("/verein/register", methods=["GET", "POST"])
 def register():
     error = ""
@@ -264,10 +348,10 @@ def register():
             error = "Bitte eine gültige E-Mail-Adresse eingeben."
         elif rubrik not in RUBRIKEN:
             error = "Bitte eine gültige Rubrik auswählen."
+        elif not plz_gueltig(plz):
+            error = "PLZ muss 5 Ziffern haben (z.B. 84092)."
         elif not heimatort or len(heimatort) < 2:
-            error = "Bitte den Heimatort des Vereins angeben."
-        elif not plz or not re.match(r"^\d{5}$", plz):
-            error = "PLZ muss 5 Ziffern haben (z.B. 83308)."
+            error = "Bitte die Ortschaft des Vereins angeben."
         elif not telefon:
             error = "Bitte eine Telefonnummer für Rückfragen angeben."
         elif len(pw) < 8:
@@ -293,10 +377,7 @@ def register():
                     break
 
         if not error:
-            gemeinde = landkreis = ""
-            geo = lookup_plz(plz)
-            gemeinde  = geo.get("gemeinde", "")
-            landkreis = geo.get("landkreis", "")
+            gemeinde, landkreis, hinweise = ortschaft_geo(heimatort, plz)
             with db_conn() as conn:
                 verein_row = conn.execute(
                     """INSERT INTO vereine_accounts
@@ -320,7 +401,9 @@ def register():
                 )
             send_verify_email(email, token)
             _telegram_approve_msg(verein_id, verein_name, email,
-                                  rubrik=rubrik, heimatort=heimatort, telefon=telefon)
+                                  rubrik=rubrik, heimatort=heimatort, telefon=telefon,
+                                  plz=plz, gemeinde=gemeinde, landkreis=landkreis,
+                                  hinweise=hinweise)
             threading.Thread(
                 target=_telegram_suggest_links,
                 args=(verein_id, verein_name, verein_key),
@@ -373,10 +456,7 @@ def register():
     <option value="">– bitte wählen –</option>
     {rubrik_opts}
   </select>
-  <label>Heimatort</label>
-  <input name="heimatort" type="text" required placeholder="z.B. Musterdorf" value="{html.escape(form_data.get('heimatort', ''))}">
-  <label>PLZ</label>
-  <input name="plz" type="text" inputmode="numeric" maxlength="5" required placeholder="z.B. 83308" value="{html.escape(form_data.get('plz', ''))}">
+{_ortschaft_felder(form_data.get('plz', ''), form_data.get('heimatort', ''))}
   <label>E-Mail (Ansprechpartner)</label>
   <input name="email" type="text" inputmode="email" autocorrect="off" autocapitalize="none" required autocomplete="email" placeholder="vorstand@beispiel.de" value="{html.escape(form_data.get('email', ''))}">
   <label>Telefon Ansprechpartner</label>
@@ -405,6 +485,8 @@ def register():
 <hr>
 <p class="hint">Bereits registriert? <a href="/verein/login">Zum Login</a></p>
 <p class="hint"><a href="/verein/datenschutz">Datenschutzerklärung</a> · <a href="/verein/nutzungsbedingungen">Nutzungsbedingungen</a></p>
+{_PLZ_QUELLE}
+{_ORTSCHAFT_JS}
 <script>
 document.querySelector('form').addEventListener('submit',function(e){{
   this.querySelectorAll('.field-err').forEach(f=>f.classList.remove('field-err'));
