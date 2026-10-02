@@ -98,11 +98,32 @@ hr{border:none;border-top:1px solid #3a3a3c;margin:1.5rem 0}
 _BACK = '<a class="btn btn-sec" href="/verein/login" style="margin-top:.75rem">← Zurück zum Login</a>'
 
 
+_PW_TOGGLE_JS = """<script>
+/* Auge-Symbol an jedem Passwortfeld (Progressive Enhancement). Felder, die schon in .pw-wrap
+   stehen (Registrierung), bleiben unberührt. */
+(function(){
+  var EYE='<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>',OFF='<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+  function setze(inp,b,zeigen){inp.type=zeigen?'text':'password';b.innerHTML=zeigen?OFF:EYE;
+    b.setAttribute('aria-pressed',zeigen?'true':'false');b.setAttribute('aria-label',zeigen?'Passwort verbergen':'Passwort anzeigen');}
+  var paare=[];
+  document.querySelectorAll('input[type=password]').forEach(function(inp){
+    if(inp.closest('.pw-wrap'))return;
+    var w=document.createElement('div');w.className='pw-wrap';
+    inp.parentNode.insertBefore(w,inp);w.appendChild(inp);
+    var b=document.createElement('button');b.type='button';b.className='pw-toggle';b.tabIndex=-1;
+    w.appendChild(b);setze(inp,b,false);paare.push([inp,b]);
+    b.addEventListener('click',function(){setze(inp,b,inp.type==='password');});
+  });
+  /* Beim Zurück-Navigieren (Bfcache) nie offen im Klartext stehen lassen */
+  window.addEventListener('pageshow',function(){paare.forEach(function(p){setze(p[0],p[1],false);});});
+})();
+</script>"""
+
 def _page(title: str, body: str) -> str:
     return f"""<!doctype html><html lang="de"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{title} – Vereinskalender</title>{_CSS}</head>
-<body><h1>{title}</h1>{body}</body></html>"""
+<body><h1>{title}</h1>{body}{_PW_TOGGLE_JS}</body></html>"""
 
 
 def _session_token() -> str:

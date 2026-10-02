@@ -151,6 +151,9 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
 .pw-gate input{width:100%;max-width:320px;padding:12px 16px;border:1.5px solid var(--border2);border-radius:12px;font-size:16px;background:var(--bg);color:var(--text);outline:none;text-align:center;letter-spacing:2px}
 .pw-gate button{width:100%;max-width:320px;padding:13px;background:var(--accent);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer}
 .pw-gate button:active{opacity:.8}
+.pw-field{position:relative;width:100%;max-width:320px}
+.pw-field input{max-width:none;padding-right:44px}
+.pw-gate .pw-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:36px;height:36px;max-width:none;padding:0;background:none;color:var(--text3);display:flex;align-items:center;justify-content:center;border-radius:8px}
 .pw-err{font-size:13px;color:#ff3b30;min-height:18px}
 
 /* ── Version label ── */
@@ -299,7 +302,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
   </div>
   <div class="hdr-right" style="display:flex;align-items:center;gap:6px">
     <div class="hdr-ver" style="display:flex;flex-direction:column;align-items:flex-end;gap:1px">
-      <span class="ver-lbl" style="margin-right:0">v1.27</span>
+      <span class="ver-lbl" style="margin-right:0">v1.28</span>
       <span style="font-size:9px;color:rgba(255,255,255,.28);letter-spacing:.2px;line-height:1">a sEpp-App</span>
     </div>
     <a class="refresh-btn" id="verein-login-btn" href="/verein/login" title="Vereins-Login oder Registrierung" style="width:auto;padding:0 10px;font-size:13px;font-weight:600;letter-spacing:.3px;text-decoration:none;white-space:nowrap">Login</a>
@@ -428,7 +431,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title" style="width:55%"></div><div class="sk-line sk-ort"></div></div>
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title"></div><div class="sk-line sk-ort" style="width:30%"></div></div>
     </div>
-    <p class="version">Vereinskalender &middot; v1.27 &middot; 2026-10-02 &middot; a sEpp-App</p>
+    <p class="version">Vereinskalender &middot; v1.28 &middot; 2026-10-02 &middot; a sEpp-App</p>
     <p style="font-size:11px;color:var(--text3);text-align:center;padding:0 0 24px;line-height:2">&#127807; Hosting in Finnland mit &Ouml;kostrom &middot; Werbefrei &middot; DSGVO-konform</p>
   </div>
 
@@ -441,8 +444,9 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
       <form id="pw-form" onsubmit="checkPassword();return false" autocomplete="on">
         <input type="text" name="username" autocomplete="username"
                style="display:none" value="admin" aria-hidden="true">
-        <input type="password" id="pw-input" name="password" placeholder="Passwort"
+        <div class="pw-field"><input type="password" id="pw-input" name="password" placeholder="Passwort"
                autocomplete="current-password">
+        <button type="button" class="pw-eye" onclick="togglePwEye(this)" tabindex="-1" aria-label="Passwort anzeigen" aria-pressed="false"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
         <div class="pw-err" id="pw-err"></div>
         <button type="submit">&#214;ffnen</button>
       </form>
@@ -642,6 +646,8 @@ const WD=["So","Mo","Di","Mi","Do","Fr","Sa"];
 const MO=["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
 const ZEIT_LBL={"zukunft":"Künftig","-14":"14 Tage zurück","-30":"30 Tage zurück","30":"Nächste 30 Tage","90":"3 Monate","365":"1 Jahr","alle":"Alle"};
 const ICON_PATHS={
+  eye:`<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>`,
+  eyeOff:`<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>`,
   x:`<path d="M18 6 6 18"/><path d="m6 6 12 12"/>`,
   house:`<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`,
   mail:`<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>`,
@@ -1823,6 +1829,15 @@ function toggleImport(){
   }
 }
 
+function togglePwEye(b){
+  const inp=document.getElementById("pw-input");
+  const zeigen=inp.type==="password";
+  inp.type=zeigen?"text":"password";
+  b.innerHTML=icon(zeigen?"eyeOff":"eye",20);
+  b.setAttribute("aria-pressed",zeigen?"true":"false");
+  b.setAttribute("aria-label",zeigen?"Passwort verbergen":"Passwort anzeigen");
+}
+window.addEventListener("pageshow",()=>{const i=document.getElementById("pw-input"),b=document.querySelector(".pw-eye");if(i&&i.type==="text"&&b)togglePwEye(b);});
 async function checkPassword(){
   const pw=document.getElementById("pw-input").value;
   const err=document.getElementById("pw-err");
