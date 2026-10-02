@@ -757,7 +757,7 @@ function _migrateRegionFavorites(){
    Chip-Schlüssel = Anzeige-Label: "Weng" – bei Namensgleichheit in mehreren Gemeinden "Weng (Postau)".
    Ohne Kollision identisch mit dem bisherigen Schlüssel (kein Migrationsbedarf).
    _meta[key].ortschaft_gemeinde überschreibt die Gemeinde nur für die Ortschaft-Zuordnung. */
-let _ortOf={},_ortBase={},_ortGem={};
+let _ortOf={},_ortBase={},_ortGem={},_geoLbl={};
 function _ortNameOf(k){
   const h=(meta[k]||{}).heimatort;
   if(h)return h;
@@ -777,6 +777,7 @@ function _ortGemeindeOf(k){
 }
 function _prepareOrtschaften(){
   _ortOf={};_ortBase={};_ortGem={};allOrteAll={};
+  allT.forEach(t=>{delete t._ortL;});
   const byName={};  // Ortsname → {Gemeinde-Schlüssel: [verein_keys]}
   new Set([...Object.keys(labels),...Object.keys(meta)]).forEach(k=>{
     const n=_ortNameOf(k);
@@ -785,6 +786,13 @@ function _prepareOrtschaften(){
     const grp=byName[n]=byName[n]||{};
     (grp[g]=grp[g]||[]).push(k);
   });
+  // Orte der Termine (ADR-014): auch Orte ohne Verein-Heimatort werden Chips (Paindlkofen, Veitsbuch …)
+  allT.forEach(t=>((t._geo||{}).ortschaften||[]).forEach(o=>{
+    const g=_gemNormName(o.gemeinde)?_gemNormName(o.gemeinde)+"|"+(o.landkreis||"Landkreis Landshut"):"";
+    const grp=byName[o.ort]=byName[o.ort]||{};
+    if(!grp[g])grp[g]=[];
+  }));
+  _geoLbl={};
   Object.entries(byName).forEach(([n,groups])=>{
     const gems=Object.keys(groups).filter(Boolean);
     // Vereine ohne Gemeinde → größte Gemeinde-Gruppe dieses Ortsnamens
@@ -796,12 +804,27 @@ function _prepareOrtschaften(){
       const lbl=gems.length>1?((gl===n||gl.startsWith(n+" ("))?gl:n+" ("+gl+")"):n;
       _ortBase[lbl]=n;
       _ortGem[lbl]=eff;  // effektive Gemeinde (inkl. Override) für die Filter-Kaskade
+      _geoLbl[n+"\u0001"+g]=lbl;
+      if(!allOrteAll[lbl])allOrteAll[lbl]=[];
       ks.forEach(k=>{
         _ortOf[k]=lbl;
         if(labels[k])(allOrteAll[lbl]=allOrteAll[lbl]||[]).push(k);
       });
     });
   });
+}
+/* Ortschaft-Labels eines Termins (ADR-014): der Ort des Termins, nicht der Heimatort des Vereins.
+   Mehrere möglich (Kläranlage Bayerbach/Penk) – der Termin bleibt trotzdem ein Eintrag, der Filter greift bei jedem.
+   Ohne `_geo` (orte.json fehlt = Kill-Switch) Rückfall auf den Heimatort des Vereins, also das alte Verhalten. */
+function _terminOrte(t){
+  if(t._ortL)return t._ortL;
+  const o=((t._geo||{}).ortschaften||[]);
+  let l=o.map(x=>{
+    const gn=_gemNormName(x.gemeinde);
+    return _geoLbl[x.ort+"\u0001"+(gn?gn+"|"+(x.landkreis||"Landkreis Landshut"):"")];
+  }).filter(Boolean);
+  if(!o.length&&_ortOf[t.verein])l=[_ortOf[t.verein]];
+  return t._ortL=l;
 }
 // Alter Ortschaft-Name (localStorage) → aktuelle Labels (nur relevant, wenn ein Name inzwischen mehrdeutig ist)
 function _ortKeysForOld(o){
@@ -1446,7 +1469,8 @@ function openFavIcalFeed(){
   favorites.forEach(f=>{
     if(f.type==="verein"){keys.add(f.key);}
     else if(f.type==="ortschaft"){
-      Object.keys(_ortOf).forEach(k=>{if(_ortOf[k]===f.key)keys.add(k);});
+      // Vereine, die dort Termine haben (Ort des Termins, ADR-014) – der Feed filtert noch nach Verein, nicht nach Ort
+      allT.forEach(t=>{if(_terminOrte(t).includes(f.key))keys.add(t.verein);});
     }
     else if(f.type==="gemeinde"){
       Object.keys(_gemOf).forEach(k=>{if(_gemOf[k]===f.key)keys.add(k);});
@@ -1583,7 +1607,7 @@ function _termMatchFav(t,f){
   if(!activeFavs.has(f.type+":"+String(f.key)))return false;
   const k=t.verein;
   if(f.type==="verein")return k===f.key;
-  if(f.type==="ort"||f.type==="ortschaft")return _ortOf[k]===f.key;
+  if(f.type==="ort"||f.type==="ortschaft")return _terminOrte(t).includes(f.key);
   if(f.type==="region")return _regionForVerein(k)===f.key;
   if(f.type==="gemeinde")return(_gemOf[k]||"")===f.key;
   return false;
@@ -1628,7 +1652,7 @@ function render(){
     if(aktRubrikSet.size>0){const r=rubriken[t.verein]||"Verein";if(!aktRubrikSet.has(r))return false;}
     if(aktLandkreis!==null&&_regionForVerein(t.verein)!==aktLandkreis)return false;
     if(aktGemeinden.size>0&&!aktGemeinden.has(_gemOf[t.verein]||""))return false;
-    if(aktOrte.size>0&&!aktOrte.has(_ortOf[t.verein]))return false;
+    if(aktOrte.size>0&&!_terminOrte(t).some(o=>aktOrte.has(o)))return false;
     return true;
   });
 
@@ -1639,7 +1663,7 @@ function render(){
     const tChips=searchChips.filter(c=>c.type==="termin");
     out=out.filter(t=>{
       if(vChips.length>0&&!vChips.some(c=>t.verein===c.key))return false;
-      if(oChips.length>0&&!oChips.some(c=>_ortOf[t.verein]===c.key))return false;
+      if(oChips.length>0&&!oChips.some(c=>_terminOrte(t).includes(c.key)))return false;
       if(tChips.length>0){
         const match=tChips.some(c=>{
           const orig=allT[c.key];
@@ -1657,7 +1681,8 @@ function render(){
       const bez=t.bezeichnung.toLowerCase();
       const ort=(t.ort||"").toLowerCase();
       const lbl=(labels[t.verein]||"").toLowerCase();
-      return bez.includes(srchText)||ort.includes(srchText)||lbl.includes(srchText);
+      const osch=(t.ortschaft||"").toLowerCase();
+      return bez.includes(srchText)||ort.includes(srchText)||osch.includes(srchText)||lbl.includes(srchText);
     });
   }
 

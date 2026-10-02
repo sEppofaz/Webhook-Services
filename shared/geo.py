@@ -158,7 +158,7 @@ def geo_fuer_termin(termin: dict, meta_eintrag: dict | None = None,
             eintraege = [heimat]
 
     if not eintraege:
-        return {"orte": [], "plz": [], "gemeinden": [], "landkreise": [], "bundeslaender": []}
+        return {"orte": [], "ortschaften": [], "plz": [], "gemeinden": [], "landkreise": [], "bundeslaender": []}
 
     def sammeln(feld):
         gesehen, out = set(), []
@@ -171,6 +171,10 @@ def geo_fuer_termin(termin: dict, meta_eintrag: dict | None = None,
 
     return {
         "orte":          sammeln("ort"),
+        # Ort mit seiner Gemeinde als Paar: die Chip-Label im Frontend heissen bei
+        # Namensgleichheit "Weng (Postau)", dafuer reicht die Namensliste nicht.
+        "ortschaften":   [{"ort": e["ort"], "gemeinde": e.get("gemeinde", ""),
+                           "landkreis": e.get("landkreis", "")} for e in eintraege],
         "plz":           sammeln("plz"),
         "gemeinden":     sammeln("gemeinde"),
         "landkreise":    sammeln("landkreis"),
