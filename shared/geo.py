@@ -25,9 +25,13 @@ import re
 from pathlib import Path
 
 ORTE_FILE = Path(__file__).resolve().parent.parent / "orte.json"
+# Orte im weiten Sinn (Lokale, Gebäude, falsche Schreibweisen) → amtliche Ortschaft.
+# Getrennt von orte.json, damit dort nur amtliche Ortschaften stehen (ADR-014).
+ORTE_FREI_FILE = Path(__file__).resolve().parent.parent / "orte_frei.json"
 
 _register: list | None = None
 _muster: list | None = None
+_frei_muster: list | None = None
 
 
 def _gem_norm(g: str) -> str:
@@ -39,7 +43,7 @@ def _gem_norm(g: str) -> str:
 
 def _lade() -> tuple[list, list]:
     """Register + vorkompilierte Suchmuster, einmal pro Prozess."""
-    global _register, _muster
+    global _register, _muster, _frei_muster
     if _register is not None:
         return _register, _muster
     try:
@@ -58,6 +62,21 @@ def _lade() -> tuple[list, list]:
                 re.compile(r"(?<![a-zäöüßA-ZÄÖÜ])" + re.escape(n) + r"(?![a-zäöüßA-ZÄÖÜ])", re.I),
                 eintrag,
             ))
+    _frei_muster = []
+    try:
+        frei = json.loads(ORTE_FREI_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        frei = []
+    for f in frei if isinstance(frei, list) else []:
+        ziel = next((e for e in _register if e.get("ort") == f.get("ortschaft")), None)
+        if not ziel:
+            continue  # Verweis auf unbekannte Ortschaft: ignorieren statt falsch zuordnen
+        for n in sorted({n for n in [f.get("name", "")] + list(f.get("alias") or []) if n},
+                        key=len, reverse=True):
+            _frei_muster.append((
+                re.compile(r"(?<![a-zäöüßA-ZÄÖÜ])" + re.escape(n) + r"(?![a-zäöüßA-ZÄÖÜ])", re.I),
+                ziel,
+            ))
     return _register, _muster
 
 
@@ -75,12 +94,13 @@ def _ohne_adress_schwanz(text: str) -> str:
 
 def treffer_im_text(text: str) -> list[dict]:
     """Alle Register-Einträge, die im Text als eigenständiges Wort vorkommen."""
-    _, muster = _lade()
+    _lade()
     txt = _ohne_adress_schwanz(text)
     if not txt.strip():
         return []
     gefunden, gesehen = [], set()
-    for regex, eintrag in muster:
+    # Orte (orte_frei.json) zuerst, dann die amtlichen Ortschaften selbst
+    for regex, eintrag in list(_frei_muster) + list(_muster):
         if eintrag["ort"] in gesehen:
             continue
         if regex.search(txt):
@@ -144,6 +164,20 @@ def geo_fuer_termin(termin: dict, meta_eintrag: dict | None = None,
         return None
 
     eintraege = treffer_im_text(termin.get("ort", ""))
+
+    if not eintraege:
+        # Keine Ortschaft vor der PLZ: den Ort hinter der PLZ prüfen
+        # („Rosemeyerstr. 1, 84061 Ergoldsbach"). Nur der erste Treffer – ein
+        # Adress-Schwanz wie „84092 Bayerbach b. Ergoldsbach" nennt Nachbarn mit.
+        rest = re.split(r"\b\d{5}\b", str(termin.get("ort", "")), maxsplit=1)
+        if len(rest) > 1:
+            treffer = []
+            for regex, eintrag in _muster:
+                m = regex.search(rest[1])
+                if m:
+                    treffer.append((m.start(), eintrag))
+            if treffer:
+                eintraege = [min(treffer, key=lambda x: x[0])[1]]
 
     if not eintraege:
         aus_feld = eintrag_fuer(termin.get("ortschaft", ""))

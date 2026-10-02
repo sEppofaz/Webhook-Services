@@ -57,6 +57,36 @@
     ]
   },
   {
+    "ort": "Böglkreut",
+    "plz": "84092",
+    "gemeinde": "Bayerbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Gemeinde Bayerbach (Auskunft des Gemeinde-Chatbots, 2026-10-02) + Nominatim: Gemeinde Bayerbach bei Ergoldsbach, PLZ 84092"
+  },
+  {
+    "ort": "Dünzlhof",
+    "plz": "84092",
+    "gemeinde": "Bayerbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Gemeinde Bayerbach (Auskunft des Gemeinde-Chatbots, 2026-10-02) + Nominatim: Gemeinde Bayerbach bei Ergoldsbach, PLZ 84092"
+  },
+  {
+    "ort": "Dürnaich",
+    "plz": "84092",
+    "gemeinde": "Bayerbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Gemeinde Bayerbach (Auskunft des Gemeinde-Chatbots, 2026-10-02) + Nominatim: Gemeinde Bayerbach bei Ergoldsbach, PLZ 84092"
+  },
+  {
     "ort": "Ergolding",
     "plz": "84030",
     "gemeinde": "Ergolding",
@@ -85,6 +115,16 @@
     "alias": []
   },
   {
+    "ort": "Feistenaich",
+    "plz": "84092",
+    "gemeinde": "Bayerbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Gemeinde Bayerbach (Auskunft des Gemeinde-Chatbots, 2026-10-02) + Nominatim: Gemeinde Bayerbach bei Ergoldsbach, PLZ 84092"
+  },
+  {
     "ort": "Feuchten",
     "plz": "84092",
     "gemeinde": "Bayerbach",
@@ -103,6 +143,16 @@
     "alias": []
   },
   {
+    "ort": "Ganslmaier",
+    "plz": "84092",
+    "gemeinde": "Bayerbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Gemeinde Bayerbach (Auskunft des Gemeinde-Chatbots, 2026-10-02) + Nominatim: Gemeinde Bayerbach bei Ergoldsbach, PLZ 84092"
+  },
+  {
     "ort": "Gerabach",
     "plz": "84092",
     "gemeinde": "Bayerbach",
@@ -110,6 +160,16 @@
     "bundesland": "Bayern",
     "hauptort": false,
     "alias": []
+  },
+  {
+    "ort": "Gillisau",
+    "plz": "84092",
+    "gemeinde": "Bayerbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Gemeinde Bayerbach (Auskunft des Gemeinde-Chatbots, 2026-10-02) + Nominatim: Gemeinde Bayerbach bei Ergoldsbach, PLZ 84092"
   },
   {
     "ort": "Greilsberg",
@@ -139,17 +199,35 @@
     "alias": []
   },
   {
+    "ort": "Hochmoos",
+    "plz": "84092",
+    "gemeinde": "Bayerbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Gemeinde Bayerbach (Auskunft des Gemeinde-Chatbots, 2026-10-02) + Nominatim: Gemeinde Bayerbach bei Ergoldsbach, PLZ 84092"
+  },
+  {
     "ort": "Hölskofen",
     "plz": "84092",
     "gemeinde": "Bayerbach",
     "landkreis": "Landkreis Landshut",
     "bundesland": "Bayern",
     "hauptort": false,
-    "alias": [
-      "Winklmoos"
-    ],
+    "alias": [],
     "geprueft": "2026-09-30",
-    "beleg": "BayernAtlas: Winklmoos liegt in Gemeinde Bayerbach, Ortschaft Hölskofen (Josef, 2026-09-30)"
+    "beleg": "BayernAtlas: Winklmoos liegt in Gemeinde Bayerbach, Ortschaft Hölskofen (Josef, 2026-09-30). Winklmoos steht als Ort in orte_frei.json, nicht als Alias."
+  },
+  {
+    "ort": "Hörmannsdorf",
+    "plz": "84187",
+    "gemeinde": "Weng",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Nominatim (Weng, Wörth a.d.Isar VGem, 84187) + Vereinskontext Pfarrei Veitsbuch/Weng; gleichnamige Orte existieren (Hörmannsdorf auch bei Bodenkirchen) – von Josef zu bestätigen"
   },
   {
     "ort": "Iffelkofen",
@@ -169,6 +247,16 @@
     "hauptort": false,
     "alias": [],
     "geprueft": "2026-09-30"
+  },
+  {
+    "ort": "Kleinfeuchten",
+    "plz": "84092",
+    "gemeinde": "Bayerbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Gemeinde Bayerbach (Auskunft des Gemeinde-Chatbots, 2026-10-02) + Nominatim: Gemeinde Bayerbach bei Ergoldsbach, PLZ 84092"
   },
   {
     "ort": "Kläham",
@@ -199,6 +287,16 @@
     "alias": []
   },
   {
+    "ort": "Lottokreut",
+    "plz": "84092",
+    "gemeinde": "Bayerbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Gemeinde Bayerbach (Auskunft des Gemeinde-Chatbots, 2026-10-02) + Nominatim: Gemeinde Bayerbach bei Ergoldsbach, PLZ 84092"
+  },
+  {
     "ort": "Martinshaun",
     "plz": "84061",
     "gemeinde": "Ergoldsbach",
@@ -221,6 +319,16 @@
     "geprueft": "2026-09-30"
   },
   {
+    "ort": "Mausloch",
+    "plz": "84092",
+    "gemeinde": "Bayerbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Gemeinde Bayerbach (Auskunft des Gemeinde-Chatbots, 2026-10-02) + Nominatim: Gemeinde Bayerbach bei Ergoldsbach, PLZ 84092"
+  },
+  {
     "ort": "Mettenbach",
     "plz": "84051",
     "gemeinde": "Essenbach",
@@ -240,6 +348,16 @@
     "alias": []
   },
   {
+    "ort": "Moosberg",
+    "plz": "84187",
+    "gemeinde": "Weng",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Nominatim (Weng, Wörth a.d.Isar VGem, 84187) + Vereinskontext Pfarrei Veitsbuch/Weng; gleichnamige Orte existieren (Hörmannsdorf auch bei Bodenkirchen) – von Josef zu bestätigen"
+  },
+  {
     "ort": "Moosthann",
     "plz": "84103",
     "gemeinde": "Postau",
@@ -256,6 +374,16 @@
     "bundesland": "Bayern",
     "hauptort": true,
     "alias": []
+  },
+  {
+    "ort": "Nißlpram",
+    "plz": "84092",
+    "gemeinde": "Bayerbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Gemeinde Bayerbach (Auskunft des Gemeinde-Chatbots, 2026-10-02) + Nominatim: Gemeinde Bayerbach bei Ergoldsbach, PLZ 84092"
   },
   {
     "ort": "Oberahrain",
@@ -312,6 +440,16 @@
     "alias": []
   },
   {
+    "ort": "Pirket",
+    "plz": "84092",
+    "gemeinde": "Bayerbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Gemeinde Bayerbach (Chatbot, 2026-10-02); Nominatim kennt nur die Schreibweise Neu-Birket (Penk) – ungeklärt"
+  },
+  {
     "ort": "Postau",
     "plz": "84103",
     "gemeinde": "Postau",
@@ -319,6 +457,16 @@
     "bundesland": "Bayern",
     "hauptort": true,
     "alias": []
+  },
+  {
+    "ort": "Pram",
+    "plz": "84092",
+    "gemeinde": "Bayerbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Gemeinde Bayerbach (Auskunft des Gemeinde-Chatbots, 2026-10-02) + Nominatim: Gemeinde Bayerbach bei Ergoldsbach, PLZ 84092"
   },
   {
     "ort": "Prinkofen",
@@ -337,6 +485,26 @@
     "bundesland": "Bayern",
     "hauptort": true,
     "alias": []
+  },
+  {
+    "ort": "Runding",
+    "plz": "84092",
+    "gemeinde": "Bayerbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Gemeinde Bayerbach (Auskunft des Gemeinde-Chatbots, 2026-10-02) + Nominatim: Gemeinde Bayerbach bei Ergoldsbach, PLZ 84092"
+  },
+  {
+    "ort": "Sand",
+    "plz": "84092",
+    "gemeinde": "Bayerbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Gemeinde Bayerbach (Auskunft des Gemeinde-Chatbots, 2026-10-02) + Nominatim: Gemeinde Bayerbach bei Ergoldsbach, PLZ 84092"
   },
   {
     "ort": "Siegensdorf",
@@ -403,6 +571,16 @@
     "bundesland": "Bayern",
     "hauptort": true,
     "alias": []
+  },
+  {
+    "ort": "Winkelmoos",
+    "plz": "84092",
+    "gemeinde": "Bayerbach",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Gemeinde Bayerbach (Auskunft des Gemeinde-Chatbots, 2026-10-02) + Nominatim: Gemeinde Bayerbach bei Ergoldsbach, PLZ 84092"
   },
   {
     "ort": "Wörth a. d. Isar",

@@ -105,9 +105,8 @@ def test_kernfaelle(termine, meta, labels, rubriken):
     pruefe(zahl["Oberköllnbach"] == 10, "Oberköllnbach: 10 Termine (vorher 0)", zahl["Oberköllnbach"])
     # 13 → 11: zwei Termine der Königstreuen Patrioten wandern nach Paindlkofen,
     # wo sie tatsächlich stattfinden (Gasthaus Pritscher). Die beiden
-    # „Winklmoos"-Termine bleiben in Hölskofen: Winklmoos steht nicht im
-    # Register, `ortschaft` liefert nur den Hauptort Bayerbach, und die
-    # Spezifitäts-Regel zieht deshalb den Heimatort des Vereins vor.
+    # „Winklmoos"-Termine liegen in Hölskofen: Winklmoos ist ein Ort
+    # (orte_frei.json) und verweist auf die Ortschaft Hölskofen.
     pruefe(zahl["Hölskofen"] == 11, "Hölskofen: 11 Termine (vorher 13)", zahl["Hölskofen"])
 
     pfarr = [t for t in kuenftig
@@ -120,6 +119,54 @@ def test_kernfaelle(termine, meta, labels, rubriken):
               if labels.get(t.get("verein"), "").startswith("Pfarrgemeinde Postau")
               and "Postau" in orte_von(t, meta, labels)]
     pruefe(not postau, "keine Pfarr-Messe landet fälschlich in Postau", len(postau))
+
+
+def test_orte_und_ortschaften():
+    print("\nOrte vs. Ortschaften (ADR-014)")
+    import shared.geo as g
+    register, _ = g._lade()
+    namen = [e["ort"] for e in register]
+    pruefe(len(namen) == len(set(namen)), "keine doppelten Ortschaften")
+    alle_alias = [a for e in register for a in (e.get("alias") or [])]
+    pruefe(len(alle_alias) == len(set(alle_alias)) and not set(alle_alias) & set(namen),
+           "Aliasse sind eindeutig und kein Ortschaftsname")
+    fehlt = [e["ort"] for e in register
+             if not (e.get("plz") and e.get("gemeinde") and e.get("landkreis"))]
+    pruefe(not fehlt, "jede Ortschaft hat PLZ, Gemeinde und Landkreis", fehlt)
+
+    frei = json.loads(g.ORTE_FREI_FILE.read_text(encoding="utf-8"))
+    pruefe(all(f["ortschaft"] in namen for f in frei), "jeder Ort verweist auf eine Ortschaft")
+    frei_namen = {f["name"].casefold() for f in frei}
+    pruefe(not frei_namen & {n.casefold() for n in namen + alle_alias},
+           "kein Ort steht zugleich als Ortschaft oder Alias im Register")
+
+    # Winkelmoos ist amtliche Ortschaft (Bayerbach), Winklmoos nur ein Ort → Hölskofen
+    pruefe(g.eintrag_fuer("Winkelmoos") and g.eintrag_fuer("Winkelmoos")["gemeinde"] == "Bayerbach",
+           "Winkelmoos ist Ortschaft der Gemeinde Bayerbach")
+    pruefe(g.eintrag_fuer("Winklmoos") is None, "Winklmoos ist keine Ortschaft")
+    pruefe([e["ort"] for e in treffer_im_text("Weihnachtsmarkt Winklmoos")] == ["Hölskofen"],
+           "Ort „Winklmoos“ führt zur Ortschaft Hölskofen")
+    pruefe(geo_fuer_termin({"ort": "Winkelmoos 2"})["orte"] == ["Winkelmoos"],
+           "Ortschaft Winkelmoos wird als Winkelmoos erkannt")
+
+    # PLZ-Rückfall
+    for text, soll in (("Rosemeyerstr. 1, 84061 Ergoldsbach", ["Ergoldsbach"]),
+                       ("Goldbach Halle, Badstraße 20, 84061 Ergoldsbach", ["Ergoldsbach"])):
+        ist = geo_fuer_termin({"ort": text})["orte"]
+        pruefe(ist == soll, "PLZ-Rückfall: %s" % text, ist)
+    pruefe(geo_fuer_termin({"ort": "Kläranlage Bayerbach, Penk 30 a, 84092 Bayerbach b. Ergoldsbach"})["orte"]
+           == ["Bayerbach", "Penk"], "PLZ-Rückfall greift nicht, wenn vor der PLZ ein Treffer steht")
+
+    # Kill-Switch für die Orte-Liste: Datei fehlt → ignorieren, Ortschaften gelten weiter
+    alt = (g._register, g._muster, g._frei_muster, g.ORTE_FREI_FILE)
+    g._register = g._muster = g._frei_muster = None
+    g.ORTE_FREI_FILE = Path("/nicht/vorhanden/orte_frei.json")
+    try:
+        pruefe(geo_fuer_termin({"ort": "Hölskofen"})["orte"] == ["Hölskofen"]
+               and not treffer_im_text("Winklmoos"),
+               "ohne orte_frei.json gelten die Ortschaften weiter, Orte werden ignoriert")
+    finally:
+        g._register, g._muster, g._frei_muster, g.ORTE_FREI_FILE = alt
 
 
 def test_killswitch():
@@ -135,6 +182,17 @@ def test_killswitch():
 
 
 # ── Bericht ─────────────────────────────────────────────────────────────────
+def ohne_treffer(termine):
+    """Veranstaltungsorte ohne Registertreffer – fehlende Orte werden sichtbar."""
+    kuenftig = [t for t in termine if t.get("datum", "") >= STICHTAG and t.get("ort")]
+    c = Counter(t["ort"] for t in kuenftig if not treffer_im_text(t["ort"])
+                and not geo_fuer_termin({"ort": t["ort"]})["orte"])
+    print("\nVeranstaltungsorte ohne Registertreffer (fallen auf den Heimatort des Vereins): %d Texte, %d Termine"
+          % (len(c), sum(c.values())))
+    for o, n in c.most_common():
+        print("  %2d  %s" % (n, o))
+
+
 def bericht(termine, meta, labels):
     kuenftig = [t for t in termine if t.get("datum", "") >= STICHTAG]
     alt = Counter(h for t in kuenftig
@@ -189,7 +247,9 @@ def main():
     test_regeln()
     test_abdeckung(termine, meta, labels)
     test_kernfaelle(termine, meta, labels, rubriken)
+    test_orte_und_ortschaften()
     test_killswitch()
+    ohne_treffer(termine)
     if "--bericht" in sys.argv:
         bericht(termine, meta, labels)
     print("\n%s" % ("ALLE PRÜFUNGEN BESTANDEN" if not _fehler

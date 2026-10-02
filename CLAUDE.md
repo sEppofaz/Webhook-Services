@@ -299,7 +299,8 @@ zum Nachsehen.
 
 | Datei | Zweck |
 |---|---|
-| `orte.json` | Ortsregister, 44 Orte mit PLZ, Gemeinde, Landkreis, Bundesland, `hauptort`, `alias` |
+| `orte.json` | **Ortschaften** (amtlich), 62 Einträge mit PLZ, Gemeinde, Landkreis, Bundesland, `hauptort`, `alias`, `geprueft`/`quelle` |
+| `orte_frei.json` | **Orte** (alles Mögliche: Lokale, Gebäude, falsche Schreibweisen) → Ortschaft. Winklmoos → Hölskofen. Wird vor `orte.json` geprüft |
 | `shared/geo.py` | `geo_fuer_termin()` → `{orte, plz, gemeinden, landkreise, bundeslaender}` |
 | `tests/test_geo.py` | Offline-Abnahme gegen `tests/fixtures/termine.json` |
 
@@ -314,6 +315,7 @@ python3 tests/test_geo.py --register  # Register mit Herkunft und Nutzung je Ort
   Secrets nicht lauffähig und damit nicht offline testbar. Neue Logik, die getestet werden
   soll, gehört aus demselben Grund **nicht** in `kalender_core`.
 - **Kill-Switch:** Ohne `orte.json` liefert `geo_fuer_termin()` `None` → altes Verhalten.
+- **Neue Gemeinde anlegen ⇒ alle ihre Ortschaften mit Gemeinde + PLZ prüfen und eintragen**, auch ohne Termine (Josef, 2026-10-02). Quelle BayernAtlas, ohne Zugriff mit `quelle` markieren und von Josef bestätigen lassen. **Ortschaft ≠ Ort:** Amtliches gehört in `orte.json`, alles andere in `orte_frei.json`. Winkelmoos (Ortschaft, Bayerbach) ≠ Winklmoos (Ort → Hölskofen). `tests/test_geo.py` listet Veranstaltungsorte ohne Treffer und prüft die Registerkonsistenz.
 - **Register erweitern ist Faktenarbeit, nicht Codearbeit.** Eine falsche Gemeinde fällt
   nicht auf, sie zeigt still die falschen Termine. Nie aus dem Gedächtnis befüllen.
   Quellenrangfolge (ausführlich in ADR-014):

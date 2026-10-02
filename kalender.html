@@ -1212,12 +1212,15 @@ function _applyHierarchy(){
 function filterVereinListForOrt(){
   const lbls=document.querySelectorAll("#v-list .v-check");
   const gemFilter=aktGemeinden.size>0;
+  // Vereine mit Terminen an den gewählten Ortschaften (ADR-014) – nicht nur Vereine mit Heimatort dort
+  const vereineAmOrt=new Set();
+  if(aktOrte.size)allT.forEach(t=>{if(_terminOrte(t).some(o=>aktOrte.has(o)))vereineAmOrt.add(t.verein);});
   if(!aktOrte.size&&!gemFilter&&!aktLandkreis){lbls.forEach(l=>l.style.display="");return;}
   lbls.forEach(lbl=>{
     const cb=lbl.querySelector("[data-vk]");
     if(cb){
       const k=cb.dataset.vk;
-      const inOrt=!aktOrte.size||aktOrte.has(_ortOf[k]);
+      const inOrt=!aktOrte.size||aktOrte.has(_ortOf[k])||vereineAmOrt.has(k);
       const inGem=!gemFilter||aktGemeinden.has(_gemOf[k]||"");
       const inReg=!aktLandkreis||_regionForVerein(k)===aktLandkreis;
       lbl.style.display=(inOrt&&inGem&&inReg)?"":"none";
