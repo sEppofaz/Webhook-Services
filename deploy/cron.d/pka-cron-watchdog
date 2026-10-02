@@ -1,0 +1,8 @@
+# Cron-Wächter (ADR-015) – Quelle im Repo: deploy/cron.d/pka-cron-watchdog
+# Installation: install -m 644 -o root -g root /opt/rename-webhook/deploy/cron.d/pka-cron-watchdog /etc/cron.d/pka-cron-watchdog
+# Jobs stehen in /opt/rename-webhook/cron_registry.json; überwacht wird erst, was dort `aktiv_seit` hat.
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+*/10 * * * * root /opt/rename-webhook/bin/python3 /opt/rename-webhook/cron_watchdog.py >> /var/log/pka-cron-watchdog.log 2>&1
+# Lebenszeichen bewusst um 08:05, nicht 08:00: zur vollen Stunde läuft schon der 10-Minuten-Lauf, zwei gleichzeitige Läufe würden sich beim Zustand in die Quere kommen
+5 8 * * * root /opt/rename-webhook/bin/python3 /opt/rename-webhook/cron_watchdog.py --lebenszeichen >> /var/log/pka-cron-watchdog.log 2>&1
