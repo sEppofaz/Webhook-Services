@@ -302,7 +302,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
   </div>
   <div class="hdr-right" style="display:flex;align-items:center;gap:6px">
     <div class="hdr-ver" style="display:flex;flex-direction:column;align-items:flex-end;gap:1px">
-      <span class="ver-lbl" style="margin-right:0">v1.28</span>
+      <span class="ver-lbl" style="margin-right:0">v1.29</span>
       <span style="font-size:9px;color:rgba(255,255,255,.28);letter-spacing:.2px;line-height:1">a sEpp-App</span>
     </div>
     <a class="refresh-btn" id="verein-login-btn" href="/verein/login" title="Vereins-Login oder Registrierung" style="width:auto;padding:0 10px;font-size:13px;font-weight:600;letter-spacing:.3px;text-decoration:none;white-space:nowrap">Login</a>
@@ -431,7 +431,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title" style="width:55%"></div><div class="sk-line sk-ort"></div></div>
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title"></div><div class="sk-line sk-ort" style="width:30%"></div></div>
     </div>
-    <p class="version">Vereinskalender &middot; v1.28 &middot; 2026-10-02 &middot; a sEpp-App</p>
+    <p class="version">Vereinskalender &middot; v1.29 &middot; 2026-10-02 &middot; a sEpp-App</p>
     <p style="font-size:11px;color:var(--text3);text-align:center;padding:0 0 24px;line-height:2">&#127807; Hosting in Finnland mit &Ouml;kostrom &middot; Werbefrei &middot; DSGVO-konform</p>
   </div>
 
@@ -619,7 +619,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
     </div>
     <label style="font-size:12px;color:var(--text3);display:block">Rubrik
       <select id="vd-rubrik" style="display:block;width:100%;margin-top:4px;padding:8px 11px;border:1.5px solid var(--border2);border-radius:9px;font-size:14px;background:var(--bg);color:var(--text);cursor:pointer;outline:none">
-        <option>Verein</option><option>Pfarrei</option><option>Kunst und Kultur</option><option>Sonstiges</option>
+        <option>Verein</option><option>Pfarrei</option><option>Kunst und Kultur</option><option>Gaststätte/Pub/Bar</option><option>Sonstiges</option>
       </select>
     </label>
     <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border:1.5px solid var(--border2);border-radius:9px">
@@ -668,6 +668,7 @@ const ICON_PATHS={
   scale:`<path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21H17"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>`,
   barChart:`<line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/>`,
   church:`<path d="m18 7 4 2v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9l4-2"/><path d="M14 22v-4a2 2 0 0 0-4 0v4"/><path d="M18 22V5l-6-3-6 3v17"/><path d="M12 7v5"/><path d="M10 9h4"/>`,
+  beer:`<path d="M17 11h1a3 3 0 0 1 0 6h-1"/><path d="M9 12v6"/><path d="M13 12v6"/><path d="M14 7.5c-1 0-1.44.5-3 .5s-2-.5-3-.5-1.72.5-2.5.5a2.5 2.5 0 0 1 0-5c.78 0 1.57.5 2.5.5S9.44 2 11 2s2 1.5 3 1.5 1.72-.5 2.5-.5a2.5 2.5 0 0 1 0 5c-.78 0-1.5-.5-2.5-.5Z"/><path d="M5 8v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8"/>`,
   palette:`<circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>`,
   info:`<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>`,
   userPlus:`<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/>`,
@@ -1340,10 +1341,10 @@ function renderRubrikBar(){
   if(!bar)return;
   const vorh=new Set(Object.values(rubriken));
   if(vorh.size<=1){bar.style.display="none";return;}
-  const reihenfolge=["Verein","Pfarrei","Kunst und Kultur"];
+  const reihenfolge=["Verein","Pfarrei","Kunst und Kultur","Gaststätte/Pub/Bar"];
   const extra=[...vorh].filter(r=>!reihenfolge.includes(r)).sort();
   const tabs=[...reihenfolge.filter(r=>vorh.has(r)),...extra];
-  const icons={"Verein":icon("house",14)+" Vereine","Pfarrei":icon("church",14)+" Pfarreien","Kunst und Kultur":icon("palette",14)+" Kunst &amp; Kultur"};
+  const icons={"Verein":icon("house",14)+" Vereine","Pfarrei":icon("church",14)+" Pfarreien","Kunst und Kultur":icon("palette",14)+" Kunst &amp; Kultur","Gaststätte/Pub/Bar":icon("beer",14)+" Gaststätten &amp; Bars"};
   bar.style.display="flex";
   bar.innerHTML=tabs.map(r=>{
     const on=aktRubrikSet.has(r);
@@ -2507,7 +2508,7 @@ let _editVereinData=null;
 function openVereinEditModal(verein_id,verein_name,vData){
   _editVereinData=vData;
   document.getElementById("verein-edit-modal")?.remove();
-  const R=["Verein","Pfarrei","Kunst und Kultur","Sonstiges"];
+  const R=RUBRIKEN_OPT;
   const rubrikOpts=R.map(r=>`<option value="${r}"${(vData.rubrik||"Verein")===r?" selected":""}>${r}</option>`).join("");
   const usersHtml=(vData.users||[]).map(u=>`
     <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:10px">
@@ -2680,7 +2681,8 @@ async function transferTermine(verein_id){
 }
 
 /* ── Vereine-Tab (Admin) ── */
-const RUBRIKEN_OPT=["Verein","Pfarrei","Kunst und Kultur","Sonstiges"];
+/* Gleiche Liste wie shared/rubriken.py – neue Rubrik dort UND hier eintragen */
+const RUBRIKEN_OPT=["Verein","Pfarrei","Kunst und Kultur","Gaststätte/Pub/Bar","Sonstiges"];
 let _lastVereinList=[],_vereinSearch="",_vereinSearchField="name",_drawerKey=null,_drawerSV=false;
 
 async function loadVereine(){

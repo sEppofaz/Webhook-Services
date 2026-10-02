@@ -181,6 +181,13 @@ def init_db():
             "ALTER TABLE vereine_accounts ADD COLUMN gemeinde TEXT",
             "ALTER TABLE vereine_accounts ADD COLUMN landkreis TEXT",
             "ALTER TABLE vk_audit ADD COLUMN anzahl INTEGER NOT NULL DEFAULT 1",
+            # Ansprechpartner + E-Mail-Wechsel mit Bestätigung (2026-10-02)
+            "ALTER TABLE vk_users ADD COLUMN anrede TEXT",
+            "ALTER TABLE vk_users ADD COLUMN vorname TEXT",
+            "ALTER TABLE vk_users ADD COLUMN nachname TEXT",
+            "ALTER TABLE vk_users ADD COLUMN email_neu TEXT",
+            "ALTER TABLE vk_users ADD COLUMN email_neu_token TEXT",
+            "ALTER TABLE vk_users ADD COLUMN email_neu_expires DATETIME",
         ]:
             try:
                 conn.execute(col_sql)

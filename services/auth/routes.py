@@ -13,8 +13,11 @@ from flask import Blueprint, jsonify, make_response, redirect, request
 
 from shared.vk_db import SESSION_TIMEOUT_HOURS, create_session, db_conn, delete_session, get_session_user, init_db
 from shared.kalender_core import lookup_plz, _make_verein_key
+from shared.rubriken import RUBRIKEN
 from shared.csrf import csrf_field, get_csrf_token, validate_csrf
 from shared.vk_mail import (
+    ANREDEN,
+    gruss_aus,
     send_rejected_email,
     send_reset_email,
     send_verify_email,
@@ -28,7 +31,6 @@ auth_bp = Blueprint("auth", __name__)
 UPLOAD_TOKEN = os.environ.get("UPLOAD_TOKEN", "")
 MAX_LOGIN_ATTEMPTS = 5
 LOCKOUT_MINUTES = 15
-RUBRIKEN = ["Verein", "Pfarrei", "Kunst und Kultur", "Sonstiges"]
 
 # Kurzlebiger Pre-Auth-Store für Vereinsauswahl bei mehreren Accounts pro E-Mail
 # token → ([(user_id, verein_name)], expires)
@@ -173,7 +175,7 @@ def _valid_email(email: str) -> bool:
 def _telegram_approve_msg(verein_id: int, verein_name: str, email: str,
                            rubrik: str = "", heimatort: str = "", telefon: str = "",
                            plz: str = "", gemeinde: str = "", landkreis: str = "",
-                           hinweise: list[str] | None = None) -> None:
+                           hinweise: list[str] | None = None, ansprechpartner: str = "") -> None:
     lines = [f"🏛 Neuer Verein wartet auf Freigabe:\n<b>{verein_name}</b>"]
     if rubrik:
         lines.append(f"Rubrik: {rubrik}")
@@ -182,6 +184,8 @@ def _telegram_approve_msg(verein_id: int, verein_name: str, email: str,
                      + (f" ({gemeinde}, {landkreis})" if gemeinde else ""))
     for h in hinweise or []:
         lines.append(f"⚠️ {h}")
+    if ansprechpartner:
+        lines.append(f"Ansprechpartner: {ansprechpartner}")
     lines.append(f"E-Mail: {email}")
     if telefon:
         lines.append(f"Telefon: {telefon}")
@@ -285,6 +289,30 @@ def _telegram_ortschaft_hinweis(verein_name: str, plz: str, ort: str, hinweise: 
         pass
 
 
+def _ansprechpartner_felder(anrede: str, vorname: str, nachname: str) -> str:
+    """Anrede, Vor- und Nachname – alle Pflicht. Für die Begrüßung in den Mails."""
+    opts = "".join(
+        f'<option value="{a}"{" selected" if anrede == a else ""}>{a}</option>' for a in ANREDEN
+    )
+    return f"""
+  <label>Anrede</label>
+  <select name="anrede" required><option value="">– bitte wählen –</option>{opts}</select>
+  <label>Vorname Ansprechpartner</label>
+  <input name="vorname" type="text" required autocomplete="given-name" placeholder="z.B. Maria" value="{html.escape(vorname)}">
+  <label>Nachname Ansprechpartner</label>
+  <input name="nachname" type="text" required autocomplete="family-name" placeholder="z.B. Huber" value="{html.escape(nachname)}">"""
+
+
+def ansprechpartner_fehler(anrede: str, vorname: str, nachname: str) -> str:
+    if anrede not in ANREDEN:
+        return "Bitte die Anrede wählen."
+    if not vorname or not nachname:
+        return "Bitte Vor- und Nachname des Ansprechpartners angeben."
+    if len(vorname) > 60 or len(nachname) > 60:
+        return "Vor- oder Nachname ist zu lang (max. 60 Zeichen)."
+    return ""
+
+
 def _ortschaft_felder(plz: str, heimatort: str) -> str:
     """PLZ- und Ortschaftsfeld, beide Pflicht. DB-Feld bleibt `heimatort`."""
     return f"""
@@ -339,19 +367,25 @@ def register():
         heimatort   = request.form.get("heimatort", "").strip()
         plz         = request.form.get("plz", "").strip()
         telefon     = request.form.get("telefon", "").strip()
+        anrede      = request.form.get("anrede", "").strip()
+        vorname     = request.form.get("vorname", "").strip()
+        nachname    = request.form.get("nachname", "").strip()
         form_data   = dict(verein_name=verein_name, email=email, rubrik=rubrik,
-                           heimatort=heimatort, plz=plz, telefon=telefon)
+                           heimatort=heimatort, plz=plz, telefon=telefon,
+                           anrede=anrede, vorname=vorname, nachname=nachname)
 
         if not verein_name or len(verein_name) < 3:
             error = "Bitte einen Vereinsnamen mit mindestens 3 Zeichen eingeben."
-        elif not _valid_email(email):
-            error = "Bitte eine gültige E-Mail-Adresse eingeben."
         elif rubrik not in RUBRIKEN:
             error = "Bitte eine gültige Rubrik auswählen."
         elif not plz_gueltig(plz):
             error = "PLZ muss 5 Ziffern haben (z.B. 84092)."
         elif not heimatort or len(heimatort) < 2:
             error = "Bitte die Ortschaft des Vereins angeben."
+        elif ansprechpartner_fehler(anrede, vorname, nachname):
+            error = ansprechpartner_fehler(anrede, vorname, nachname)
+        elif not _valid_email(email):
+            error = "Bitte eine gültige E-Mail-Adresse eingeben."
         elif not telefon:
             error = "Bitte eine Telefonnummer für Rückfragen angeben."
         elif len(pw) < 8:
@@ -395,15 +429,18 @@ def register():
                 expires = (datetime.utcnow() + timedelta(hours=24)).isoformat()
                 conn.execute(
                     """INSERT INTO vk_users
-                       (email, password_hash, verein_id, role, telefon, verify_token, verify_token_expires)
-                       VALUES (?,?,?,?,?,?,?)""",
-                    (email, _hash_pw(pw), verein_id, "admin", telefon or None, token, expires),
+                       (email, password_hash, verein_id, role, telefon, verify_token, verify_token_expires,
+                        anrede, vorname, nachname, name)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                    (email, _hash_pw(pw), verein_id, "admin", telefon or None, token, expires,
+                     anrede, vorname, nachname, f"{vorname} {nachname}"),
                 )
-            send_verify_email(email, token)
+            send_verify_email(email, token, gruss=gruss_aus(form_data))
             _telegram_approve_msg(verein_id, verein_name, email,
                                   rubrik=rubrik, heimatort=heimatort, telefon=telefon,
                                   plz=plz, gemeinde=gemeinde, landkreis=landkreis,
-                                  hinweise=hinweise)
+                                  hinweise=hinweise,
+                                  ansprechpartner=f"{anrede} {vorname} {nachname}".replace("keine Angabe ", ""))
             threading.Thread(
                 target=_telegram_suggest_links,
                 args=(verein_id, verein_name, verein_key),
@@ -449,7 +486,7 @@ def register():
 {'<p class="err">'+error+'</p>' if error else ''}
 <form method="post" autocomplete="on">
   {csrf_field(tok)}
-  <label>Vereinsname <span class="hint">(Euer Login-Name)</span></label>
+  <label>Vereinsname</label>
   <input name="verein_name" type="text" required autocomplete="organization" placeholder="z.B. FF Musterdorf" value="{html.escape(form_data.get('verein_name', ''))}">
   <label>Rubrik</label>
   <select name="rubrik" required>
@@ -457,7 +494,8 @@ def register():
     {rubrik_opts}
   </select>
 {_ortschaft_felder(form_data.get('plz', ''), form_data.get('heimatort', ''))}
-  <label>E-Mail (Ansprechpartner)</label>
+{_ansprechpartner_felder(form_data.get('anrede', ''), form_data.get('vorname', ''), form_data.get('nachname', ''))}
+  <label>E-Mail Ansprechpartner <span class="hint">(damit loggt ihr euch ein)</span></label>
   <input name="email" type="text" inputmode="email" autocorrect="off" autocapitalize="none" required autocomplete="email" placeholder="vorstand@beispiel.de" value="{html.escape(form_data.get('email', ''))}">
   <label>Telefon Ansprechpartner</label>
   <input name="telefon" type="tel" required autocomplete="tel" placeholder="z.B. 0172 1234567" value="{html.escape(form_data.get('telefon', ''))}">
@@ -477,7 +515,7 @@ def register():
   </div>
   <div class="chk">
     <input type="checkbox" name="zugangsdaten_notiert" id="zn" required>
-    <label for="zn">Ich habe die Zugangsdaten (Vereinsname + Passwort) notiert.</label>
+    <label for="zn">Ich habe die Zugangsdaten (E-Mail-Adresse + Passwort) notiert.</label>
   </div>
   <button class="btn" type="submit" id="reg-btn">Registrieren</button>
 </form>
@@ -551,7 +589,7 @@ def resend_verify():
         tokens_to_send = []
         with db_conn() as conn:
             rows = conn.execute(
-                "SELECT id FROM vk_users WHERE email=? AND email_verified=0", (email,)
+                "SELECT id, anrede, vorname, nachname FROM vk_users WHERE email=? AND email_verified=0", (email,)
             ).fetchall()
             for row in rows:
                 token = secrets.token_urlsafe(32)
@@ -560,9 +598,9 @@ def resend_verify():
                     "UPDATE vk_users SET verify_token=?, verify_token_expires=? WHERE id=?",
                     (token, expires, row["id"]),
                 )
-                tokens_to_send.append(token)
-        for token in tokens_to_send:
-            send_verify_email(email, token)
+                tokens_to_send.append((token, gruss_aus(row)))
+        for token, gruss in tokens_to_send:
+            send_verify_email(email, token, gruss=gruss)
         body = '<p class="ok">Falls die E-Mail existiert und noch nicht bestätigt ist, wurde ein neuer Link verschickt.</p><div class="spam-hint">📬 Bitte auch im <strong>Spam-Ordner</strong> nachsehen.</div>' + _BACK
         return _page("Link verschickt", body)
     tok = get_csrf_token()
@@ -748,7 +786,7 @@ def forgot_password():
         tokens_to_send = []
         with db_conn() as conn:
             rows = conn.execute(
-                "SELECT id FROM vk_users WHERE email = ?", (email,)
+                "SELECT id, anrede, vorname, nachname FROM vk_users WHERE email = ?", (email,)
             ).fetchall()
             for row in rows:
                 token = secrets.token_urlsafe(32)
@@ -757,9 +795,9 @@ def forgot_password():
                     "UPDATE vk_users SET reset_token=?, reset_token_expires=? WHERE id=?",
                     (token, expires, row["id"]),
                 )
-                tokens_to_send.append(token)
-        for token in tokens_to_send:
-            send_reset_email(email, token)
+                tokens_to_send.append((token, gruss_aus(row)))
+        for token, gruss in tokens_to_send:
+            send_reset_email(email, token, gruss=gruss)
         body = '<p class="ok">Falls diese E-Mail registriert ist, wurde ein Reset-Link verschickt.</p><div class="spam-hint">📬 Bitte auch im <strong>Spam-Ordner</strong> nachsehen.</div>' + _BACK
         return _page("Link verschickt", body)
     tok = get_csrf_token()
@@ -823,7 +861,7 @@ def approve_verein(verein_id: int):
     with db_conn() as conn:
         row = conn.execute(
             """SELECT v.verein_name, v.verein_key, v.plz, v.gemeinde, v.landkreis,
-                      v.heimatort, v.rubrik, u.email
+                      v.heimatort, v.rubrik, u.email, u.anrede, u.vorname, u.nachname
                FROM vereine_accounts v
                JOIN vk_users u ON u.verein_id = v.id AND u.role = 'admin'
                WHERE v.id = ? AND v.status = 'pending'""",
@@ -835,7 +873,7 @@ def approve_verein(verein_id: int):
             "UPDATE vereine_accounts SET status='aktiv', freigegeben_at=CURRENT_TIMESTAMP WHERE id=?",
             (verein_id,),
         )
-        send_welcome_email(row["email"], row["verein_name"])
+        send_welcome_email(row["email"], row["verein_name"], gruss=gruss_aus(row))
 
     from shared.kalender_store import register_verein
     register_verein(row["verein_key"], row["verein_name"], row)
@@ -850,8 +888,8 @@ def reject_verein(verein_id: int):
         return {"error": "Unauthorized"}, 401
     with db_conn() as conn:
         row = conn.execute(
-            """SELECT v.verein_name, u.email FROM vereine_accounts v
-               JOIN vk_users u ON u.verein_id = v.id
+            """SELECT v.verein_name, u.email, u.anrede, u.vorname, u.nachname FROM vereine_accounts v
+               JOIN vk_users u ON u.verein_id = v.id AND u.role = 'admin'
                WHERE v.id = ? AND v.status = 'pending'""",
             (verein_id,),
         ).fetchone()
@@ -861,7 +899,7 @@ def reject_verein(verein_id: int):
             "UPDATE vereine_accounts SET status='abgelehnt' WHERE id=?",
             (verein_id,),
         )
-        send_rejected_email(row["email"], row["verein_name"])
+        send_rejected_email(row["email"], row["verein_name"], gruss=gruss_aus(row))
     return {"ok": True}
 
 

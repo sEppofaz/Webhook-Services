@@ -632,7 +632,7 @@ def telegram_webhook():
 
         elif cb_data.startswith("verein_approve:") or cb_data.startswith("verein_reject:"):
             from shared.vk_db import db_conn
-            from shared.vk_mail import send_welcome_email, send_rejected_email
+            from shared.vk_mail import gruss_aus, send_welcome_email, send_rejected_email
             try:
                 parts = cb_data.split(":", 2)
                 verein_id = int(parts[1])
@@ -641,7 +641,8 @@ def telegram_webhook():
                 with db_conn() as conn:
                     row = conn.execute(
                         """SELECT v.verein_name, v.verein_key, v.plz, v.gemeinde,
-                                  v.landkreis, v.heimatort, v.rubrik, u.email
+                                  v.landkreis, v.heimatort, v.rubrik, u.email,
+                                  u.anrede, u.vorname, u.nachname
                            FROM vereine_accounts v
                            JOIN vk_users u ON u.verein_id = v.id AND u.role='admin'
                            WHERE v.id = ? AND v.status = 'pending'""",
@@ -657,7 +658,7 @@ def telegram_webhook():
                                 "UPDATE vereine_accounts SET status='aktiv', freigegeben_at=CURRENT_TIMESTAMP WHERE id=?",
                                 (verein_id,),
                             )
-                            send_welcome_email(row["email"], row["verein_name"])
+                            send_welcome_email(row["email"], row["verein_name"], gruss=gruss_aus(row))
                             # Gleicher Schritt wie im API-Endpunkt: ohne Eintrag in
                             # vereinstermine.json bleibt der Verein in der Übersicht
                             # unsichtbar, bis er seinen ersten Termin anlegt.
@@ -670,7 +671,7 @@ def telegram_webhook():
                                 "UPDATE vereine_accounts SET status='abgelehnt' WHERE id=?",
                                 (verein_id,),
                             )
-                            send_rejected_email(row["email"], row["verein_name"])
+                            send_rejected_email(row["email"], row["verein_name"], gruss=gruss_aus(row))
                             answer_telegram_callback(cb_id, "❌ Abgelehnt")
                             send_telegram(TELEGRAM_CHAT_ID, f"❌ Verein abgelehnt: {row['verein_name']}")
             except Exception as e:

@@ -15,6 +15,7 @@ from shared.kalender_core import (
     cleanup_stale_pending, import_pdf_bytes, parse_excel_bytes,
 )
 from shared.flyer_store import upload_flyer, delete_flyer
+from shared.rubriken import RUBRIKEN
 from shared.csrf import csrf_field, get_csrf_token, validate_csrf
 from shared.vk_db import (
     db_conn, get_session_user, log_audit,
@@ -28,9 +29,9 @@ from shared.geo import plz_gueltig
 
 verein_bp = Blueprint("verein", __name__)
 
+_BACK_PROFIL = '<a class="btn btn-sec" href="/verein/profil" style="margin-top:.75rem">← Zurück zum Profil</a>'
 _BACK_DASH = '<a class="btn btn-sec" href="/verein/dashboard" style="margin-top:.75rem">← Zurück</a>'
 _UPLOAD_LIMIT = 3
-RUBRIKEN = ["Verein", "Pfarrei", "Kunst und Kultur", "Sonstiges"]
 
 
 def _quota_remaining(verein_id: int) -> int:
@@ -410,7 +411,7 @@ def change_password(user):
   <input name="password_neu2" type="password" required autocomplete="new-password">
   <button class="btn" type="submit">Passwort ändern</button>
 </form>
-{_BACK_DASH}"""
+{_BACK_PROFIL if request.args.get("von") == "profil" else _BACK_DASH}"""
     return _page("Passwort ändern", form)
 
 
@@ -779,14 +780,14 @@ def confirm_upload(user):
 @verein_bp.route("/verein/datenschutz")
 def datenschutz():
     body = f"""
-<p style="color:#aeaeb2;font-size:.85rem">Stand: Mai 2026</p>
+<p style="color:#aeaeb2;font-size:.85rem">Stand: Oktober 2026</p>
 <div class="card">
 <h2 style="font-size:1rem;margin-top:0">1. Verantwortlicher</h2>
 <p>Josef Fischer, Hölskofen 13, 84092 Bayerbach b. Ergoldsbach · <a href="mailto:Vereinskalender@icloud.com">Vereinskalender@icloud.com</a></p>
 </div>
 <div class="card">
 <h2 style="font-size:1rem;margin-top:0">2. Erhobene Daten</h2>
-<p>Bei der Registrierung erfassen wir: E-Mail-Adresse, Vereinsname sowie das Passwort (verschlüsselt gespeichert, niemals im Klartext). Vereinstermine werden öffentlich angezeigt.</p>
+<p>Bei der Registrierung und im Vereinsprofil erfassen wir: Vereinsname, Rubrik, PLZ und Ortschaft des Vereins, Anrede, Vor- und Nachname, E-Mail-Adresse und Telefonnummer des Ansprechpartners sowie das Passwort (verschlüsselt gespeichert, niemals im Klartext). Öffentlich angezeigt werden nur Vereinsname, Rubrik, Ort und die Vereinstermine. Name, E-Mail-Adresse und Telefonnummer des Ansprechpartners sind nicht öffentlich; sie dienen der Anmeldung, der Anrede in E-Mails und Rückfragen des Betreibers.</p>
 </div>
 <div class="card">
 <h2 style="font-size:1rem;margin-top:0">3. Zweck der Verarbeitung</h2>
@@ -841,8 +842,16 @@ def nutzungsbedingungen():
 @verein_bp.route("/verein/profil", methods=["GET", "POST"])
 @require_verein_login
 def verein_profil(user):
+    """Alle Daten aus der Registrierung: Verein (DB vereine_accounts) und
+    Ansprechpartner (vk_users des eingeloggten Admins). Die E-Mail ist Login und
+    Reset-Ziel – sie wechselt erst nach Klick auf den Link an die neue Adresse."""
     if user["role"] != "admin":
         return redirect("/verein/dashboard")
+
+    from services.auth.routes import (
+        _ansprechpartner_felder, _check_pw, _valid_email, ansprechpartner_fehler,
+    )
+    from shared.vk_mail import gruss_aus, send_email_change_confirm, send_email_change_notice
 
     error = ok = ""
 
@@ -852,10 +861,12 @@ def verein_profil(user):
             (user["verein_id"],),
         ).fetchone()
         usr = conn.execute(
-            "SELECT telefon FROM vk_users WHERE id=?", (user["id"],)
+            """SELECT email, telefon, anrede, vorname, nachname, name, email_neu, email_neu_expires,
+                      password_hash
+               FROM vk_users WHERE id=?""", (user["id"],)
         ).fetchone()
 
-    if not va:
+    if not va or not usr:
         return redirect("/verein/dashboard")
 
     verein_name = va["verein_name"]
@@ -864,86 +875,185 @@ def verein_profil(user):
     plz         = va["plz"] or ""
     gemeinde    = va["gemeinde"] or ""
     landkreis   = va["landkreis"] or ""
-    telefon     = usr["telefon"] if usr else ""
+    telefon     = usr["telefon"] or ""
+    anrede      = usr["anrede"] or ""
+    vorname     = usr["vorname"] or ""
+    nachname    = usr["nachname"] or ""
+    if not vorname and not nachname and usr["name"]:
+        # Altbestand: nur `name` (vom Admin gesetzt) → als Vorschlag aufteilen
+        teile = usr["name"].strip().rsplit(" ", 1)
+        vorname, nachname = (teile[0], teile[1]) if len(teile) == 2 else ("", teile[0])
+    email       = usr["email"]
+    email_neu   = usr["email_neu"] if usr["email_neu_expires"] and \
+        usr["email_neu_expires"] > datetime.utcnow().isoformat() else ""
+    eingabe_email = email
 
     if request.method == "POST":
         if not validate_csrf():
             return _page("Fehler", '<p class="err">Ungültige Anfrage. Bitte Seite neu laden.</p>'), 403
-        new_name      = request.form.get("verein_name", "").strip()
-        new_rubrik    = request.form.get("rubrik", "").strip()
-        new_heimatort = request.form.get("heimatort", "").strip()
-        new_plz       = request.form.get("plz", "").strip()
-        new_telefon   = request.form.get("telefon", "").strip()
+        f = {k: request.form.get(k, "").strip() for k in
+             ("verein_name", "rubrik", "heimatort", "plz", "telefon", "anrede", "vorname", "nachname", "email")}
+        f["email"] = f["email"].lower()
+        pw_aktuell = request.form.get("password_aktuell", "")
+        email_wechsel = f["email"] != email.lower()
+        eingabe_email = f["email"]
 
-        if not new_name or len(new_name) < 3:
+        if not f["verein_name"] or len(f["verein_name"]) < 3:
             error = "Vereinsname muss mindestens 3 Zeichen haben."
-        elif new_rubrik not in RUBRIKEN:
+        elif f["rubrik"] not in RUBRIKEN:
             error = "Bitte eine gültige Rubrik wählen."
-        elif not plz_gueltig(new_plz):
+        elif not plz_gueltig(f["plz"]):
             error = "Bitte die PLZ angeben (5 Ziffern, z.B. 84092)."
-        elif not new_heimatort or len(new_heimatort) < 2:
+        elif not f["heimatort"] or len(f["heimatort"]) < 2:
             error = "Bitte die Ortschaft angeben."
+        elif ansprechpartner_fehler(f["anrede"], f["vorname"], f["nachname"]):
+            error = ansprechpartner_fehler(f["anrede"], f["vorname"], f["nachname"])
+        elif not _valid_email(f["email"]):
+            error = "Bitte eine gültige E-Mail-Adresse eingeben."
+        elif email_wechsel and not _check_pw(pw_aktuell, usr["password_hash"]):
+            error = "Zum Ändern der E-Mail-Adresse bitte das aktuelle Passwort eingeben."
+        elif not f["telefon"]:
+            error = "Bitte eine Telefonnummer für Rückfragen angeben."
         else:
-            if new_plz != plz or new_heimatort != heimatort or not gemeinde:
-                new_gemeinde, new_landkreis, hinweise = ortschaft_geo(new_heimatort, new_plz)
+            if f["plz"] != plz or f["heimatort"] != heimatort or not gemeinde:
+                new_gemeinde, new_landkreis, hinweise = ortschaft_geo(f["heimatort"], f["plz"])
                 if hinweise:
-                    _telegram_ortschaft_hinweis(new_name, new_plz, new_heimatort, hinweise)
+                    _telegram_ortschaft_hinweis(f["verein_name"], f["plz"], f["heimatort"], hinweise)
             else:
-                new_gemeinde  = gemeinde
-                new_landkreis = landkreis
+                new_gemeinde, new_landkreis = gemeinde, landkreis
 
+            token = None
             with db_conn() as conn:
                 conn.execute(
                     """UPDATE vereine_accounts
                        SET verein_name=?, rubrik=?, heimatort=?, plz=?, gemeinde=?, landkreis=?
                        WHERE id=?""",
-                    (new_name, new_rubrik, new_heimatort,
-                     new_plz or None, new_gemeinde or None, new_landkreis or None,
-                     user["verein_id"]),
+                    (f["verein_name"], f["rubrik"], f["heimatort"], f["plz"],
+                     new_gemeinde or None, new_landkreis or None, user["verein_id"]),
                 )
                 conn.execute(
-                    "UPDATE vk_users SET telefon=? WHERE id=?",
-                    (new_telefon or None, user["id"]),
+                    "UPDATE vk_users SET telefon=?, anrede=?, vorname=?, nachname=?, name=? WHERE id=?",
+                    (f["telefon"], f["anrede"], f["vorname"], f["nachname"],
+                     f"{f['vorname']} {f['nachname']}", user["id"]),
                 )
-            if new_name != verein_name and user.get("verein_key"):
-                vk = user["verein_key"]
-                def _rename_label(d, vk=vk, new_name=new_name):
-                    d.setdefault("_labels", {})[vk] = new_name
-                KalenderStore.update(_rename_label)
-            verein_name = new_name
-            rubrik      = new_rubrik
-            heimatort   = new_heimatort
-            plz         = new_plz
-            gemeinde    = new_gemeinde
-            landkreis   = new_landkreis
-            telefon     = new_telefon
+                if email_wechsel:
+                    import secrets as _sec
+                    token = _sec.token_urlsafe(32)
+                    conn.execute(
+                        "UPDATE vk_users SET email_neu=?, email_neu_token=?, email_neu_expires=? WHERE id=?",
+                        (f["email"], token, (datetime.utcnow() + timedelta(hours=24)).isoformat(), user["id"]),
+                    )
+
+            log_audit("email_wechsel_angefordert" if email_wechsel else "profil_geaendert",
+                      "", user.get("verein_key") or "", user["id"])
+            _profil_in_kalender(user.get("verein_key"), f["verein_name"], verein_name, {
+                "rubrik": f["rubrik"], "heimatort": f["heimatort"], "plz": f["plz"],
+                "gemeinde": new_gemeinde, "landkreis": new_landkreis,
+            })
+            gruss = gruss_aus(f)
+            if email_wechsel and token:
+                send_email_change_confirm(f["email"], token, f["verein_name"], gruss=gruss)
+                send_email_change_notice(email, f["email"], f["verein_name"], gruss=gruss)
+                email_neu = f["email"]
+
+            verein_name, rubrik, heimatort, plz = f["verein_name"], f["rubrik"], f["heimatort"], f["plz"]
+            gemeinde, landkreis, telefon = new_gemeinde, new_landkreis, f["telefon"]
+            anrede, vorname, nachname = f["anrede"], f["vorname"], f["nachname"]
+            eingabe_email = email
             ok = "✅ Profil gespeichert."
+            if email_wechsel:
+                ok += (f" Wir haben einen Bestätigungslink an <strong>{html.escape(email_neu)}</strong> geschickt."
+                       " Bis zum Klick darauf bleibt die bisherige Adresse gültig.")
+
+        if error:
+            # Eingaben behalten
+            verein_name, rubrik, heimatort, plz = f["verein_name"], f["rubrik"] or rubrik, f["heimatort"], f["plz"]
+            telefon, anrede, vorname, nachname = f["telefon"], f["anrede"], f["vorname"], f["nachname"]
 
     rubrik_opts = "".join(
         f'<option value="{r}"{" selected" if rubrik == r else ""}>{r}</option>'
         for r in RUBRIKEN
     )
-    geo_hint = f'<p class="hint">{gemeinde}, {landkreis}</p>' if gemeinde else ""
+    geo_hint = f'<p class="hint">{html.escape(gemeinde)}, {html.escape(landkreis)}</p>' if gemeinde else ""
+    neu_hint = (f'<p class="hint">Bestätigung ausstehend für <strong>{html.escape(email_neu)}</strong> '
+                f'(Link per E-Mail, 24 Stunden gültig).</p>') if email_neu else ""
 
     tok = get_csrf_token()
     body = f"""
 {'<p class="err">'+error+'</p>' if error else ''}
 {'<p class="ok">'+ok+'</p>' if ok else ''}
-<form method="post">
+<form method="post" autocomplete="on">
   {csrf_field(tok)}
+  <h2 style="font-size:1rem;margin:1rem 0 0">Verein</h2>
   <label>Vereinsname</label>
-  <input name="verein_name" type="text" required value="{html.escape(verein_name)}">
+  <input name="verein_name" type="text" required autocomplete="organization" value="{html.escape(verein_name)}">
   <label>Rubrik</label>
   <select name="rubrik" required>
     {rubrik_opts}
   </select>
 {_ortschaft_felder(plz, heimatort)}
   {geo_hint}
-  <label>Telefon Ansprechpartner <span class="hint">(optional)</span></label>
-  <input name="telefon" type="tel" autocomplete="tel" placeholder="z.B. 0172 1234567" value="{html.escape(telefon or '')}">
+  <h2 style="font-size:1rem;margin:1.5rem 0 0">Ansprechpartner</h2>
+{_ansprechpartner_felder(anrede, vorname, nachname)}
+  <label>E-Mail <span class="hint">(damit loggt ihr euch ein)</span></label>
+  <input name="email" type="text" inputmode="email" autocorrect="off" autocapitalize="none" required autocomplete="email" value="{html.escape(eingabe_email)}">
+  {neu_hint}
+  <label>Aktuelles Passwort <span class="hint">(nur nötig, wenn du die E-Mail änderst)</span></label>
+  <input name="password_aktuell" type="password" autocomplete="current-password">
+  <label>Telefon Ansprechpartner</label>
+  <input name="telefon" type="tel" required autocomplete="tel" placeholder="z.B. 0172 1234567" value="{html.escape(telefon)}">
   <button class="btn" type="submit">Speichern</button>
 </form>
+<a class="btn btn-sec" href="/verein/passwort?von=profil" style="margin-top:.75rem">Passwort ändern</a>
 {_BACK_DASH}
 {_PLZ_QUELLE}
 {_ORTSCHAFT_JS}"""
     return _page("Vereinsprofil", body)
+
+
+def _profil_in_kalender(verein_key: str | None, neuer_name: str, alter_name: str, werte: dict) -> None:
+    """Profiländerungen in vereinstermine.json nachziehen – sonst sieht der Kalender
+    sie nie (Kalender liest `_labels`/`_meta`, nicht die DB).
+
+    Nur für Vereine, die im Kalender schon existieren (`_labels`), also freigegeben.
+    Andere `_meta`-Felder (`selbstverwaltung`, `ortschaft_gemeinde`-Override …)
+    bleiben unangetastet; leere Werte überschreiben nichts."""
+    if not verein_key:
+        return
+
+    def _mut(d, vk=verein_key):
+        labels = d.get("_labels") or {}
+        if vk not in labels:
+            return
+        if neuer_name != alter_name:
+            labels[vk] = neuer_name
+        m = d.setdefault("_meta", {}).setdefault(vk, {})
+        for k, v in werte.items():
+            if v:
+                m[k] = v
+    KalenderStore.update(_mut)
+
+
+@verein_bp.route("/verein/email-bestaetigen", methods=["GET"])
+def email_bestaetigen():
+    """Link aus der Mail an die neue Adresse: erst jetzt wird sie Login-Adresse."""
+    token = request.args.get("token", "")
+    with db_conn() as conn:
+        row = conn.execute(
+            "SELECT id, email_neu, email_neu_expires FROM vk_users WHERE email_neu_token=?",
+            (token,),
+        ).fetchone() if token else None
+        if not row or not row["email_neu"] or (row["email_neu_expires"] or "") < datetime.utcnow().isoformat():
+            return _page("Link ungültig",
+                         '<p class="err">Der Link ist ungültig oder abgelaufen. '
+                         'Bitte die Änderung im Vereinsprofil erneut anstoßen.</p>'
+                         '<a class="btn btn-sec" href="/verein/login">Zum Login</a>')
+        conn.execute(
+            """UPDATE vk_users SET email=?, email_verified=1,
+                      email_neu=NULL, email_neu_token=NULL, email_neu_expires=NULL
+               WHERE id=?""",
+            (row["email_neu"], row["id"]),
+        )
+    return _page("E-Mail bestätigt",
+                 f'<p class="ok">✅ Ab sofort loggst du dich mit <strong>{html.escape(row["email_neu"])}</strong> ein.</p>'
+                 '<a class="btn" href="/verein/login">Zum Login</a>')

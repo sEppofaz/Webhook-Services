@@ -1,3 +1,4 @@
+import html
 import os
 import smtplib
 import sys
@@ -72,7 +73,37 @@ def _send(to_email: str, subject: str, html_body: str) -> bool:
         return False
 
 
-def send_verify_email(to_email: str, token: str) -> bool:
+ANREDEN = ["Herr", "Frau", "keine Angabe"]
+
+
+def begruessung(anrede: str | None = "", vorname: str | None = "", nachname: str | None = "") -> str:
+    """„Hallo Herr Huber," – bei „keine Angabe" mit vollem Namen, ohne Namen nur „Hallo,"."""
+    anrede, vorname, nachname = (anrede or "").strip(), (vorname or "").strip(), (nachname or "").strip()
+    if anrede in ("Herr", "Frau") and nachname:
+        return f"Hallo {anrede} {html.escape(nachname)},"
+    name = " ".join(x for x in (vorname, nachname) if x)
+    return f"Hallo {html.escape(name)}," if name else "Hallo,"
+
+
+def gruss_aus(row) -> str:
+    """Begrüßung aus einer vk_users-Zeile (sqlite3.Row oder dict), fehlende Spalten → „Hallo,"."""
+    def feld(k):
+        try:
+            return row[k]
+        except (KeyError, IndexError, TypeError):
+            return ""
+    return begruessung(feld("anrede"), feld("vorname"), feld("nachname"))
+
+
+def _mit_gruss(body: str, gruss: str) -> str:
+    """Setzt die Begrüßung direkt unter die Überschrift."""
+    if not gruss:
+        return body
+    teile = body.split("</h2>", 1)
+    return f"{teile[0]}</h2>\n<p>{gruss}</p>{teile[1]}" if len(teile) == 2 else f"<p>{gruss}</p>{body}"
+
+
+def send_verify_email(to_email: str, token: str, gruss: str = "") -> bool:
     link = f"{BASE_URL}/api/auth/verify?token={token}"
     body = f"""<h2>E-Mail-Adresse bestätigen</h2>
 <p>Bitte bestätige deine E-Mail-Adresse, um deine Registrierung abzuschließen.</p>
@@ -80,17 +111,17 @@ def send_verify_email(to_email: str, token: str) -> bool:
 <p class="hint">Der Link ist <strong>24 Stunden</strong> gültig.<br>
 Falls du dich nicht registriert hast, kannst du diese E-Mail ignorieren.<br><br>
 Direktlink: <a href="{link}" style="color:#6D28D9">{link}</a></p>"""
-    return _send(to_email, "Deine E-Mail-Adresse bestätigen – Vereinskalender", _html_wrap("E-Mail bestätigen", body))
+    return _send(to_email, "Deine E-Mail-Adresse bestätigen – Vereinskalender", _html_wrap("E-Mail bestätigen", _mit_gruss(body, gruss)))
 
 
-def send_reset_email(to_email: str, token: str) -> bool:
+def send_reset_email(to_email: str, token: str, gruss: str = "") -> bool:
     link = f"{BASE_URL}/verein/passwort-reset?token={token}"
     body = f"""<h2>Passwort zurücksetzen</h2>
 <p>Du hast eine Passwort-Zurücksetzung angefordert.</p>
 <a class="btn" href="{link}">Neues Passwort setzen</a>
 <p class="hint">Der Link ist <strong>1 Stunde</strong> gültig.<br>
 Falls du keine Zurücksetzung angefordert hast, ignoriere diese E-Mail.</p>"""
-    return _send(to_email, "Passwort zurücksetzen – Vereinskalender", _html_wrap("Passwort zurücksetzen", body))
+    return _send(to_email, "Passwort zurücksetzen – Vereinskalender", _html_wrap("Passwort zurücksetzen", _mit_gruss(body, gruss)))
 
 
 def send_invite_email(to_email: str, token: str, verein_name: str) -> bool:
@@ -102,14 +133,14 @@ def send_invite_email(to_email: str, token: str, verein_name: str) -> bool:
     return _send(to_email, f"Einladung: {verein_name} – Vereinskalender", _html_wrap("Einladung", body))
 
 
-def send_welcome_email(to_email: str, verein_name: str) -> bool:
+def send_welcome_email(to_email: str, verein_name: str, gruss: str = "") -> bool:
     login_link  = f"{BASE_URL}/verein/login"
     upload_link = f"{BASE_URL}/verein/upload"
     profil_link = f"{BASE_URL}/verein/profil"
     body = f"""<h2>Willkommen beim Vereinskalender!</h2>
 <p>Das Konto für <strong>{verein_name}</strong> ist freigeschaltet. In drei Schritten seid ihr dabei:</p>
 <ol style="margin:12px 0 16px;padding-left:20px;color:#3c3c43;line-height:2;font-size:14px">
-  <li><strong>Profil prüfen</strong> – Heimatort, PLZ und Rubrik kontrollieren:<br>
+  <li><strong>Profil prüfen</strong> – PLZ, Ortschaft, Rubrik und Ansprechpartner kontrollieren:<br>
       <a href="{profil_link}" style="color:#6D28D9">{profil_link}</a></li>
   <li><strong>Termine hochladen</strong> – Jahresprogramm als PDF, Foto oder Excel:<br>
       <a href="{upload_link}" style="color:#6D28D9">{upload_link}</a></li>
@@ -119,11 +150,37 @@ def send_welcome_email(to_email: str, verein_name: str) -> bool:
 <a class="btn" href="{login_link}">Jetzt einloggen</a>
 <p class="hint">Bei Fragen einfach auf diese E-Mail antworten oder schreiben an
 <a href="mailto:Vereinskalender@icloud.com" style="color:#6D28D9">Vereinskalender@icloud.com</a>.</p>"""
-    return _send(to_email, f"Konto freigeschaltet – {verein_name}", _html_wrap("Willkommen!", body))
+    return _send(to_email, f"Konto freigeschaltet – {verein_name}", _html_wrap("Willkommen!", _mit_gruss(body, gruss)))
 
 
-def send_rejected_email(to_email: str, verein_name: str) -> bool:
+def send_rejected_email(to_email: str, verein_name: str, gruss: str = "") -> bool:
     body = f"""<h2>Registrierung nicht angenommen</h2>
 <p>Die Registrierungsanfrage für <strong>{verein_name}</strong> konnte leider nicht bestätigt werden.</p>
 <p>Bei Fragen wende dich direkt an den Kalender-Administrator.</p>"""
-    return _send(to_email, f"Registrierungsanfrage – Vereinskalender", _html_wrap("Registrierung", body))
+    return _send(to_email, f"Registrierungsanfrage – Vereinskalender", _html_wrap("Registrierung", _mit_gruss(body, gruss)))
+
+
+def send_email_change_confirm(to_email: str, token: str, verein_name: str, gruss: str = "") -> bool:
+    """An die NEUE Adresse: erst der Klick macht sie zur Login-Adresse."""
+    link = f"{BASE_URL}/verein/email-bestaetigen?token={token}"
+    body = f"""<h2>Neue E-Mail-Adresse bestätigen</h2>
+<p>Für <strong>{html.escape(verein_name)}</strong> soll diese Adresse künftig zum Einloggen und für Benachrichtigungen dienen.</p>
+<a class="btn" href="{link}">Adresse bestätigen</a>
+<p class="hint">Der Link ist <strong>24 Stunden</strong> gültig. Bis dahin gilt die bisherige Adresse.<br>
+Falls du das nicht veranlasst hast, ignoriere diese E-Mail.<br><br>
+Direktlink: <a href="{link}" style="color:#6D28D9">{link}</a></p>"""
+    return _send(to_email, "Neue E-Mail-Adresse bestätigen – Vereinskalender",
+                 _html_wrap("E-Mail bestätigen", _mit_gruss(body, gruss)))
+
+
+def send_email_change_notice(to_email: str, neu: str, verein_name: str, gruss: str = "") -> bool:
+    """An die ALTE Adresse: Hinweis, damit eine fremde Änderung auffällt."""
+    teile = neu.split("@")
+    maskiert = (teile[0][:2] + "…@" + teile[1]) if len(teile) == 2 else "…"
+    body = f"""<h2>Änderung der E-Mail-Adresse angefordert</h2>
+<p>Für <strong>{html.escape(verein_name)}</strong> wurde eine neue Login-Adresse eingetragen: <strong>{html.escape(maskiert)}</strong>.
+Sie gilt erst, wenn sie über den Link in der dortigen E-Mail bestätigt wird.</p>
+<p>Warst du das nicht? Dann ändere bitte sofort dein Passwort und melde dich unter
+<a href="mailto:Vereinskalender@icloud.com" style="color:#6D28D9">Vereinskalender@icloud.com</a>.</p>"""
+    return _send(to_email, "E-Mail-Adresse geändert – Vereinskalender",
+                 _html_wrap("Hinweis", _mit_gruss(body, gruss)))
