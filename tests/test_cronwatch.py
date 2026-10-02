@@ -83,6 +83,16 @@ def test_bewertung():
     pruefe(cw.bewerte({**job, "aktiv_seit": "2026-10-02T14:00"}, None, t("2026-10-02 14:30"))["status"] == cw.OK,
            "aktiv_seit mit Uhrzeit: der Soll-Zeitpunkt 06:30 vor Aufsichtsbeginn zählt nicht")
 
+    erster = {"letzter_start": "2026-10-02T14:00:05+02:00", "letztes_ende": "2026-10-02T14:00:09+02:00", "letzter_exit": 0,
+              "letzter_erfolg": "2026-10-02T14:00:09+02:00", "laeuft_seit": None, "erster_start": "2026-10-02T14:00:05+02:00"}
+    selbst = {"name": "s", "at": ["06:30"], "grace_min": 10}  # kein aktiv_seit
+    pruefe(cw.bewerte(selbst, erster, t("2026-10-02 14:30"))["status"] == cw.OK,
+           "Selbstaufnahme: erster Heartbeat um 14:00, der Soll-Zeitpunkt 06:30 davor zählt nicht")
+    pruefe(cw.bewerte(selbst, erster, t("2026-10-03 06:45"))["status"] == cw.UEBERFAELLIG,
+           "Selbstaufnahme: am Folgetag fehlt der Lauf → überfällig")
+    pruefe(cw.bewerte(selbst, None, t("2026-10-03 06:45"))["status"] == cw.UNBEOBACHTET,
+           "ohne Heartbeat und ohne aktiv_seit weiter unbeobachtet")
+
     fail = hb("2026-10-02T06:30:01+02:00", "2026-10-02T06:30:05+02:00", 3, "2026-10-01T06:30:20+02:00")
     pruefe(cw.bewerte(job, fail, jetzt)["status"] == cw.FEHLGESCHLAGEN, "Exit-Code 3 → fehlgeschlagen")
     genesen = hb("2026-10-02T06:50:01+02:00", "2026-10-02T06:50:05+02:00", 0, "2026-10-02T06:50:05+02:00")
@@ -140,10 +150,12 @@ def test_dateien():
         cw.heartbeat_ende("job1", 0, v, t("2026-10-02 06:31"))
         h = cw.lese_heartbeat("job1", v)
         pruefe(h["laeuft_seit"] is None and h["letzter_exit"] == 0 and h["letzter_erfolg"], "Ende 0: Erfolg gesetzt", h)
+        pruefe(h["erster_start"].startswith("2026-10-02T06:30"), "erster_start wird einmal gesetzt", h)
         cw.heartbeat_start("job1", v, t("2026-10-03 06:30"))
         cw.heartbeat_ende("job1", 2, v, t("2026-10-03 06:30"))
         h = cw.lese_heartbeat("job1", v)
         pruefe(h["letzter_exit"] == 2 and h["letzter_erfolg"].startswith("2026-10-02"), "Fehlschlag überschreibt den letzten Erfolg nicht", h)
+        pruefe(h["erster_start"].startswith("2026-10-02T06:30"), "erster_start bleibt beim zweiten Lauf unverändert", h)
         (v / "kaputt.json").write_text("{nicht json")
         pruefe(cw.lese_heartbeat("kaputt", v) is None, "kaputte Datei → None statt Absturz")
         pruefe(cw.lese_heartbeat("gibtsnicht", v) is None, "fehlende Datei → None")

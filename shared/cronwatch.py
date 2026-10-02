@@ -93,11 +93,13 @@ def _fenster(job: dict, tag: date) -> tuple[datetime, datetime] | None:
 def bewerte(job: dict, hb: dict | None, jetzt: datetime) -> dict:
     """Status eines Jobs: {"status", "grund"}. `hb` = Heartbeat oder None."""
     grace = timedelta(minutes=int(job.get("grace_min", 10)))
-    seit = parse_zeit(job.get("aktiv_seit"))
+    hb = hb or {}
+    # Selbstaufnahme: Mit dem ersten Heartbeat (erster Lauf über cronwrap) steht ein Job unter Aufsicht.
+    # `aktiv_seit` in der Registry ist nur nötig, um einen Job VOR seinem ersten Heartbeat zu überwachen.
+    seit = parse_zeit(job.get("aktiv_seit")) or parse_zeit(hb.get("erster_start"))
     if seit is None or jetzt < seit:
         return {"status": UNBEOBACHTET, "grund": "noch nicht unter Aufsicht"}
 
-    hb = hb or {}
     laeuft_seit = parse_zeit(hb.get("laeuft_seit"))
     max_lauf = timedelta(minutes=int(job.get("max_laufzeit_min", 60)))
     if laeuft_seit and jetzt - laeuft_seit > max_lauf:
@@ -245,6 +247,7 @@ def heartbeat_start(name: str, verzeichnis: Path | None = None, jetzt: datetime 
     hb = lese_json(pfad) or {}
     t = (jetzt or jetzt_berlin()).isoformat()
     hb.update({"name": name, "letzter_start": t, "laeuft_seit": t})
+    hb.setdefault("erster_start", t)
     _atomar_schreiben(pfad, hb)
 
 
