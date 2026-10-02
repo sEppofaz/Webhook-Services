@@ -230,7 +230,8 @@ Gottesdienste aus `gottesdienste.json` erreichen die Abonnenten also **nicht**. 
 - **Pflichtfelder:** `plz` + `telefon` sind serverseitig required. Validierung: PLZ muss `^\d{5}$`, Telefon non-empty.
 - **Neue Checkbox `zugangsdaten_notiert`:** Pflicht, serverseitig geprüft (`elif not zn:`). Wird in `form_data` NICHT zurückgegeben (kein Preserve nötig – ist nach Submit weg).
 - **Client-Validierung:** JS in `<script>`-Tag am Ende des Formulars. f-String → `{{` für JS-Objekte, `\d{{5}}` für Regex. Checkbox-Fehler highlightet `.chk`-Wrapper (nicht das Input selbst).
-- **Passwort-Toggle:** `.pw-wrap` wrapper + `.pw-toggle` Button mit Eye/EyeOff SVG. `tabindex="-1"` damit Tab-Reihenfolge unberührt bleibt.
+- **Passwort-Toggle (seit v1.28 an jedem Passwortfeld):** `services/auth/routes.py::_PW_TOGGLE_JS` wird von `_page()` in **jede** Server-Seite eingehängt (Login, Registrierung, Passwort ändern/zurücksetzen, Verein-Dashboard) und ergänzt `input[type=password]` selbst um `.pw-wrap` + `.pw-toggle` (Lucide eye/eye-off). Felder, die schon in `.pw-wrap` stehen, werden übersprungen. **Neue Passwortfelder brauchen nichts weiter**, solange die Seite über `_page()` läuft. Der Admin-Zugang in `kalender.html` hat seinen eigenen Knopf (`.pw-eye`, `togglePwEye()`). `tabindex="-1"`, `aria-pressed`, Rücksetzung auf „verborgen" bei `pageshow` (Bfcache).
+- **Header-Button „Login"** (seit v1.26, `#verein-login-btn`, Ziel `/verein/login`): erscheint nur ohne Session, eingeloggt ersetzt ihn der Stift `#verein-admin-btn`. Er führt zum **Vereins**-Login, nicht zum Admin-Zugang (der bleibt `/admin` bzw. das Import-Symbol). Unter 480 px entfallen Titelzusatz und Versionsblock (`.hdr-ver` trägt inline `display:flex` → die Regel braucht `!important`). nginx begrenzt `/verein/login` (429 nach etwa 6 schnellen Aufrufen) – beim Testen mit curl daran denken.
 
 ## Filterlogik kalender.html – wichtige Pitfalls
 
@@ -277,7 +278,7 @@ weiterer Call.
 
 ---
 
-## Pfarr-Termine: zwei Quellen, und der Ortschafts-Filter hängt am Verein
+## Pfarr-Termine: zwei Quellen, Ortschafts-Filter am Termin (ADR-014)
 
 **Zwei unabhängige Einspeisewege** beschreiben dieselbe Pfarrgemeinde:
 `pfarrbrief_manager.py` → `gottesdienste.json` (`hk`/`pk`/`ok`) und der Kalender-Import über
