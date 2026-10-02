@@ -823,7 +823,7 @@ def nutzungsbedingungen():
 </div>
 <div class="card">
 <h2 style="font-size:1rem;margin-top:0">2. Registrierung</h2>
-<p>Nur Vereine im Einzugsgebiet dürfen sich registrieren. Gaststätten dürfen öffentliche Veranstaltungen eintragen. Andere gewerbliche oder kommerzielle Anbieter sind ausgeschlossen. Jeder Verein trägt Verantwortung für die Richtigkeit seiner Daten.</p>
+<p>Gaststätten dürfen öffentliche Veranstaltungen eintragen. Wer sich registriert, trägt die Verantwortung für die Richtigkeit seiner Daten.</p>
 </div>
 <div class="card">
 <h2 style="font-size:1rem;margin-top:0">3. Haftungsausschluss</h2>
