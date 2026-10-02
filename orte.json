@@ -367,6 +367,16 @@
     "alias": []
   },
   {
+    "ort": "Neufahrn",
+    "plz": "84088",
+    "gemeinde": "Neufahrn in Niederbayern",
+    "landkreis": "Landkreis Landshut",
+    "bundesland": "Bayern",
+    "hauptort": true,
+    "alias": [],
+    "quelle": "Josef 2026-10-02 (Neufahrn in Niederbayern); PLZ/Gemeinde aus Nominatim, im BayernAtlas zu bestätigen"
+  },
+  {
     "ort": "Niederaichbach",
     "plz": "84100",
     "gemeinde": "Niederaichbach",

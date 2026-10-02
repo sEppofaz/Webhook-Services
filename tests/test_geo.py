@@ -149,6 +149,10 @@ def test_orte_und_ortschaften():
     pruefe(geo_fuer_termin({"ort": "Winkelmoos 2"})["orte"] == ["Winkelmoos"],
            "Ortschaft Winkelmoos wird als Winkelmoos erkannt")
 
+    pruefe(geo_fuer_termin({"ort": "Neufahrn"})["orte"] == ["Neufahrn"]
+           and g.eintrag_fuer("Neufahrn")["plz"] == "84088",
+           "Neufahrn (in Niederbayern) ist Ortschaft, PLZ 84088")
+
     # PLZ-Rückfall
     for text, soll in (("Rosemeyerstr. 1, 84061 Ergoldsbach", ["Ergoldsbach"]),
                        ("Goldbach Halle, Badstraße 20, 84061 Ergoldsbach", ["Ergoldsbach"])):
