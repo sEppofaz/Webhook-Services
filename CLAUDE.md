@@ -177,7 +177,10 @@ Gottesdienste aus `gottesdienste.json` erreichen die Abonnenten also **nicht**. 
 | `/api/admin/verein/<id>/transfer-key` | POST `{source_key}` – Termine + _meta + _labels + tg_subscriptions übertragen |
 | `/upload` | Superadmin-Upload (PDF/JPG/PNG/HEIC/Excel) |
 | `/#admin` | Admin-PWA (Tabs: Import/Importe/Vereine/Accounts/Termine/Stats) |
-| `/verein/register` | Selbstregistrierung |
+| `/verein/register` | Selbstregistrierung (PLZ → Ortschaft, Ansprechpartner, ADR-016) |
+| `/verein/profil` | Vereinsprofil: alle Registrierungsdaten, E-Mail-Wechsel mit Bestätigung |
+| `/verein/email-bestaetigen` | GET `?token=` – Link aus der Mail an die neue Adresse (24 h, einmalig) |
+| `/api/orte` | GET `?plz=NNNNN` – öffentlich: Gemeinden + Ortschafts-Vorschläge (400 bei ungültiger PLZ) |
 | `/verein/login` | Vereins-Login (bcrypt, Brute-Force-Schutz) |
 | `/verein/dashboard` | Termin-Übersicht (nach Login) |
 | `/verein/upload` | Vereinsadmin-Upload (Rate-Limit 3/Tag) |
@@ -227,9 +230,18 @@ Gottesdienste aus `gottesdienste.json` erreichen die Abonnenten also **nicht**. 
 - **Flyer-Button:** Nur gerendert wenn `t.flyer_url` gesetzt. `titlePadding` dynamisch: 74px (ohne Flyer) / 114px (mit Flyer). Click via Event-Delegation `.js-ev-flyer-btn` → `window.open(dataset.flyerUrl, '_blank', 'noopener')`.
 - **Suchfeld-Lösch-Button (seit 2026-08-10, PWA-Standard):** Generische Helper `_toggleMiniClear(inputId)` / `_clearMiniSearch(inputId, cb)` (CSS-Klasse `.mini-srch-clear`) für Suchfelder außerhalb der Haupt-Suche (die hat bereits `#srch-clear`/`.srch-clear`). Konvention: Clear-Button-ID = `<inputId>-clear`. Aktuell genutzt in `#ver-srch` (Vereinsverwaltung) und `#trm-search` (Terminverwaltung).
 
-## Registrierungsform `/verein/register` – Pitfalls (Stand 2026-06-07)
+## Registrierung `/verein/register` und Profil `/verein/profil` (Stand 2026-10-02, ADR-016)
 
-- **Pflichtfelder:** `plz` + `telefon` sind serverseitig required. Validierung: PLZ muss `^\d{5}$`, Telefon non-empty.
+- **Login ist die E-Mail-Adresse**, nicht der Vereinsname. Bis 2026-10-02 stand in der Registrierung fälschlich „Vereinsname (Euer Login-Name)“.
+- **Reihenfolge und Pflicht (beide Formulare):** PLZ → Ortschaft (DB-Feld `heimatort`) → Anrede (`Herr`/`Frau`/`keine Angabe`, `shared/vk_mail.ANREDEN`) → Vorname → Nachname → E-Mail → Telefon. Bausteine `_ortschaft_felder()`, `_ansprechpartner_felder()`, `_ORTSCHAFT_JS`, `_PLZ_QUELLE` in `services/auth/routes.py`, vom Profil importiert.
+- **Gemeinde/Landkreis:** `ortschaft_geo()` → `shared/geo.ortschaft_aufloesen()` (Register mit gleicher PLZ → Gemeinde der PLZ aus `plz_gemeinden.json`) → nur bei mehrdeutiger PLZ `lookup_plz()` (Nominatim). Hinweise („nicht im Register“, „PLZ passt nicht“, „mehrere Gemeinden“) gehen per Telegram an Josef, abgelehnt wird nie. Gleichnamige Orte anderswo (Bayerbach 94137) lösen bewusst kein „passt nicht“ aus.
+- **E-Mail-Wechsel im Profil:** nur mit aktuellem Passwort; Spalten `email_neu`, `email_neu_token`, `email_neu_expires` (24 h); Mail an neu (`send_email_change_confirm`) + Hinweis an alt (`send_email_change_notice`); `/verein/email-bestaetigen` setzt `email`, `email_verified=1` und leert die drei Spalten. Andere Vereine derselben Person (Multi-Verein-Login) behalten ihre Adresse.
+- **Profil → Kalender:** `_profil_in_kalender()` schreibt Rubrik, Ortschaft, PLZ, Gemeinde, Landkreis nach `_meta[verein_key]` und den Namen nach `_labels` – nur wenn der Key in `_labels` steht (freigegeben). Leere Werte überschreiben nichts, `selbstverwaltung`/`ortschaft_gemeinde` bleiben. Vorher landeten Profiländerungen nur in der DB und waren im Kalender unsichtbar.
+- **Anrede in Mails:** `gruss_aus(row)` → „Hallo Frau Huber,“ (bei „keine Angabe“ voller Name, ohne Namen „Hallo,“), eingesetzt unter der `<h2>`. Selects, die eine Mail auslösen, müssen `u.anrede, u.vorname, u.nachname` mitselektieren (Freigabe in `auth` **und** `telegram`, Reset, Resend-Verify).
+- **Admin-Dialog „Name“** ändert nur `vk_users.name`, nicht Vor-/Nachname – die Begrüßung nutzt Vor-/Nachname. Das Profil schreibt beides.
+- **Rubriken:** zentral in `shared/rubriken.py`; `kalender.html` hat eine Kopie (`RUBRIKEN_OPT`, `#vd-rubrik`, Chip-Icons in `renderRubrikBar()`). Neue Rubrik ⇒ an allen drei Stellen. Seit v1.29: „Gaststätte/Pub/Bar“ (Lucide `beer`).
+- **Offline testen ohne Secrets:** `CLAUDE_API_KEY=attrappe` setzen, `vk_db.DB_FILE` auf eine Temp-Datei, Mail-/Telegram-Funktionen in den Modulen ersetzen, Blueprints in eine eigene Flask-App hängen, CSRF-Feld heißt `_csrf`. Geschützte Routen per `inspect.unwrap(V.verein_profil)(user)` aufrufen.
+- **Telefon:** serverseitig Pflicht (Registrierung und Profil).
 - **Neue Checkbox `zugangsdaten_notiert`:** Pflicht, serverseitig geprüft (`elif not zn:`). Wird in `form_data` NICHT zurückgegeben (kein Preserve nötig – ist nach Submit weg).
 - **Client-Validierung:** JS in `<script>`-Tag am Ende des Formulars. f-String → `{{` für JS-Objekte, `\d{{5}}` für Regex. Checkbox-Fehler highlightet `.chk`-Wrapper (nicht das Input selbst).
 - **Passwort-Toggle (seit v1.28 an jedem Passwortfeld):** `services/auth/routes.py::_PW_TOGGLE_JS` wird von `_page()` in **jede** Server-Seite eingehängt (Login, Registrierung, Passwort ändern/zurücksetzen, Verein-Dashboard) und ergänzt `input[type=password]` selbst um `.pw-wrap` + `.pw-toggle` (Lucide eye/eye-off). Felder, die schon in `.pw-wrap` stehen, werden übersprungen. **Neue Passwortfelder brauchen nichts weiter**, solange die Seite über `_page()` läuft. Der Admin-Zugang in `kalender.html` hat seinen eigenen Knopf (`.pw-eye`, `togglePwEye()`). `tabindex="-1"`, `aria-pressed`, Rücksetzung auf „verborgen" bei `pageshow` (Bfcache).
@@ -308,7 +320,8 @@ Der iCal-Feed filtert `?ort=` über dieselbe Zuordnung (exakter Ortsname), der F
 | `orte.json` | **Ortschaften** (amtlich), 62 Einträge mit PLZ, Gemeinde, Landkreis, Bundesland, `hauptort`, `alias`, `geprueft`/`quelle` |
 | `orte_frei.json` | **Orte** (alles Mögliche: Lokale, Gebäude, falsche Schreibweisen) → Ortschaft. Winklmoos → Hölskofen. Wird vor `orte.json` geprüft |
 | `shared/geo.py` | `geo_fuer_termin()` → `{orte, plz, gemeinden, landkreise, bundeslaender}` |
-| `tests/test_geo.py` | Offline-Abnahme gegen `tests/fixtures/termine.json` |
+| `tests/test_geo.py` | Offline-Abnahme gegen `tests/fixtures/termine.json` (inkl. PLZ-Prüfungen) |
+| `plz_gemeinden.json` | **PLZ → Gemeinde(n)**, Landkreis, Bundesland, Postorte – bundesweit, aus OpenPLZ (ODbL). Keine Ortsteile. Neu bauen: `python3 tools/build_plz_gemeinden.py` (lokal, ~230 API-Abrufe) |
 
 ```bash
 python3 tests/test_geo.py             # Prüfungen
