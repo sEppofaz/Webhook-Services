@@ -816,14 +816,14 @@ def datenschutz():
 @verein_bp.route("/verein/nutzungsbedingungen")
 def nutzungsbedingungen():
     body = f"""
-<p style="color:#aeaeb2;font-size:.85rem">Stand: Mai 2026</p>
+<p style="color:#aeaeb2;font-size:.85rem">Stand: Oktober 2026</p>
 <div class="card">
 <h2 style="font-size:1rem;margin-top:0">1. Nutzung</h2>
-<p>Der Vereinskalender vereinskalender.online dient der nicht-kommerziellen Veröffentlichung von Vereinsterminen. Die Nutzung ist kostenlos.</p>
+<p>Der Vereinskalender vereinskalender.online dient der Veröffentlichung von Vereinsterminen und öffentlichen Veranstaltungen. Die Nutzung ist kostenlos.</p>
 </div>
 <div class="card">
 <h2 style="font-size:1rem;margin-top:0">2. Registrierung</h2>
-<p>Nur Vereine im Einzugsgebiet dürfen sich registrieren. Gewerbliche oder kommerzielle Anbieter sind ausgeschlossen. Jeder Verein trägt Verantwortung für die Richtigkeit seiner Daten.</p>
+<p>Nur Vereine im Einzugsgebiet dürfen sich registrieren. Gaststätten dürfen öffentliche Veranstaltungen eintragen. Andere gewerbliche oder kommerzielle Anbieter sind ausgeschlossen. Jeder Verein trägt Verantwortung für die Richtigkeit seiner Daten.</p>
 </div>
 <div class="card">
 <h2 style="font-size:1rem;margin-top:0">3. Haftungsausschluss</h2>
