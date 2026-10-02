@@ -129,11 +129,11 @@
       "name": "netatmo_alert",
       "every_min": 10,
       "zeitfenster": [
-        "06:00",
-        "22:50"
+        "06:03",
+        "22:53"
       ],
       "projekt": "Netatmo-Alert",
-      "beschreibung": "/etc/cron.d/netatmo-alert (*/10, Stunden 6-22, loggt nur bei Zustandswechsel)",
+      "beschreibung": "/etc/cron.d/netatmo-alert (3-59/10 = :03/:13/…, versetzt gegen die Lastspitze bei Netatmo zur vollen Zehnerminute; Stunden 6-22, Fehler mit Zeitstempel in /var/log/pka-netatmo.log)",
       "grace_min": 10,
       "aktiv_seit": null
     },
