@@ -1,0 +1,158 @@
+{
+  "_hinweis": "Soll-Zustand aller Cronjobs. Ein Job steht unter Aufsicht, sobald `aktiv_seit` gesetzt ist – **mit Uhrzeit, genau zum Zeitpunkt der Umstellung auf cronwrap** (z. B. `2026-10-05T14:00`), sonst zählt ein davor liegender Soll-Zeitpunkt desselben Tages als verpasst – dann muss er über cronwrap.py laufen (oder `signal: log`). Zeiten: Europe/Berlin, days: Mo=0 … So=6, fehlt = täglich. Noch nicht erfasst (Zeit/Takt laut Doku unklar): pip_update_audit (sonntags), e-Rechnungen-Retry (täglich), OrgKompass-Erinnerungen, cron.weekly/sicherheitsupdates, plz_update (Baustein B).",
+  "jobs": [
+    {
+      "name": "logbuch_summary",
+      "at": [
+        "06:30"
+      ],
+      "projekt": "Vereinskalender",
+      "beschreibung": "Logbuch-Eintrag per Telegram",
+      "grace_min": 10,
+      "aktiv_seit": null
+    },
+    {
+      "name": "event_reminder",
+      "at": [
+        "18:00"
+      ],
+      "projekt": "Vereinskalender",
+      "beschreibung": "Erinnerung morgige Gottesdienste + Termine (Josef)",
+      "grace_min": 10,
+      "aktiv_seit": null
+    },
+    {
+      "name": "kalender_erinnerung",
+      "at": [
+        "18:00"
+      ],
+      "projekt": "Vereinskalender",
+      "beschreibung": "Telegram-Erinnerungen für Bot-Abonnenten",
+      "grace_min": 10,
+      "aktiv_seit": null
+    },
+    {
+      "name": "kalender_report",
+      "at": [
+        "00:10",
+        "20:00"
+      ],
+      "projekt": "Vereinskalender",
+      "beschreibung": "Vereinskalender-Bericht",
+      "grace_min": 10,
+      "aktiv_seit": null
+    },
+    {
+      "name": "stats_collector",
+      "at": [
+        "00:05"
+      ],
+      "projekt": "Vereinskalender",
+      "beschreibung": "Besucherstatistik → page_stats",
+      "grace_min": 10,
+      "aktiv_seit": null
+    },
+    {
+      "name": "heimat_import",
+      "at": [
+        "07:00"
+      ],
+      "days": [
+        2
+      ],
+      "projekt": "Vereinskalender",
+      "beschreibung": "heimat-info.de Import (Mi)",
+      "max_laufzeit_min": 120,
+      "grace_min": 10,
+      "aktiv_seit": null
+    },
+    {
+      "name": "traffic_info",
+      "at": [
+        "06:00"
+      ],
+      "days": [
+        1,
+        3
+      ],
+      "projekt": "Verkehr",
+      "beschreibung": "Verkehrsinfo Di+Do",
+      "signal": "log",
+      "log_pfad": "/var/log/pka-traffic.log",
+      "grace_min": 10,
+      "aktiv_seit": null
+    },
+    {
+      "name": "pka_todos_reminder",
+      "every_min": 15,
+      "projekt": "PKA-Todos",
+      "beschreibung": "Todos Fälligkeits-Erinnerungen",
+      "grace_min": 10,
+      "aktiv_seit": null
+    },
+    {
+      "name": "telegram_webhook_guard",
+      "every_min": 30,
+      "projekt": "Vereinskalender",
+      "beschreibung": "Webhook-Wächter",
+      "grace_min": 10,
+      "aktiv_seit": null
+    },
+    {
+      "name": "life_doku_export",
+      "at": [
+        "03:00"
+      ],
+      "projekt": "Life-Doku",
+      "beschreibung": "Export-Cron",
+      "signal": "log",
+      "log_pfad": "/var/log/pka-life-doku-export.log",
+      "grace_min": 10,
+      "aktiv_seit": null
+    },
+    {
+      "name": "pka_backup",
+      "at": [
+        "02:30"
+      ],
+      "projekt": "Server",
+      "beschreibung": "Server-Backup (SOPs/Server-Backup.md)",
+      "signal": "log",
+      "log_pfad": "/var/log/pka-backup.log",
+      "max_laufzeit_min": 90,
+      "grace_min": 10,
+      "aktiv_seit": null
+    },
+    {
+      "name": "claude_code_idle_check",
+      "every_min": 15,
+      "projekt": "Claude-Code-Hetzner",
+      "beschreibung": "/etc/cron.d/claude-code-idle-check",
+      "grace_min": 10,
+      "aktiv_seit": null
+    },
+    {
+      "name": "netatmo_alert",
+      "every_min": 10,
+      "zeitfenster": [
+        "06:00",
+        "22:00"
+      ],
+      "projekt": "Netatmo-Alert",
+      "beschreibung": "/etc/cron.d/netatmo-alert (6-22 Uhr, loggt nur bei Zustandswechsel)",
+      "grace_min": 10,
+      "aktiv_seit": null
+    },
+    {
+      "name": "server_maintenance",
+      "at": [
+        "03:00"
+      ],
+      "projekt": "Server",
+      "beschreibung": "/etc/cron.d/server-maintenance",
+      "max_laufzeit_min": 120,
+      "grace_min": 10,
+      "aktiv_seit": null
+    }
+  ]
+}
