@@ -91,6 +91,8 @@ ssh root@89.167.104.145 "/opt/rename-webhook/bin/python3 /opt/rename-webhook/hei
 
 ## Cron-Jobs (Vereinskalender-relevant)
 
+**Überwachung (seit 2026-10-02, ADR-015):** Alle hier genannten Jobs laufen über `cronwrap.py NAME -- <Befehl>` und schreiben einen Heartbeat nach `/var/lib/pka-cron/NAME.json`. `cron_watchdog.py` (alle 10 Min, `/etc/cron.d/pka-cron-watchdog`, Quelle `deploy/cron.d/`) bewertet sie gegen `cron_registry.json` und meldet überfällige, fehlgeschlagene und hängende Jobs per Telegram; Lebenszeichen täglich 08:05. Ein Job steht ab seinem ersten Wrapper-Lauf automatisch unter Aufsicht. Bei Intervallen ≤ 30 Min alarmiert erst der zweite Fehlschlag in Folge. **Neuer Cronjob ⇒ in `cron_registry.json` eintragen und mit `cronwrap.py` starten** (`PKA/BKM/Neuer-Server-Service.md`, Punkt 12). Offline testen: `python3 tests/test_cronwatch.py`, Trockenlauf auf dem Server: `cron_watchdog.py --dry-run`. Nicht erfasst: systemd-Timer (`newsletter-fetch.timer`), `update_geoip.sh` (monatlich). Sicherung der Zeilen vor der Umstellung: `/root/vor-cronwrap-20261002/`.
+
 Alle Jobs als `root`-Crontab. Timezone: `Europe/Berlin`. Logs: `/var/log/pka-*.log` – Rotation seit 2026-07-02 via `/etc/logrotate.d/pka` (weekly, 8 Rotationen, `su root root` nötig wegen `syslog`-Gruppenrechten auf `/var/log`).
 
 | Zeit | Script | Beschreibung |
@@ -580,6 +582,8 @@ Endpunkt `/telegram` – nur Josefs Chat-ID. Token = `TOKEN` aus `/etc/pka/secre
 
 ## pip_update_audit.py (Sonntags-Pip-Report)
 
+**Wo er läuft:** nicht im Crontab, sondern **sonntags 03:00 aus `/usr/local/bin/server-maintenance.sh`** (letzter Befehl des Skripts; `/etc/cron.d/server-maintenance`, täglich 03:00). Ein Audit-Fehlschlag macht damit das Skript fehlschlagen und wird über den Cron-Wächter-Job `server_maintenance` sichtbar. Am 2026-10-02 wurde er irrtümlich als „läuft nicht" gemeldet, weil nur Crontab und `cron.d` durchsucht wurden.
+
 Prüft **alle** venvs unter `/opt` (dynamisch erkannt, seit 2026-09-20 – vorher feste `VENVS`-Liste mit nur 5 von 10 venvs, siehe Claude-Remote ADR-008) auf veraltete Pakete + CVEs und hängt einen Abschnitt „Server-Inventar“ an (Whitelist-Abgleich, crashende/gescheiterte systemd-Units, apt, Node); sendet den Ampel-Report per Telegram. Läuft sonntags via `server-maintenance.sh` → `/etc/cron.d/server-maintenance` (03:00 Uhr). Macht **keine** automatischen Updates.
 
 - Im GitHub-Repo getrackt, normaler Deployment-Flow (`git push` → `ssh ... "git -C /opt/rename-webhook pull"`)
@@ -700,3 +704,9 @@ dort ist normal. Entscheidend beim Verifizieren ist der direkte Aufruf auf `127.
 Weitere existierende Pfade, die man leicht falsch rät: `/aktien-search` (nicht `/aktien/`),
 `/autoquartett/car-lookup` (POST, nicht `/autoquartett/`), `/telegram` (nur POST → GET
 liefert korrekt 405; ein 502 hieße, der Service ist tot).
+
+## Cron-Pitfalls (2026-10-02)
+
+- **Netatmo-Job beendet sich bei jedem API-Fehler still mit Exit 1** (`HTTP 503` von Netatmo). Vor der Überwachung unsichtbar; der Wächter toleriert den ersten Fehlschlag, alarmiert den zweiten in Folge. Log: `/var/log/pka-netatmo.log` (Rechte 600).
+- **`secrets.env` Zeile `NETATMO_REFRESH_TOKEN` enthält ein unquotiertes `|`:** in bash ist die Variable nach `source` leer, `source` mit `set -e` scheitert (Exit 127). Harmlos (eigener Parser im Netatmo-Skript, systemd nimmt den Wert wörtlich). Neue Zeilen immer in Einzelanführungszeichen anhängen; Diagnose ohne Werte-Ausgabe: Muster in `PKA/SOPs/Server-Secret-Scan.md`.
+- **Ein Cronjob-Wrapper auf Zeilen mit `bash -c '… source secrets.env …'`** (`pka_todos_reminder`) wird *innerhalb* der Anführungszeichen eingefügt, nicht davor.
