@@ -287,15 +287,18 @@ hatte – auch einen ohne künftige Termine. Seit ADR-013 werden beide über
 `shared/kalender_core.py::gottesdienste_eintraege()` zusammengeführt (Dublettenschlüssel
 `datum + uhrzeit + ort`), API und iCal-Feed nutzen dieselbe Funktion.
 
-**⚠️ Der Ortschafts-Filter im Frontend hängt noch am Verein, nicht am Termin.**
-`kalender.html:1631` filtert über `_ortOf[t.verein]` (Such-Chips: `:1642`); `_ortOf`
-entsteht aus `meta[k].heimatort` und fällt sonst auf das **letzte Wort des Labels** zurück
-(`_ortNameOf`, Zeile 761). Eine Pfarrei feiert aber reihum in allen Kirchen des Verbands –
-ein Filter auf Ortschaft *Hölskofen* findet die Hölskofener Messe deshalb **nicht**.
-Bei „Termin ist in der API, erscheint aber nicht in der App" ist das die erste Stelle
-zum Nachsehen.
+**Ortschafts-Filter hängt seit 2026-10-02 am Termin, nicht mehr am Verein (ADR-014, Stufe 0–2 live).**
+`/api/termine` liefert pro Termin `_geo` (`orte`, `ortschaften`, `plz`, `gemeinden`, `landkreise`,
+`bundeslaender`); `kalender.html::_terminOrte(t)` macht daraus Chip-Labels und ersetzt
+`_ortOf[t.verein]` im Haupt-Terminfilter, den Such-Chips und den Favoriten. `_ortOf`
+(Heimatort des Vereins) bleibt für die Kaskade und die Vereinsliste und ist der Rückfall, wenn
+`_geo` fehlt. **Gemeinde- und Landkreis-Filter hängen weiter am Verein** (Stufe 3, offen).
+Bei „Termin ist in der API, erscheint aber nicht in der App" zuerst `t._geo.orte` ansehen und
+dann `python3 tests/test_geo.py` (Abschnitt „Veranstaltungsorte ohne Registertreffer").
+Der iCal-Feed filtert `?ort=` über dieselbe Zuordnung (exakter Ortsname), der Favoriten-Feed
+(`?v=`) bleibt Verein-basiert.
 
-**Die Ablösung ist vorbereitet (ADR-014, Stufe 0 fertig am 2026-09-30):**
+**Dateien der Geo-Zuordnung (ADR-014, live seit 2026-10-02):**
 
 | Datei | Zweck |
 |---|---|
