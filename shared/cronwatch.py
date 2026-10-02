@@ -109,9 +109,15 @@ def bewerte(job: dict, hb: dict | None, jetzt: datetime) -> dict:
     erfolg = parse_zeit(hb.get("letzter_erfolg"))
     ende = parse_zeit(hb.get("letztes_ende"))
     exit_code = hb.get("letzter_exit")
-    # Fehlschlag zählt, wenn er neuer ist als der letzte Erfolg
+    # Fehlschlag zählt, wenn er neuer ist als der letzte Erfolg – und bei kurzen Intervallen erst ab
+    # `schwelle` Fehlschlägen in Folge (ein einzelner API-Aussetzer bei einem */10-Job ist Rauschen)
     if exit_code not in (None, 0) and ende and (erfolg is None or ende > erfolg):
-        return {"status": FEHLGESCHLAGEN, "grund": "letzter Lauf endete mit Exit-Code %s" % exit_code}
+        folge = int(hb.get("fehler_in_folge") or 1)  # ältere Heartbeats ohne Zähler: ein Fehlschlag
+        schwelle = alarm_schwelle(job)
+        if folge >= schwelle:
+            return {"status": FEHLGESCHLAGEN,
+                    "grund": "letzter Lauf endete mit Exit-Code %s (%d Fehlschläge in Folge)" % (exit_code, folge)}
+        return {"status": OK, "grund": "%d von %d tolerierten Fehlschlägen (Exit-Code %s)" % (folge, schwelle, exit_code)}
 
     if job.get("every_min"):
         takt = timedelta(minutes=int(job["every_min"]))
@@ -137,6 +143,13 @@ def bewerte(job: dict, hb: dict | None, jetzt: datetime) -> dict:
         return {"status": UEBERFAELLIG,
                 "grund": "Lauf von %s fehlt – %s" % (soll.strftime("%d.%m. %H:%M"), _ueberfaellig_text(erfolg, jetzt))}
     return {"status": OK, "grund": ""}
+
+
+def alarm_schwelle(job: dict) -> int:
+    """Fehlschläge in Folge bis zum Alarm: je Job `alarm_ab_fehlern`; sonst 2 bei Intervallen ≤ 30 Min, 1 bei Festzeiten."""
+    if job.get("alarm_ab_fehlern"):
+        return max(1, int(job["alarm_ab_fehlern"]))
+    return 2 if job.get("every_min") and int(job["every_min"]) <= 30 else 1
 
 
 def _ueberfaellig_text(erfolg: datetime | None, jetzt: datetime) -> str:
@@ -259,6 +272,9 @@ def heartbeat_ende(name: str, exit_code: int, verzeichnis: Path | None = None,
     hb.update({"letztes_ende": t, "letzter_exit": int(exit_code), "laeuft_seit": None})
     if int(exit_code) == 0:
         hb["letzter_erfolg"] = t
+        hb["fehler_in_folge"] = 0
+    else:
+        hb["fehler_in_folge"] = int(hb.get("fehler_in_folge") or 0) + 1
     _atomar_schreiben(pfad, hb)
 
 

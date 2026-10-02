@@ -97,6 +97,21 @@ def test_bewertung():
     pruefe(cw.bewerte(job, fail, jetzt)["status"] == cw.FEHLGESCHLAGEN, "Exit-Code 3 → fehlgeschlagen")
     genesen = hb("2026-10-02T06:50:01+02:00", "2026-10-02T06:50:05+02:00", 0, "2026-10-02T06:50:05+02:00")
     pruefe(cw.bewerte(job, genesen, jetzt)["status"] == cw.OK, "späterer Erfolg nach Fehlschlag → ok")
+    # Toleranz bei kurzen Intervallen: erst der zweite Fehlschlag in Folge alarmiert
+    kurz = {"name": "k", "every_min": 10, "grace_min": 5, "aktiv_seit": "2026-09-01"}
+    f1 = {**hb("2026-10-02T06:50:00+02:00", "2026-10-02T06:50:03+02:00", 1, "2026-10-02T06:40:00+02:00"), "fehler_in_folge": 1}
+    f2 = {**f1, "fehler_in_folge": 2}
+    pruefe(cw.bewerte(kurz, f1, t("2026-10-02 06:52"))["status"] == cw.OK, "alle 10 Min: erster Fehlschlag → noch kein Alarm")
+    pruefe(cw.bewerte(kurz, f2, t("2026-10-02 06:52"))["status"] == cw.FEHLGESCHLAGEN, "alle 10 Min: zweiter in Folge → Alarm")
+    pruefe(cw.bewerte({**job, "aktiv_seit": "2026-09-01"}, {**fail, "fehler_in_folge": 1}, jetzt)["status"] == cw.FEHLGESCHLAGEN,
+           "Festzeit-Job (täglich): schon der erste Fehlschlag alarmiert")
+    pruefe(cw.bewerte({**kurz, "alarm_ab_fehlern": 3}, f2, t("2026-10-02 06:52"))["status"] == cw.OK, "Schwelle je Job einstellbar (3)")
+    pruefe(cw.bewerte({**kurz, "every_min": 60}, f1, t("2026-10-02 06:52"))["status"] == cw.FEHLGESCHLAGEN, "stündlicher Job: Schwelle 1")
+    ohne_zaehler = hb("2026-10-02T06:50:00+02:00", "2026-10-02T06:50:03+02:00", 1, "2026-10-02T06:40:00+02:00")
+    pruefe(cw.bewerte(kurz, ohne_zaehler, t("2026-10-02 06:52"))["status"] == cw.OK, "alter Heartbeat ohne Zähler zählt als ein Fehlschlag")
+    pruefe(cw.alarm_schwelle({"every_min": 15}) == 2 and cw.alarm_schwelle({"at": ["06:00"]}) == 1 and cw.alarm_schwelle({"every_min": 30}) == 2,
+           "Standardschwellen: ≤30 Min → 2, Festzeit → 1")
+
     haengt = hb("2026-10-02T05:00:00+02:00", None, 0, "2026-10-01T06:30:20+02:00", laeuft="2026-10-02T05:00:00+02:00")
     pruefe(cw.bewerte(job, haengt, jetzt)["status"] == cw.HAENGT, "läuft seit 2 h (Grenze 60 Min) → hängt")
     lang = {**job, "max_laufzeit_min": 180}
@@ -156,6 +171,11 @@ def test_dateien():
         h = cw.lese_heartbeat("job1", v)
         pruefe(h["letzter_exit"] == 2 and h["letzter_erfolg"].startswith("2026-10-02"), "Fehlschlag überschreibt den letzten Erfolg nicht", h)
         pruefe(h["erster_start"].startswith("2026-10-02T06:30"), "erster_start bleibt beim zweiten Lauf unverändert", h)
+        pruefe(h["fehler_in_folge"] == 1, "Fehlschlag zählt fehler_in_folge hoch", h)
+        cw.heartbeat_start("job1", v, t("2026-10-04 06:30")); cw.heartbeat_ende("job1", 2, v, t("2026-10-04 06:31"))
+        pruefe(cw.lese_heartbeat("job1", v)["fehler_in_folge"] == 2, "zweiter Fehlschlag in Folge → 2")
+        cw.heartbeat_start("job1", v, t("2026-10-05 06:30")); cw.heartbeat_ende("job1", 0, v, t("2026-10-05 06:31"))
+        pruefe(cw.lese_heartbeat("job1", v)["fehler_in_folge"] == 0, "Erfolg setzt den Zähler zurück")
         (v / "kaputt.json").write_text("{nicht json")
         pruefe(cw.lese_heartbeat("kaputt", v) is None, "kaputte Datei → None statt Absturz")
         pruefe(cw.lese_heartbeat("gibtsnicht", v) is None, "fehlende Datei → None")
