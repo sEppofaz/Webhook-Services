@@ -80,6 +80,7 @@ select{-webkit-appearance:none;appearance:none;padding-right:2.5rem;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat:no-repeat;background-position:right .75rem center;background-size:1.1rem}
 input:focus,select:focus,textarea:focus{outline:2px solid #0a84ff;border-color:transparent}
+textarea{font-family:inherit;line-height:1.4;resize:vertical}
 .btn{display:block;width:100%;padding:.875rem;margin-top:1rem;border:none;
      border-radius:.625rem;background:#0a84ff;color:#fff;font-size:1rem;
      font-weight:600;cursor:pointer;text-align:center;text-decoration:none}

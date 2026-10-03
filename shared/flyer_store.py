@@ -33,13 +33,19 @@ def _dbx() -> dropbox.Dropbox:
     )
 
 
-def upload_flyer(file_bytes: bytes) -> tuple[str, str]:
-    """Lädt Flyer nach Dropbox hoch. Gibt (flyer_url, flyer_path) zurück."""
+def pruefe_flyer(file_bytes: bytes) -> str:
+    """Prüft Größe und Format ohne Upload. Gibt die Endung zurück, sonst ValueError."""
     if len(file_bytes) > _MAX_BYTES:
         raise ValueError("Datei zu groß (max. 8 MB).")
     ext = _detect_ext(file_bytes)
     if not ext:
         raise ValueError("Ungültiges Format. Erlaubt: PDF, JPG, PNG, WebP.")
+    return ext
+
+
+def upload_flyer(file_bytes: bytes) -> tuple[str, str]:
+    """Lädt Flyer nach Dropbox hoch. Gibt (flyer_url, flyer_path) zurück."""
+    ext = pruefe_flyer(file_bytes)
 
     pfad = f"{_ORDNER}/{uuid.uuid4().hex}.{ext}"
     dbx = _dbx()

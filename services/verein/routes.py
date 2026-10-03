@@ -14,7 +14,7 @@ from shared.kalender_core import (
     VEREINSTERMINE_FILE, _HEIC_SUPPORTED, _do_save_import,
     cleanup_stale_pending, import_pdf_bytes, parse_excel_bytes,
 )
-from shared.flyer_store import upload_flyer, delete_flyer
+from shared.flyer_store import upload_flyer, delete_flyer, pruefe_flyer
 from shared.rubriken import RUBRIKEN
 from shared.csrf import csrf_field, get_csrf_token, validate_csrf
 from shared.vk_db import (
@@ -32,6 +32,8 @@ verein_bp = Blueprint("verein", __name__)
 _BACK_PROFIL = '<a class="btn btn-sec" href="/verein/profil" style="margin-top:.75rem">← Zurück zum Profil</a>'
 _BACK_DASH = '<a class="btn btn-sec" href="/verein/dashboard" style="margin-top:.75rem">← Zurück</a>'
 _UPLOAD_LIMIT = 3
+_MAX_UPLOAD_MB = 40  # Summe aller Flyer je Formular; nginx /verein/(termine|upload) erlaubt 45m
+_MAX_PLAN_MB = 20    # Terminplan-Upload (PDF/Bild/Excel), wie Admin-/upload
 
 
 def _quota_remaining(verein_id: int) -> int:
@@ -69,8 +71,9 @@ def dashboard(user):
   <div style="display:flex;justify-content:space-between;align-items:start">
     <div>
       <div style="font-weight:600">{html.escape(t.get('bezeichnung',''))}</div>
-      <div style="color:#aeaeb2;font-size:.85rem">{t.get('datum','')} {t.get('uhrzeit','')}</div>
+      <div style="color:#aeaeb2;font-size:.85rem">{t.get('datum','')} {t.get('uhrzeit','')}{('–' + t['uhrzeit_bis']) if t.get('uhrzeit_bis') else ''}</div>
       <div style="color:#aeaeb2;font-size:.85rem">{html.escape(t.get('ort',''))}</div>
+      {'<div style="color:#8e8e93;font-size:.8rem">ⓘ mit Beschreibung</div>' if t.get('beschreibung') else ''}
     </div>
     <div>{edit_btn}</div>
   </div>
@@ -136,7 +139,7 @@ def dashboard(user):
 
     <div>
       <div style="font-weight:600;font-size:.9rem;margin-bottom:.25rem">🖼 Flyer-Upload bei einem Termin</div>
-      <div style="color:#aeaeb2;font-size:.85rem">Bild oder PDF zuerst auf dem Gerät speichern und von dort hochladen. Ein Bild direkt aus Outlook/einer E-Mail in das Upload-Feld zu ziehen funktioniert nicht (Outlook gibt dabei nur einen internen Bild-Verweis statt der echten Datei weiter).</div>
+      <div style="color:#aeaeb2;font-size:.85rem">Bild oder PDF (max. 8 MB) zuerst auf dem Gerät speichern und von dort hochladen. Ein Bild direkt aus Outlook/einer E-Mail in das Upload-Feld zu ziehen funktioniert nicht (Outlook gibt dabei nur einen internen Bild-Verweis statt der echten Datei weiter).</div>
     </div>
 
   </div>
@@ -168,6 +171,103 @@ def dashboard(user):
 
 # ── Neuer Termin ─────────────────────────────────────────────────────────────
 
+_MAX_TAGE = 16
+_BESCHREIBUNG_MAX = 1000
+_UHRZEIT_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+_WOCHENTAGE = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
+_FLYER_ACCEPT = ".pdf,.jpg,.jpeg,.png,.webp"
+_FLYER_SUMME_HINWEIS = (f'<p class="hint">Mehrere Tage: alle Flyer zusammen max. {_MAX_UPLOAD_MB} MB pro Speichern – '
+                        'weitere Flyer danach beim jeweiligen Termin ergänzen.</p>')
+_FLYER_HINWEIS = ('<p class="hint">Bitte den Flyer zuerst auf dem Gerät speichern (z.B. Bild aus der E-Mail '
+                  'per „Speichern unter") und von dort hochladen. Ein Bild direkt aus Outlook/der E-Mail zu '
+                  'ziehen funktioniert nicht.</p>')
+
+
+def _zeit_fehler(uhrzeit: str, uhrzeit_bis: str) -> str:
+    """Prüft Beginn/Ende. Ende früher als Beginn = endet nach Mitternacht (erlaubt)."""
+    if uhrzeit and not _UHRZEIT_RE.match(uhrzeit):
+        return "Uhrzeit muss im Format HH:MM sein."
+    if uhrzeit_bis and not _UHRZEIT_RE.match(uhrzeit_bis):
+        return "Bis-Uhrzeit muss im Format HH:MM sein."
+    if uhrzeit_bis and not uhrzeit:
+        return "Bitte zur Bis-Uhrzeit auch eine Beginn-Uhrzeit angeben."
+    if uhrzeit_bis and uhrzeit_bis == uhrzeit:
+        return "Bis-Uhrzeit muss sich vom Beginn unterscheiden."
+    return ""
+
+
+def _tag_label(iso: str) -> str:
+    d = date.fromisoformat(iso)
+    return f"{_WOCHENTAGE[d.weekday()]} {d.strftime('%d.%m.%Y')}"
+
+
+def _tag_block(i: int, tag: str, beschreibung: str, mehrtaegig: bool) -> str:
+    """Beschreibung + Flyer für einen Tag. Bei eintägigen Terminen ohne Tages-Überschrift."""
+    kopf = (f'<div class="tag-kopf" style="font-weight:600;margin-top:1rem">Tag {i + 1} · {_tag_label(tag)}</div>'
+            if mehrtaegig else '<div class="tag-kopf" style="display:none"></div>')
+    rahmen = ' style="border-top:1px solid #3a3a3c;margin-top:1rem"' if mehrtaegig else ""
+    return f"""<div class="tag-block"{rahmen}>
+  {kopf}
+  <label>Beschreibung (optional)</label>
+  <textarea name="beschreibung_{i}" rows="3" maxlength="{_BESCHREIBUNG_MAX}" placeholder="Wird beim Antippen des Termins angezeigt">{html.escape(beschreibung)}</textarea>
+  <label>Flyer (optional, PDF/JPG/PNG/WebP, max. 8 MB)</label>
+  {_FLYER_SUMME_HINWEIS if i == 0 else ''}
+  {_FLYER_HINWEIS if i == 0 else ''}
+  <input name="flyer_{i}" type="file" accept="{_FLYER_ACCEPT}">
+</div>"""
+
+
+# Blendet je Tag zwischen Datum und bis-Datum einen Block (Beschreibung + Flyer) ein.
+# Bestehende Blöcke bleiben erhalten (Dateiauswahl lässt sich nicht kopieren), es wird
+# nur am Ende ergänzt oder entfernt. Ohne JS bleibt der serverseitig gerenderte Block.
+_TAGE_JS = """<script>
+(function(){
+  var MAX=%d, WT=["So","Mo","Di","Mi","Do","Fr","Sa"];
+  var von=document.querySelector("[name=datum]"), bis=document.querySelector("[name=datum_bis]");
+  var box=document.getElementById("tage"), info=document.getElementById("tage-info");
+  var vorlage=box.querySelector(".tag-block").cloneNode(true);
+  function iso(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+  function lbl(d){return WT[d.getDay()]+" "+String(d.getDate()).padStart(2,"0")+"."+String(d.getMonth()+1).padStart(2,"0")+"."+d.getFullYear();}
+  function tage(){
+    if(!von.value)return [];
+    var a=new Date(von.value+"T12:00:00"), e=bis.value?new Date(bis.value+"T12:00:00"):a, out=[];
+    if(e<a)return null;
+    for(var d=new Date(a);d<=e&&out.length<=MAX;d.setDate(d.getDate()+1))out.push(new Date(d));
+    return out;
+  }
+  function neu(i){
+    var b=vorlage.cloneNode(true);
+    b.querySelector("textarea").name="beschreibung_"+i; b.querySelector("textarea").value="";
+    b.querySelector("input[type=file]").name="flyer_"+i; b.querySelector("input[type=file]").value="";
+    var h=b.querySelector(".hint"); if(h)h.remove();
+    return b;
+  }
+  function sync(){
+    var t=tage(); info.textContent="";
+    if(t===null){info.textContent="Das bis-Datum liegt vor dem Startdatum.";return;}
+    if(t.length>MAX){info.textContent="Höchstens "+MAX+" Tage auf einmal.";return;}
+    var n=Math.max(t.length,1), bl=box.querySelectorAll(".tag-block");
+    for(var i=bl.length;i<n;i++)box.appendChild(neu(i));
+    bl=box.querySelectorAll(".tag-block");
+    for(var j=bl.length-1;j>=n;j--)bl[j].remove();
+    var mehr=n>1;
+    box.querySelectorAll(".tag-block").forEach(function(b,k){
+      var kopf=b.querySelector(".tag-kopf");
+      kopf.style.cssText=mehr?"font-weight:600;margin-top:1rem":"display:none";
+      kopf.textContent=mehr?"Tag "+(k+1)+" · "+lbl(t[k]):"";
+      b.style.borderTop=mehr?"1px solid #3a3a3c":""; b.style.marginTop=mehr?"1rem":"";
+    });
+    if(mehr)info.textContent=n+" Einträge werden angelegt – je Tag eigene Beschreibung und eigener Flyer möglich.";
+  }
+  von.addEventListener("change",sync); bis.addEventListener("change",sync);
+  document.getElementById("termin-form").addEventListener("submit",function(ev){
+    var summe=0; box.querySelectorAll("input[type=file]").forEach(function(f){if(f.files[0])summe+=f.files[0].size;});
+    if(summe>%d){ev.preventDefault();info.textContent="Alle Flyer zusammen sind größer als %d MB. Bitte einzelne Flyer nachträglich beim jeweiligen Termin hochladen.";}
+  });
+})();
+</script>"""
+
+
 @verein_bp.route("/verein/termine/neu", methods=["GET", "POST"])
 @require_verein_login
 def termin_neu(user):
@@ -175,74 +275,131 @@ def termin_neu(user):
         return redirect("/verein/dashboard")
 
     error = ""
+    f = {"datum": date.today().isoformat(), "datum_bis": "", "uhrzeit": "", "uhrzeit_bis": "",
+         "bezeichnung": "", "ort": ""}
+    beschreibungen = [""]
     if request.method == "POST":
         if not validate_csrf():
             return _page("Fehler", '<p class="err">Ungültige Anfrage. Bitte Seite neu laden.</p>'), 403
-        datum = request.form.get("datum", "").strip()
-        uhrzeit = request.form.get("uhrzeit", "").strip()
-        bezeichnung = request.form.get("bezeichnung", "").strip()
-        ort = request.form.get("ort", "").strip()
-
-        if not datum or not bezeichnung:
+        f = {k: request.form.get(k, "").strip() for k in f}
+        datum, datum_bis = f["datum"], f["datum_bis"]
+        tage = []
+        if not datum or not f["bezeichnung"]:
             error = "Datum und Bezeichnung sind Pflichtfelder."
-        elif not re.match(r"^\d{4}-\d{2}-\d{2}$", datum):
+        elif not re.match(r"^\d{4}-\d{2}-\d{2}$", datum) or (datum_bis and not re.match(r"^\d{4}-\d{2}-\d{2}$", datum_bis)):
             error = "Datum muss im Format YYYY-MM-DD sein."
         else:
-            flyer_url = ""
-            flyer_path = ""
-            flyer_file = request.files.get("flyer")
-            if flyer_file and flyer_file.filename:
-                try:
-                    flyer_url, flyer_path = upload_flyer(flyer_file.read())
-                except ValueError as e:
-                    error = str(e)
+            try:
+                start = date.fromisoformat(datum)
+                ende = date.fromisoformat(datum_bis) if datum_bis else start
+            except ValueError:
+                start = ende = None
+                error = "Ungültiges Datum."
             if not error:
-                termin_id = str(uuid.uuid4())[:8]
-                neuer_termin = {
-                    "id": termin_id,
-                    "datum": datum,
-                    "uhrzeit": uhrzeit,
-                    "bezeichnung": bezeichnung,
-                    "ort": ort,
+                if ende < start:
+                    error = "Das bis-Datum liegt vor dem Startdatum."
+                elif (ende - start).days + 1 > _MAX_TAGE:
+                    error = f"Höchstens {_MAX_TAGE} Tage auf einmal."
+                else:
+                    tage = [(start + timedelta(days=i)).isoformat() for i in range((ende - start).days + 1)]
+        if not error:
+            error = _zeit_fehler(f["uhrzeit"], f["uhrzeit_bis"])
+        n = max(len(tage), 1)
+        beschreibungen = [request.form.get(f"beschreibung_{i}", "").strip() for i in range(n)]
+        if not error and any(len(b) > _BESCHREIBUNG_MAX for b in beschreibungen):
+            error = f"Beschreibung höchstens {_BESCHREIBUNG_MAX} Zeichen."
+
+        # Erst alle Flyer prüfen, dann hochladen – kein halb angelegter Termin-Satz
+        flyer_bytes = {}
+        if not error:
+            for i in range(n):
+                datei = request.files.get(f"flyer_{i}")
+                if datei and datei.filename:
+                    inhalt = datei.read()
+                    try:
+                        pruefe_flyer(inhalt)
+                    except ValueError as e:
+                        error = (f"Flyer Tag {i + 1}: {e}" if n > 1 else str(e))
+                        break
+                    flyer_bytes[i] = inhalt
+        flyer = {}
+        if not error:
+            try:
+                for i, inhalt in flyer_bytes.items():
+                    flyer[i] = upload_flyer(inhalt)
+            except Exception:
+                for _, pfad in flyer.values():
+                    delete_flyer(pfad)
+                error = "Flyer-Upload fehlgeschlagen. Bitte erneut versuchen."
+        if not error:
+            jetzt = datetime.utcnow().isoformat()[:19]
+            neue = []
+            for i, tag in enumerate(tage):
+                t = {
+                    "id": str(uuid.uuid4())[:8],
+                    "datum": tag,
+                    "uhrzeit": f["uhrzeit"],
+                    "bezeichnung": f["bezeichnung"],
+                    "ort": f["ort"],
                     "erstellt_von": user["email"],
-                    "erstellt_am": datetime.utcnow().isoformat()[:19],
+                    "erstellt_am": jetzt,
                 }
-                if flyer_url:
-                    neuer_termin["flyer_url"] = flyer_url
-                    neuer_termin["flyer_path"] = flyer_path
-                verein_key = user["verein_key"]
+                if f["uhrzeit_bis"]:
+                    t["uhrzeit_bis"] = f["uhrzeit_bis"]
+                if beschreibungen[i]:
+                    t["beschreibung"] = beschreibungen[i]
+                if i in flyer:
+                    t["flyer_url"], t["flyer_path"] = flyer[i]
+                neue.append(t)
+            verein_key = user["verein_key"]
 
-                def updater(data):
-                    if verein_key not in data:
-                        data[verein_key] = []
-                        data["_labels"] = data.get("_labels", {})
-                        data["_labels"][verein_key] = user["verein_name"]
-                    data[verein_key].append(neuer_termin)
-                    data.setdefault("_meta", {}).setdefault(verein_key, {})["selbstverwaltung"] = True
-                    return data
+            def updater(data):
+                if verein_key not in data:
+                    data[verein_key] = []
+                    data["_labels"] = data.get("_labels", {})
+                    data["_labels"][verein_key] = user["verein_name"]
+                data[verein_key].extend(neue)
+                data.setdefault("_meta", {}).setdefault(verein_key, {})["selbstverwaltung"] = True
+                return data
 
-                KalenderStore.update(updater)
-                log_audit("erstellt", termin_id, verein_key, user["id"])
-                return redirect("/verein/dashboard")
+            KalenderStore.update(updater)
+            for t in neue:
+                log_audit("erstellt", t["id"], verein_key, user["id"])
+            return redirect("/verein/dashboard")
+        if request.files and any(d.filename for d in request.files.values()):
+            error += " Ausgewählte Flyer bitte erneut auswählen."
 
+    tage_html = "".join(_tag_block(i, f["datum"], b, len(beschreibungen) > 1) for i, b in enumerate(beschreibungen))
+    if len(beschreibungen) > 1:
+        # Tagesköpfe beim Fehler-Rerender mit den echten Daten
+        start = date.fromisoformat(f["datum"])
+        tage_html = "".join(_tag_block(i, (start + timedelta(days=i)).isoformat(), b, True)
+                            for i, b in enumerate(beschreibungen))
+    e = html.escape
     tok = get_csrf_token()
     form = f"""
-{'<p class="err">'+error+'</p>' if error else ''}
-<form method="post" enctype="multipart/form-data" autocomplete="off">
+{'<p class="err">'+e(error)+'</p>' if error else ''}
+<form id="termin-form" method="post" enctype="multipart/form-data" autocomplete="off">
   {csrf_field(tok)}
   <label>Datum *</label>
-  <input name="datum" type="date" required value="{date.today().isoformat()}">
+  <input name="datum" type="date" required value="{e(f['datum'])}">
+  <label>bis Datum (optional)</label>
+  <p class="hint">Für mehrtägige Veranstaltungen – je Tag wird ein eigener Eintrag angelegt (max. {_MAX_TAGE} Tage), jeweils mit eigener Beschreibung und eigenem Flyer.</p>
+  <input name="datum_bis" type="date" value="{e(f['datum_bis'])}">
   <label>Uhrzeit</label>
-  <input name="uhrzeit" type="time" placeholder="optional">
+  <input name="uhrzeit" type="time" value="{e(f['uhrzeit'])}">
+  <label>bis Uhrzeit (optional)</label>
+  <p class="hint">Bei Eingabe einer bis-Uhrzeit wird diese im Termin mit angezeigt (z.B. 19:00–23:00 Uhr). Eine frühere Uhrzeit als der Beginn bedeutet: Ende nach Mitternacht.</p>
+  <input name="uhrzeit_bis" type="time" value="{e(f['uhrzeit_bis'])}">
   <label>Bezeichnung *</label>
-  <input name="bezeichnung" type="text" required placeholder="z.B. Jahreshauptversammlung">
+  <input name="bezeichnung" type="text" required placeholder="z.B. Jahreshauptversammlung" value="{e(f['bezeichnung'])}">
   <label>Ort / Veranstaltungsort</label>
-  <input name="ort" type="text" placeholder="z.B. Gasthaus zur Post">
-  <label>Flyer (optional, PDF/JPG/PNG/WebP, max. 8 MB)</label>
-  <p class="hint">Bitte den Flyer zuerst auf dem Gerät speichern (z.B. Bild aus der E-Mail per „Speichern unter") und von dort hochladen. Ein Bild direkt aus Outlook/der E-Mail zu ziehen funktioniert nicht.</p>
-  <input name="flyer" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp">
+  <input name="ort" type="text" placeholder="z.B. Gasthaus zur Post" value="{e(f['ort'])}">
+  <div id="tage">{tage_html}</div>
+  <p id="tage-info" class="hint" style="color:#ff9f0a"></p>
   <button class="btn" type="submit">Termin speichern</button>
 </form>
+{_TAGE_JS % (_MAX_TAGE, _MAX_UPLOAD_MB * 1024 * 1024, _MAX_UPLOAD_MB)}
 {_BACK_DASH}"""
     return _page("Neuer Termin", form)
 
@@ -263,6 +420,7 @@ def termin_edit(user, termin_id):
     if not termin:
         return redirect("/verein/dashboard")
 
+    edit_error = ""
     if request.method == "POST":
         if not validate_csrf():
             return _page("Fehler", '<p class="err">Ungültige Anfrage. Bitte Seite neu laden.</p>'), 403
@@ -296,16 +454,25 @@ def termin_edit(user, termin_id):
             uhrzeit = request.form.get("uhrzeit", "").strip()
             bezeichnung = request.form.get("bezeichnung", "").strip()
             ort = request.form.get("ort", "").strip()
-            edit_error = ""
+            uhrzeit_bis = request.form.get("uhrzeit_bis", "").strip()
+            beschreibung = request.form.get("beschreibung", "").strip()
+            if not datum or not bezeichnung:
+                edit_error = "Datum und Bezeichnung sind Pflichtfelder."
+            elif not re.match(r"^\d{4}-\d{2}-\d{2}$", datum):
+                edit_error = "Datum muss im Format YYYY-MM-DD sein."
+            else:
+                edit_error = _zeit_fehler(uhrzeit, uhrzeit_bis)
+            if not edit_error and len(beschreibung) > _BESCHREIBUNG_MAX:
+                edit_error = f"Beschreibung höchstens {_BESCHREIBUNG_MAX} Zeichen."
             new_flyer_url = ""
             new_flyer_path = ""
             flyer_file = request.files.get("flyer")
-            if flyer_file and flyer_file.filename:
+            if not edit_error and flyer_file and flyer_file.filename:
                 try:
                     new_flyer_url, new_flyer_path = upload_flyer(flyer_file.read())
                 except ValueError as e:
                     edit_error = str(e)
-            if not edit_error and datum and bezeichnung and re.match(r"^\d{4}-\d{2}-\d{2}$", datum):
+            if not edit_error:
                 alter_pfad = termin.get("flyer_path", "") if new_flyer_url else ""
                 def edit_updater(d):
                     for t in d.get(verein_key, []):
@@ -314,6 +481,11 @@ def termin_edit(user, termin_id):
                             t["uhrzeit"] = uhrzeit
                             t["bezeichnung"] = bezeichnung
                             t["ort"] = ort
+                            for feld, wert in (("uhrzeit_bis", uhrzeit_bis), ("beschreibung", beschreibung)):
+                                if wert:
+                                    t[feld] = wert
+                                else:
+                                    t.pop(feld, None)
                             t["geaendert_von"] = user["email"]
                             t["geaendert_am"] = datetime.utcnow().isoformat()[:19]
                             if new_flyer_url:
@@ -325,6 +497,8 @@ def termin_edit(user, termin_id):
                     delete_flyer(alter_pfad)
                 log_audit("geaendert", termin_id, verein_key, user["id"])
                 return redirect("/verein/dashboard")
+            termin = {**termin, "datum": datum, "uhrzeit": uhrzeit, "uhrzeit_bis": uhrzeit_bis,
+                      "bezeichnung": bezeichnung, "ort": ort, "beschreibung": beschreibung}
 
     tok = get_csrf_token()
     flyer_url = termin.get("flyer_url", "")
@@ -341,16 +515,22 @@ def termin_edit(user, termin_id):
   </div>
 </div>"""
     form = f"""
+{'<p class="err">'+html.escape(edit_error)+'</p>' if edit_error else ''}
 <form method="post" enctype="multipart/form-data">
   {csrf_field(tok)}
   <label>Datum</label>
-  <input name="datum" type="date" required value="{termin.get('datum','')}">
+  <input name="datum" type="date" required value="{html.escape(termin.get('datum',''))}">
   <label>Uhrzeit</label>
-  <input name="uhrzeit" type="time" value="{termin.get('uhrzeit','')}">
+  <input name="uhrzeit" type="time" value="{html.escape(termin.get('uhrzeit',''))}">
+  <label>bis Uhrzeit (optional)</label>
+  <p class="hint">Bei Eingabe einer bis-Uhrzeit wird diese im Termin mit angezeigt. Eine frühere Uhrzeit als der Beginn bedeutet: Ende nach Mitternacht.</p>
+  <input name="uhrzeit_bis" type="time" value="{html.escape(termin.get('uhrzeit_bis',''))}">
   <label>Bezeichnung</label>
   <input name="bezeichnung" type="text" required value="{html.escape(termin.get('bezeichnung',''))}">
   <label>Ort</label>
   <input name="ort" type="text" value="{html.escape(termin.get('ort',''))}">
+  <label>Beschreibung (optional)</label>
+  <textarea name="beschreibung" rows="3" maxlength="{_BESCHREIBUNG_MAX}" placeholder="Wird beim Antippen des Termins angezeigt">{html.escape(termin.get('beschreibung',''))}</textarea>
   {flyer_section}
   <label>{'Flyer ersetzen' if flyer_url else 'Flyer hochladen'} (PDF/JPG/PNG/WebP, max. 8 MB)</label>
   <p class="hint">Bitte den Flyer zuerst auf dem Gerät speichern (z.B. Bild aus der E-Mail per „Speichern unter") und von dort hochladen. Ein Bild direkt aus Outlook/der E-Mail zu ziehen funktioniert nicht.</p>
@@ -638,7 +818,7 @@ def upload_page(user):
   <form method="post" action="/verein/upload" enctype="multipart/form-data">
     {csrf_field(tok)}
     <input type="hidden" name="typ" value="vision">
-    <label>Datei (PDF, JPG, PNG, HEIC)</label>
+    <label>Datei (PDF, JPG, PNG, HEIC, max. {_MAX_PLAN_MB} MB)</label>
     <input type="file" name="file" required accept=".pdf,.jpg,.jpeg,.png,.heic,.heif">
     <button class="btn" type="submit">Hochladen &amp; analysieren</button>
   </form>
@@ -651,7 +831,7 @@ def upload_page(user):
   <form method="post" action="/verein/upload" enctype="multipart/form-data">
     {csrf_field(tok)}
     <input type="hidden" name="typ" value="excel">
-    <label>Ausgefüllte Excel-Datei (.xlsx)</label>
+    <label>Ausgefüllte Excel-Datei (.xlsx, max. {_MAX_PLAN_MB} MB)</label>
     <input type="file" name="file" required accept=".xlsx">
     <button class="btn" type="submit">Termine importieren</button>
   </form>
@@ -703,6 +883,11 @@ def upload_process(user):
             body = '<p class="err">HEIC-Format auf diesem Server nicht verfügbar.</p>' + _BACK_DASH
             return _page("Fehler", body), 400
 
+    inhalt = f.read()
+    if len(inhalt) > _MAX_PLAN_MB * 1024 * 1024:
+        body = f'<p class="err">Datei zu groß (max. {_MAX_PLAN_MB} MB). Tipp: PDF verkleinern oder einzelne Seiten als Foto hochladen.</p>' + _BACK_DASH
+        return _page("Fehler", body), 413
+
     # Quota jetzt erhöhen (vor dem eigentlichen Parse/Claude-Call, um Missbrauch zu verhindern) –
     # aber erst nach der Format-Validierung, damit ein falsches Dateiformat keinen Slot kostet
     increment_upload_quota(verein_id, heute)
@@ -712,13 +897,13 @@ def upload_process(user):
 
     if typ == "excel":
         try:
-            alle = parse_excel_bytes(f.read())
+            alle = parse_excel_bytes(inhalt)
         except Exception as ex:
             body = f'<p class="err">Fehler beim Lesen der Excel-Datei: {html.escape(str(ex))}</p>' + _BACK_DASH
             return _page("Fehler", body), 400
     else:
         try:
-            result   = import_pdf_bytes(f.read(), suffix)
+            result   = import_pdf_bytes(inhalt, suffix)
             alle     = result["alle"]
             auto_plz = result.get("auto_plz", "")
         except Exception as ex:

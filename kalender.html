@@ -125,6 +125,14 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
 .ev-fav.on{opacity:1;color:#ff3b30}
 .ev-fav.on svg path{fill:currentColor}
 .ev-flyer{right:90px}
+.ev-card--info{cursor:pointer}
+/* Admin „Verein bearbeiten": Auswahlfelder exakt so hoch wie die Textfelder (Safari zeichnet <select> sonst niedriger) */
+#verein-edit-modal input{height:38px}
+.ve-sel{box-sizing:border-box;height:38px;padding:0 30px 0 10px;border:1.5px solid var(--border2);border-radius:8px;background-color:var(--bg);color:var(--text);font-size:14px;outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;text-overflow:ellipsis;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center;background-size:16px}
+.ev-info-ico{display:inline-flex;vertical-align:-2px;margin-left:5px;color:var(--accent);opacity:.85}
+.ev-beschr{display:none;font-size:13px;color:var(--text2);line-height:1.45;margin-top:8px;padding-top:8px;border-top:.5px solid var(--border);white-space:pre-line;overflow-wrap:anywhere}
+.ev-card.open .ev-beschr{display:block}
 .ev-empty{text-align:center;padding:60px 20px;color:var(--text3)}
 .ev-empty p{font-size:32px;margin-bottom:8px}
 .ev-empty small{font-size:14px}
@@ -302,7 +310,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
   </div>
   <div class="hdr-right" style="display:flex;align-items:center;gap:6px">
     <div class="hdr-ver" style="display:flex;flex-direction:column;align-items:flex-end;gap:1px">
-      <span class="ver-lbl" style="margin-right:0">v1.31</span>
+      <span class="ver-lbl" style="margin-right:0">v1.32</span>
       <span style="font-size:9px;color:rgba(255,255,255,.28);letter-spacing:.2px;line-height:1">a sEpp-App</span>
     </div>
     <a class="refresh-btn" id="verein-login-btn" href="/verein/login" title="Vereins-Login oder Registrierung" style="width:auto;padding:0 10px;font-size:13px;font-weight:600;letter-spacing:.3px;text-decoration:none;white-space:nowrap">Login</a>
@@ -431,7 +439,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title" style="width:55%"></div><div class="sk-line sk-ort"></div></div>
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title"></div><div class="sk-line sk-ort" style="width:30%"></div></div>
     </div>
-    <p class="version">Vereinskalender &middot; v1.31 &middot; 2026-10-02 &middot; a sEpp-App</p>
+    <p class="version">Vereinskalender &middot; v1.32 &middot; 2026-10-03 &middot; a sEpp-App</p>
     <p style="font-size:11px;color:var(--text3);text-align:center;padding:0 0 24px;line-height:2">&#127807; Hosting in Finnland mit &Ouml;kostrom &middot; Werbefrei &middot; DSGVO-konform</p>
   </div>
 
@@ -1642,11 +1650,13 @@ function render(){
   const todayStr=_now.getFullYear()+"-"+String(_now.getMonth()+1).padStart(2,"0")+"-"+String(_now.getDate()).padStart(2,"0");
   const nowMin=_now.getHours()*60+_now.getMinutes();
   // vergangen = zurückliegender Tag ODER heute mit bereits verstrichener Uhrzeit
+  // (mit bis-Uhrzeit zählt das Ende; Ende vor Beginn = endet nach Mitternacht → heute nie vergangen)
+  const _min=hm=>{const[hh,mm]=hm.split(":").map(Number);return hh*60+mm;};
   const _isPastT=t=>{
     if(t.datum<todayStr)return true;
     if(t.datum!==todayStr||!t.uhrzeit)return false;
-    const[hh,mm]=t.uhrzeit.split(":").map(Number);
-    return hh*60+mm<nowMin;
+    if(t.uhrzeit_bis)return _min(t.uhrzeit_bis)>_min(t.uhrzeit)&&_min(t.uhrzeit_bis)<=nowMin;
+    return _min(t.uhrzeit)<nowMin;
   };
   const hasFavs=_favMode();
 
@@ -1729,7 +1739,8 @@ function render(){
   const NOW_SEP=`<div class="ev-now-sep">Jetzt</div>`;
   el.innerHTML=out.map((t,i)=>{
     const col=colors[t.verein]||"#777";
-    const uz=t.uhrzeit?`${escHtml(t.uhrzeit)} Uhr`:"";
+    const uz=t.uhrzeit?`${escHtml(t.uhrzeit)}${t.uhrzeit_bis?"&ndash;"+escHtml(t.uhrzeit_bis):""} Uhr`:"";
+    const beschr=(t.beschreibung||"").trim();
     const ort=t.ort?`<div class="ev-ort" style="display:flex;align-items:center;gap:4px">${icon("mapPin",13)} ${escHtml(t.ort)}</div>`:"";
     const veranstLabel=escHtml(t.veranstalter||labels[t.verein]||t.verein);
     const ortBadgeTxt=(t.ortschaft&&t.ortschaft.trim())?escHtml(t.ortschaft.trim()):null;
@@ -1751,13 +1762,14 @@ function render(){
     const nowMark=(i===nowIdx&&nowIdx>0)?NOW_SEP:"";
     const flyerBtn=t.flyer_url?`<button class="ev-icon-btn ev-flyer js-ev-flyer-btn" data-flyer-url="${escHtml(t.flyer_url)}" title="Flyer öffnen">${icon("paperclip",20)}</button>`:"";
     const titlePadding=t.flyer_url?"114px":"74px";
-    return nowMark+sep+`<div class="ev-card${isPast?" ev-card--past":""}" style="border-left-color:${col}">
+    return nowMark+sep+`<div class="ev-card${isPast?" ev-card--past":""}${beschr?" ev-card--info":""}" style="border-left-color:${col}"${beschr?' title="Antippen für Beschreibung"':""}>
       <button class="ev-icon-btn ev-cal" onclick="exportICS(${idx})" title="Zum Kalender hinzufügen">${icon("calendarPlus",20)}</button>
       <button class="ev-icon-btn ev-fav js-ev-fav-btn${isFav?' on':''}" data-favk="${escHtml(t.verein)}" data-fav-key="${escHtml(t.verein)}" data-fav-label="${escHtml(labels[t.verein]||t.verein)}" title="Verein als Favorit">${icon("heart",18)}</button>
       ${flyerBtn}
       ${uz?`<div class="ev-date" style="display:flex;align-items:center;gap:4px">${icon("clock",13)} ${uz}</div>`:""}
-      <div class="ev-title" style="padding-right:${titlePadding}">${escHtml(t.bezeichnung)}</div>
+      <div class="ev-title" style="padding-right:${titlePadding}">${escHtml(t.bezeichnung)}${beschr?`<span class="ev-info-ico" aria-label="mit Beschreibung">${icon("info",15)}</span>`:""}</div>
       ${ort}${badge}
+      ${beschr?`<div class="ev-beschr">${escHtml(beschr)}</div>`:""}
     </div>`;
   }).join("")+
   (nowIdx===-1?NOW_SEP:"")+
@@ -1776,7 +1788,9 @@ function exportICS(idx){
   if(!t)return;
   const p=new URLSearchParams({d:t.datum,t:t.bezeichnung,v:labels[t.verein]||t.verein});
   if(t.uhrzeit)p.set("u",t.uhrzeit);
+  if(t.uhrzeit&&t.uhrzeit_bis)p.set("b",t.uhrzeit_bis);
   if(t.ort)p.set("o",t.ort);
+  if(t.beschreibung)p.set("x",t.beschreibung);
   window.location.href="/api/ical?"+p.toString();
 }
 
@@ -1959,6 +1973,12 @@ document.addEventListener("click",e=>{
   const flyerBtn=e.target.closest(".js-ev-flyer-btn");
   if(flyerBtn){
     window.open(flyerBtn.dataset.flyerUrl,"_blank","noopener");
+    return;
+  }
+  // Termin mit Beschreibung: Antippen klappt sie auf/zu (nicht bei Knöpfen, Links oder markiertem Text)
+  const infoCard=e.target.closest(".ev-card--info");
+  if(infoCard&&!e.target.closest("button,a")&&!String(window.getSelection?.()||"")){
+    infoCard.classList.toggle("open");
   }
 });
 
@@ -2533,7 +2553,7 @@ function openVereinEditModal(verein_id,verein_name,vData){
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
         <div>
           <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:3px">Rubrik</label>
-          <select id="ve-rubrik" style="width:100%;padding:8px 6px;border:1.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);font-size:14px">${rubrikOpts}</select>
+          <select id="ve-rubrik" class="ve-sel" style="width:100%">${rubrikOpts}</select>
         </div>
         <div>
           <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:3px">PLZ</label>
@@ -2558,11 +2578,11 @@ function openVereinEditModal(verein_id,verein_name,vData){
       <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
         <div style="font-size:12px;color:var(--text3);margin-bottom:6px">Bestehende Termine übertragen</div>
         <div style="display:flex;gap:6px;align-items:center">
-          <select id="ve-transfer-key" style="flex:1;padding:8px 10px;border:1.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);font-size:13px;outline:none">
+          <select id="ve-transfer-key" class="ve-sel" style="flex:1;min-width:0;font-size:13px">
             <option value="">Lade…</option>
           </select>
           <button onclick="transferTermine(${verein_id})"
-            style="padding:8px 12px;border-radius:8px;background:var(--accent);color:#fff;border:none;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap">
+            style="flex-shrink:0;height:38px;padding:0 12px;border-radius:8px;background:var(--accent);color:#fff;border:none;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap">
             &#8644; Übertragen
           </button>
         </div>
@@ -3203,7 +3223,7 @@ function renderTermineList(){
           <div style="font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(t.bezeichnung)}</div>
           <div style="font-size:12px;color:var(--text3)">${escHtml(t._vereinName)}</div>
         </div>
-        <div style="font-size:13px;color:${noTime?"#f39c12":"var(--text2)"};white-space:nowrap">${noTime?"&#9888; keine Zeit":t.uhrzeit}</div>
+        <div style="font-size:13px;color:${noTime?"#f39c12":"var(--text2)"};white-space:nowrap">${noTime?"&#9888; keine Zeit":escHtml(t.uhrzeit)+(t.uhrzeit_bis?"&ndash;"+escHtml(t.uhrzeit_bis):"")}</div>
       </div>`;
     }).join("")}
   `;
@@ -3232,9 +3252,15 @@ function showTerminEdit(idx){
       </div>
       ${_admFld("Datum (YYYY-MM-DD)","trm-datum","text",t.datum||"")}
       ${_admFld("Uhrzeit (HH:MM)","trm-uhrzeit","time",t.uhrzeit||"")}
+      ${_admFld("bis Uhrzeit (optional)","trm-uhrzeit-bis","time",t.uhrzeit_bis||"")}
       ${_admFld("Bezeichnung","trm-bezeichnung","text",t.bezeichnung||"")}
       ${_admFld("Ort","trm-ort","text",t.ort||"")}
       ${_admFld("Ortschaft","trm-ortschaft","text",t.ortschaft||"")}
+      <div style="margin-bottom:10px">
+        <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:3px">Beschreibung (optional)</label>
+        <textarea id="trm-beschreibung" rows="3" maxlength="1000"
+          style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid var(--border2);border-radius:8px;font-size:14px;background:var(--bg);color:var(--text);outline:none;font-family:inherit;resize:vertical">${escHtml(t.beschreibung||"")}</textarea>
+      </div>
       <div id="trm-msg" style="font-size:13px;min-height:18px;margin-top:6px"></div>
       <div style="display:flex;gap:8px;margin-top:12px">
         <button onclick="saveTermin(${idx})"
@@ -3271,11 +3297,14 @@ async function saveTermin(idx){
   const changes={
     datum:       document.getElementById("trm-datum").value.trim(),
     uhrzeit:     document.getElementById("trm-uhrzeit").value.trim(),
+    uhrzeit_bis: document.getElementById("trm-uhrzeit-bis").value.trim(),
+    beschreibung:document.getElementById("trm-beschreibung").value.trim(),
     bezeichnung: document.getElementById("trm-bezeichnung").value.trim(),
     ort:         document.getElementById("trm-ort").value.trim(),
     ortschaft:   document.getElementById("trm-ortschaft").value.trim(),
   };
   if(!changes.datum||!changes.bezeichnung){msg.style.color="red";msg.textContent="Datum und Bezeichnung sind Pflichtfelder.";return;}
+  if(changes.uhrzeit_bis&&!changes.uhrzeit){msg.style.color="red";msg.textContent="Bitte zur Bis-Uhrzeit auch eine Beginn-Uhrzeit angeben.";return;}
   msg.style.color="var(--text3)";msg.textContent="Speichere…";
   const body={verein_key:t.verein,datum:t.datum,bezeichnung:t.bezeichnung,changes};
   if(selectedVerein&&selectedVerein!==t.verein)body.new_verein_key=selectedVerein;
@@ -3458,6 +3487,10 @@ function showInfoModal(){
       <div class="help-row" style="padding:8px 0">
         <span class="help-icon">${icon("paperclip",20)}</span>
         <div><strong>Flyer</strong><span>Wenn ein Verein einen Flyer hinterlegt hat, erscheint das ${icon("paperclip",14)}-Symbol &ndash; antippen zum &Ouml;ffnen.</span></div>
+      </div>
+      <div class="help-row" style="padding:8px 0">
+        <span class="help-icon">${icon("info",20)}</span>
+        <div><strong>Beschreibung</strong><span>Steht ein ${icon("info",14)}-Symbol hinter dem Titel, hat der Verein eine Beschreibung hinterlegt &ndash; Termin antippen zum Auf- und Zuklappen.</span></div>
       </div>
       <div class="help-row" style="padding:8px 0">
         <span class="help-icon">${icon("smartphone",20)}</span>

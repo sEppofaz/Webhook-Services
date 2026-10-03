@@ -937,7 +937,7 @@ def api_termine_patch():
     old_bezeichnung = body.get("bezeichnung", "")
     new_verein_key = body.get("new_verein_key", "").strip()
     changes = {k: v for k, v in body.get("changes", {}).items()
-               if k in {"datum", "uhrzeit", "ort", "ortschaft", "bezeichnung"}}
+               if k in {"datum", "uhrzeit", "uhrzeit_bis", "ort", "ortschaft", "bezeichnung", "beschreibung"}}
     if not verein_key or not old_datum or not old_bezeichnung:
         return json.dumps({"error": "verein_key, datum und bezeichnung erforderlich"}), 400, {"Content-Type": "application/json"}
     found = [False]
@@ -992,6 +992,24 @@ def api_termine_delete():
     return json.dumps({"ok": True}, ensure_ascii=False), 200, {"Content-Type": "application/json; charset=utf-8"}
 
 
+def _ics_zeiten(tag: date, uhrzeit: str, uhrzeit_bis: str = "") -> tuple[str, str]:
+    """DTSTART/DTEND für einen Termin. Ohne Uhrzeit ganztägig, ohne Ende +1 Stunde
+    (höchstens bis 23:59), Ende vor Beginn = endet am Folgetag. ValueError bei kaputter Uhrzeit."""
+    def stamp(t: datetime) -> str:
+        return t.strftime("%Y%m%dT%H%M00")
+    if not uhrzeit:
+        return (f"DTSTART;VALUE=DATE:{tag.strftime('%Y%m%d')}",
+                f"DTEND;VALUE=DATE:{(tag + timedelta(days=1)).strftime('%Y%m%d')}")
+    start = datetime.combine(tag, datetime.strptime(uhrzeit, "%H:%M").time())
+    if uhrzeit_bis:
+        ende = datetime.combine(tag, datetime.strptime(uhrzeit_bis, "%H:%M").time())
+        if ende <= start:
+            ende += timedelta(days=1)
+    else:
+        ende = min(start + timedelta(hours=1), datetime.combine(tag, datetime.max.time()).replace(second=0, microsecond=0))
+    return f"DTSTART:{stamp(start)}", f"DTEND:{stamp(ende)}"
+
+
 def _ics_escape(text: str) -> str:
     """RFC 5545 TEXT-Escaping (Backslash, Komma, Semikolon, Zeilenumbrüche).
 
@@ -1016,7 +1034,9 @@ def api_ical():
     titel   = request.args.get("t", "").strip()
     label   = request.args.get("v", "").strip()
     uhrzeit = request.args.get("u", "").strip()
+    bis     = request.args.get("b", "").strip()
     ort     = request.args.get("o", "").strip()
+    beschr  = request.args.get("x", "").strip()[:1000]
 
     if not datum or not titel:
         return "Pflichtfelder fehlen", 400
@@ -1027,22 +1047,13 @@ def api_ical():
 
     def _p(n): return str(n).zfill(2)
 
-    if uhrzeit:
-        try:
-            hh, mm = [int(x) for x in uhrzeit.split(":")]
-        except Exception:
-            return "Ungültige Uhrzeit", 400
-        eh     = hh + 1 if hh < 23 else 23
-        em     = mm if hh < 23 else 59
-        dtstart = f"DTSTART:{y}{_p(mo)}{_p(d)}T{_p(hh)}{_p(mm)}00"
-        dtend   = f"DTEND:{y}{_p(mo)}{_p(d)}T{_p(eh)}{_p(em)}00"
-    else:
-        nd      = date(y, mo, d) + timedelta(days=1)
-        dtstart = f"DTSTART;VALUE=DATE:{y}{_p(mo)}{_p(d)}"
-        dtend   = f"DTEND;VALUE=DATE:{nd.year}{_p(nd.month)}{_p(nd.day)}"
+    try:
+        dtstart, dtend = _ics_zeiten(date(y, mo, d), uhrzeit, bis)
+    except ValueError:
+        return "Ungültige Uhrzeit", 400
 
     uid  = f"{datum}-{re.sub(r'[^a-z0-9]', '', titel.lower()[:20])}-{int(time.time())}@vereinskalender"
-    desc = label + (f"\n{ort}" if ort else "")  # echter Zeilenumbruch – _ics_escape() macht daraus "\n"
+    desc = label + (f"\n{ort}" if ort else "") + (f"\n\n{beschr}" if beschr else "")  # echte Zeilenumbrüche – _ics_escape() macht daraus "\n"
 
     lines = [
         "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Vereinskalender//DE",
@@ -1161,21 +1172,14 @@ def api_ical_feed():
         vereinname  = labels.get(vkey, vkey.upper())
         uhrzeit     = t.get("uhrzeit", "")
 
-        if uhrzeit:
-            try:
-                hh, mm = [int(x) for x in uhrzeit.split(":")]
-            except Exception:
-                hh, mm = 0, 0
-            eh     = hh + 1 if hh < 23 else 23
-            dtstart = f"DTSTART:{y}{_p(mo)}{_p(d)}T{_p(hh)}{_p(mm)}00"
-            dtend   = f"DTEND:{y}{_p(mo)}{_p(d)}T{_p(eh)}{_p(mm)}00"
-        else:
-            nd      = date(y, mo, d) + timedelta(days=1)
-            dtstart = f"DTSTART;VALUE=DATE:{y}{_p(mo)}{_p(d)}"
-            dtend   = f"DTEND;VALUE=DATE:{nd.year}{_p(nd.month)}{_p(nd.day)}"
+        try:
+            dtstart, dtend = _ics_zeiten(date(y, mo, d), uhrzeit, t.get("uhrzeit_bis", ""))
+        except ValueError:
+            dtstart, dtend = _ics_zeiten(date(y, mo, d), "00:00", "")
 
         uid_raw = f"{t['datum']}-{re.sub(r'[^a-z0-9]', '', bezeichnung.lower()[:20])}-{vkey}@vereinskalender"
-        desc    = vereinname + (f"\n{ort}" if ort else "")  # echter Zeilenumbruch – _ics_escape() macht daraus "\n"
+        beschr  = t.get("beschreibung", "")
+        desc    = vereinname + (f"\n{ort}" if ort else "") + (f"\n\n{beschr}" if beschr else "")  # echte Zeilenumbrüche – _ics_escape() macht daraus "\n"
 
         vevent_lines += [
             "BEGIN:VEVENT",
