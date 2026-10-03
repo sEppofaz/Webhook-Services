@@ -1,6 +1,7 @@
 import fcntl
 import json
 import threading
+import uuid
 from pathlib import Path
 from typing import Callable
 
@@ -13,6 +14,39 @@ _cache_mtime: float = 0.0
 _tmp = VEREINSTERMINE_FILE.with_suffix(".json.tmp")
 if _tmp.exists():
     _tmp.unlink()
+
+
+def _termin_listen(data: dict):
+    """Alle Termin-Listen (Vereins-Keys ohne '_'-Präfix)."""
+    for k, v in data.items():
+        if not k.startswith("_") and isinstance(v, list):
+            yield v
+
+
+def stelle_ids_sicher(data: dict) -> int:
+    """Gibt jedem Termin ohne (oder mit doppelter) `id` eine neue, dateiweit eindeutige ID
+    (8 Hexzeichen wie in den Vereinsformularen). Läuft nach jedem KalenderStore.update() –
+    so bekommen Termine aus allen Schreibwegen (heimat-Import, KI-/Excel-Import, Telegram,
+    Transfer, Formulare) eine ID, ohne dass jeder Weg selbst daran denken muss.
+    Gibt die Zahl neu vergebener IDs zurück."""
+    vergeben = set()
+    ohne = []
+    for liste in _termin_listen(data):
+        for t in liste:
+            if not isinstance(t, dict):
+                continue
+            tid = t.get("id")
+            if tid and tid not in vergeben:
+                vergeben.add(tid)
+            else:
+                ohne.append(t)
+    for t in ohne:
+        neu = uuid.uuid4().hex[:8]
+        while neu in vergeben:
+            neu = uuid.uuid4().hex[:8]
+        vergeben.add(neu)
+        t["id"] = neu
+    return len(ohne)
 
 
 class KalenderStore:
@@ -39,6 +73,7 @@ class KalenderStore:
                 try:
                     data = json.load(fh)
                     mutator(data)
+                    stelle_ids_sicher(data)
                     tmp = VEREINSTERMINE_FILE.with_suffix(".json.tmp")
                     tmp.write_text(
                         json.dumps(data, ensure_ascii=False, indent=2),

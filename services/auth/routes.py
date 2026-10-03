@@ -454,7 +454,7 @@ def register():
                 daemon=True,
             ).start()
             body = f"""
-<p class="ok">✅ Registrierung eingegangen!</p>
+<p class="ok">Registrierung eingegangen!</p>
 <p style="color:#aeaeb2;font-size:.9rem;margin-bottom:1.25rem">So geht es weiter:</p>
 <div style="display:flex;flex-direction:column;gap:.75rem;margin-bottom:1.25rem">
   <div style="display:flex;gap:.75rem;align-items:flex-start">
@@ -479,7 +479,7 @@ def register():
     </div>
   </div>
 </div>
-<div class="spam-hint">📬 Keine E-Mail erhalten? Bitte auch im <strong>Spam-Ordner</strong> nachsehen. Der Bestätigungslink ist 24 Stunden gültig.</div>
+<div class="spam-hint">Keine E-Mail erhalten? Bitte auch im <strong>Spam-Ordner</strong> nachsehen. Der Bestätigungslink ist 24 Stunden gültig.</div>
 <a class="btn btn-sec" href="/" style="margin-top:1rem">← Zurück zum Kalender</a>"""
             return _page("Registrierung eingegangen", body)
 
@@ -583,7 +583,7 @@ def verify_email():
             "UPDATE vk_users SET email_verified=1, verify_token=NULL, verify_token_expires=NULL WHERE id=?",
             (row["id"],),
         )
-    body = f'<p class="ok">✅ E-Mail-Adresse bestätigt!</p><p>Dein Konto wird nun vom Administrator geprüft. Du erhältst eine E-Mail sobald es freigeschaltet wurde.</p><a class="btn btn-sec" href="/" style="margin-top:.5rem">← Zurück zum Kalender</a>'
+    body = f'<p class="ok">E-Mail-Adresse bestätigt!</p><p>Dein Konto wird nun vom Administrator geprüft. Du erhältst eine E-Mail sobald es freigeschaltet wurde.</p><a class="btn btn-sec" href="/" style="margin-top:.5rem">← Zurück zum Kalender</a>'
     return _page("Bestätigt", body)
 
 
@@ -608,7 +608,7 @@ def resend_verify():
                 tokens_to_send.append((token, gruss_aus(row)))
         for token, gruss in tokens_to_send:
             send_verify_email(email, token, gruss=gruss)
-        body = '<p class="ok">Falls die E-Mail existiert und noch nicht bestätigt ist, wurde ein neuer Link verschickt.</p><div class="spam-hint">📬 Bitte auch im <strong>Spam-Ordner</strong> nachsehen.</div>' + _BACK
+        body = '<p class="ok">Falls die E-Mail existiert und noch nicht bestätigt ist, wurde ein neuer Link verschickt.</p><div class="spam-hint">Bitte auch im <strong>Spam-Ordner</strong> nachsehen.</div>' + _BACK
         return _page("Link verschickt", body)
     tok = get_csrf_token()
     form = f'<form method="post">{csrf_field(tok)}<label>E-Mail-Adresse</label><input name="email" type="email" required><button class="btn" type="submit">Neuen Link anfordern</button></form>{_BACK}'
@@ -805,7 +805,7 @@ def forgot_password():
                 tokens_to_send.append((token, gruss_aus(row)))
         for token, gruss in tokens_to_send:
             send_reset_email(email, token, gruss=gruss)
-        body = '<p class="ok">Falls diese E-Mail registriert ist, wurde ein Reset-Link verschickt.</p><div class="spam-hint">📬 Bitte auch im <strong>Spam-Ordner</strong> nachsehen.</div>' + _BACK
+        body = '<p class="ok">Falls diese E-Mail registriert ist, wurde ein Reset-Link verschickt.</p><div class="spam-hint">Bitte auch im <strong>Spam-Ordner</strong> nachsehen.</div>' + _BACK
         return _page("Link verschickt", body)
     tok = get_csrf_token()
     form = f'<p style="color:#aeaeb2">Gib deine E-Mail-Adresse ein. Du erhältst einen Link zum Passwort-Zurücksetzen.</p><form method="post">{csrf_field(tok)}<label>E-Mail</label><input name="email" type="email" required><button class="btn" type="submit">Reset-Link anfordern</button></form>{_BACK}'

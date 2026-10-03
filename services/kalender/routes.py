@@ -928,6 +928,14 @@ def api_termine():
     )
 
 
+def _termin_passt(t: dict, termin_id: str, datum: str, bezeichnung: str) -> bool:
+    """Admin-Endpunkte: Termin über seine `id` finden (eindeutig, seit v1.37 hat jeder Termin
+    eine). Datum+Bezeichnung nur noch als Rückfall für Aufrufe ohne ID."""
+    if termin_id:
+        return t.get("id") == termin_id
+    return t.get("datum") == datum and t.get("bezeichnung") == bezeichnung
+
+
 @kalender_bp.route("/api/termine", methods=["PATCH"])
 def api_termine_patch():
     token = request.headers.get("X-Upload-Token", "")
@@ -938,6 +946,7 @@ def api_termine_patch():
     old_datum = body.get("datum", "")
     old_bezeichnung = body.get("bezeichnung", "")
     new_verein_key = body.get("new_verein_key", "").strip()
+    termin_id = str(body.get("id", "") or "").strip()
     changes = {k: v for k, v in body.get("changes", {}).items()
                if k in {"datum", "uhrzeit", "uhrzeit_bis", "ort", "ortschaft", "bezeichnung", "beschreibung"}}
     if not verein_key or not old_datum or not old_bezeichnung:
@@ -951,7 +960,7 @@ def api_termine_patch():
         for i, t in enumerate(liste):
             if t.get("geloescht") or t.get("deleted"):
                 continue  # gelöschte Kopie mit gleichem Datum+Titel nie treffen (Admin sieht sie nicht)
-            if t.get("datum") == old_datum and t.get("bezeichnung") == old_bezeichnung:
+            if _termin_passt(t, termin_id, old_datum, old_bezeichnung):
                 # 4: bis-Uhrzeit/Beschreibung wie im Vereinsformular prüfen (gegen den Endstand)
                 fehler[0] = zeit_fehler(changes.get("uhrzeit", t.get("uhrzeit", "")),
                                         changes.get("uhrzeit_bis", t.get("uhrzeit_bis", "")))
@@ -995,6 +1004,7 @@ def api_termine_flyer():
     datum = request.form.get("datum", "")
     bezeichnung = request.form.get("bezeichnung", "")
     aktion = request.form.get("aktion", "hochladen")
+    termin_id = request.form.get("id", "").strip()
     if not verein_key or not datum or not bezeichnung or aktion not in ("hochladen", "entfernen"):
         return json.dumps({"error": "verein_key, datum, bezeichnung und aktion erforderlich"}), 400, {"Content-Type": "application/json"}
     neu_url = neu_pfad = ""
@@ -1013,7 +1023,7 @@ def api_termine_flyer():
 
     def mutator(data):
         for t in data.get(verein_key, []):
-            if t.get("datum") == datum and t.get("bezeichnung") == bezeichnung and not t.get("geloescht") and not t.get("deleted"):
+            if not t.get("geloescht") and not t.get("deleted") and _termin_passt(t, termin_id, datum, bezeichnung):
                 alt["gefunden"] = True
                 alt["pfad"] = t.get("flyer_path", "")
                 if neu_url:
@@ -1048,6 +1058,7 @@ def api_termine_delete():
     verein_key = body.get("verein_key", "")
     old_datum = body.get("datum", "")
     old_bezeichnung = body.get("bezeichnung", "")
+    termin_id = str(body.get("id", "") or "").strip()
     if not verein_key or not old_datum or not old_bezeichnung:
         return json.dumps({"error": "verein_key, datum und bezeichnung erforderlich"}), 400, {"Content-Type": "application/json"}
     found = [False]
@@ -1056,7 +1067,7 @@ def api_termine_delete():
         for i, t in enumerate(liste):
             if t.get("geloescht") or t.get("deleted"):
                 continue
-            if t.get("datum") == old_datum and t.get("bezeichnung") == old_bezeichnung:
+            if _termin_passt(t, termin_id, old_datum, old_bezeichnung):
                 liste.pop(i)
                 found[0] = True
                 break

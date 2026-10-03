@@ -67,7 +67,8 @@ def dashboard(user):
         style = "opacity:.5" if past else ""
         edit_btn = ""
         if user["role"] == "admin":
-            edit_btn = f'<a href="/verein/termine/{t["id"]}" style="margin-left:.5rem;color:#0a84ff;text-decoration:none">✏️</a>'
+            edit_btn = (f'<a href="/verein/termine/{html.escape(t["id"])}" style="margin-left:.5rem;color:#0a84ff;text-decoration:none;font-size:.9rem">Bearbeiten</a>'
+                        if t.get("id") else "")
         rows += f"""<div class="card" style="{style}">
   <div style="display:flex;justify-content:space-between;align-items:start">
     <div>
@@ -93,43 +94,43 @@ def dashboard(user):
         used = _UPLOAD_LIMIT - remaining
         upload_btn = (
             f'<a class="btn btn-sec" href="/verein/upload" style="margin-top:.5rem">'
-            f'📤 Terminplan hochladen ({used}/{_UPLOAD_LIMIT} heute)</a>'
+            f'Terminplan hochladen ({used}/{_UPLOAD_LIMIT} heute)</a>'
         )
-        mitglieder_link = '<a class="btn btn-sec" href="/verein/mitglieder" style="margin-top:.5rem">👥 Mitglieder</a>'
-        profil_link = '<a class="btn btn-sec" href="/verein/profil" style="margin-top:.5rem">⚙️ Vereinsprofil</a>'
+        mitglieder_link = '<a class="btn btn-sec" href="/verein/mitglieder" style="margin-top:.5rem">Mitglieder</a>'
+        profil_link = '<a class="btn btn-sec" href="/verein/profil" style="margin-top:.5rem">Vereinsprofil</a>'
 
     upload_ok = request.args.get("upload_ok", "")
     upload_banner = ""
     if upload_ok and upload_ok.isdigit():
-        upload_banner = f'<p class="ok">✅ {upload_ok} Termine erfolgreich importiert.</p>'
+        upload_banner = f'<p class="ok">{upload_ok} Termine erfolgreich importiert.</p>'
 
     hilfe_block = ""
     if user["role"] == "admin":
         hilfe_block = """
 <details style="margin-top:1rem;border:1px solid #3a3a3c;border-radius:.625rem;overflow:hidden">
   <summary style="padding:.75rem 1rem;cursor:pointer;background:#2c2c2e;color:#f2f2f7;font-size:.9rem;font-weight:600;list-style:none;display:flex;justify-content:space-between;align-items:center">
-    ❓ Hilfe &amp; FAQ <span style="color:#aeaeb2;font-weight:400;font-size:.8rem">▾</span>
+    Hilfe &amp; FAQ <span style="color:#aeaeb2;font-weight:400;font-size:.8rem">▾</span>
   </summary>
   <div style="padding:1rem;display:flex;flex-direction:column;gap:.85rem;background:#1c1c1e">
 
     <div>
-      <div style="font-weight:600;font-size:.9rem;margin-bottom:.25rem">📄 PDF oder Foto hochladen</div>
+      <div style="font-weight:600;font-size:.9rem;margin-bottom:.25rem">PDF oder Foto hochladen</div>
       <div style="color:#aeaeb2;font-size:.85rem">Claude KI liest das Dokument und extrahiert Termine automatisch. Funktioniert mit Jahresprogrammen, Pfarrbriefen und Fotos von Plakaten (JPG, PNG, HEIC). Dauer: ca. 15–60 Sek.</div>
     </div>
 
     <div>
-      <div style="font-weight:600;font-size:.9rem;margin-bottom:.25rem">📊 Excel-Vorlage</div>
+      <div style="font-weight:600;font-size:.9rem;margin-bottom:.25rem">Excel-Vorlage</div>
       <div style="color:#aeaeb2;font-size:.85rem">Vorlage herunterladen, ausfüllen und hochladen – kein KI-Call, sofortige Verarbeitung.<br>
       Datumsformat: <code style="background:#3a3a3c;padding:0 4px;border-radius:3px">TT.MM.JJJJ</code> oder <code style="background:#3a3a3c;padding:0 4px;border-radius:3px">JJJJ-MM-TT</code> – kein Text wie „ca." oder Leerzeichen in der Datumsspalte.</div>
     </div>
 
     <div>
-      <div style="font-weight:600;font-size:.9rem;margin-bottom:.25rem">⏱ Tageslimit</div>
+      <div style="font-weight:600;font-size:.9rem;margin-bottom:.25rem">Tageslimit</div>
       <div style="color:#aeaeb2;font-size:.85rem">3 Uploads pro Tag – Zurücksetzung um Mitternacht. Das Limit gilt pro Verein.</div>
     </div>
 
     <div>
-      <div style="font-weight:600;font-size:.9rem;margin-bottom:.25rem">🔄 Upload fehlgeschlagen?</div>
+      <div style="font-weight:600;font-size:.9rem;margin-bottom:.25rem">Upload fehlgeschlagen?</div>
       <div style="color:#aeaeb2;font-size:.85rem">
         <b style="color:#f2f2f7">PDF:</b> Seite als Foto abfotografieren und als JPG hochladen.<br>
         <b style="color:#f2f2f7">Excel:</b> Datumsspalte prüfen – nur reines Datum, kein zusätzlicher Text.<br>
@@ -144,7 +145,7 @@ def dashboard(user):
     </div>
 
     <div>
-      <div style="font-weight:600;font-size:.9rem;margin-bottom:.25rem">🖼 Flyer-Upload bei einem Termin</div>
+      <div style="font-weight:600;font-size:.9rem;margin-bottom:.25rem">Flyer-Upload bei einem Termin</div>
       <div style="color:#aeaeb2;font-size:.85rem">Bild oder PDF (max. 8 MB) zuerst auf dem Gerät speichern und von dort hochladen. Ein Bild direkt aus Outlook/einer E-Mail in das Upload-Feld zu ziehen funktioniert nicht (Outlook gibt dabei nur einen internen Bild-Verweis statt der echten Datei weiter).</div>
     </div>
 
@@ -169,7 +170,7 @@ def dashboard(user):
 {profil_link}
 {hilfe_block}
 <hr>
-<a class="btn btn-sec" href="/verein/passwort" style="margin-top:.5rem">🔑 Passwort ändern</a>
+<a class="btn btn-sec" href="/verein/passwort" style="margin-top:.5rem">Passwort ändern</a>
 <a class="btn btn-sec" href="/" style="margin-top:.5rem">← Zurück zum Kalender</a>
 <p class="hint" style="margin-top:1rem"><a href="/verein/datenschutz">Datenschutzerklärung</a> · <a href="/verein/nutzungsbedingungen">Nutzungsbedingungen</a></p>"""
     return _page(f"Dashboard – {verein_name}", body)
@@ -628,7 +629,7 @@ def termin_edit(user, termin_id):
 <hr>
 <form method="post" onsubmit="return confirm('Termin wirklich löschen?')">
   {csrf_field(tok)}
-  <button class="btn btn-danger" type="submit" name="aktion" value="loeschen">🗑 Termin löschen</button>
+  <button class="btn btn-danger" type="submit" name="aktion" value="loeschen">Termin löschen</button>
 </form>
 {_BACK_DASH}"""
     return _page("Termin bearbeiten", form)
@@ -749,7 +750,7 @@ def mitglieder(user):
     tok = get_csrf_token()
     rows = ""
     for m in members:
-        status = "✅" if m["aktiv"] else "⏳ Einladung ausstehend"
+        status = "aktiv" if m["aktiv"] else "Einladung ausstehend"
         remove_btn = ""
         if m["role"] == "member":
             remove_btn = f'<form method="post" style="display:inline">{csrf_field(tok)}<input type="hidden" name="aktion" value="entfernen"><input type="hidden" name="member_id" value="{m["id"]}"><button style="background:none;border:none;color:#ff453a;cursor:pointer;font-size:.9rem" type="submit">Entfernen</button></form>'
@@ -767,7 +768,7 @@ def mitglieder(user):
   <input name="email" type="email" required placeholder="mitglied@beispiel.de">
   <button class="btn" type="submit">Einladung verschicken</button>
 </form>
-<div class="spam-hint">📬 Bitte Eingeladene auf den Spam-Ordner hinweisen.</div>"""
+<div class="spam-hint">Bitte Eingeladene auf den Spam-Ordner hinweisen.</div>"""
     else:
         invite_form = '<p class="hint">Maximale Anzahl (3) erreicht.</p>'
         if success:
@@ -901,7 +902,7 @@ def upload_page(user):
     tok = get_csrf_token()
     body = f"""{quota_bar}
 <div class="card">
-  <h2 style="font-size:.95rem;margin-top:0">📄 PDF oder Foto</h2>
+  <h2 style="font-size:.95rem;margin-top:0">PDF oder Foto</h2>
   <p class="hint">Claude KI extrahiert die Termine automatisch aus dem Dokument.</p>
   <form method="post" action="/verein/upload" enctype="multipart/form-data">
     {csrf_field(tok)}
@@ -912,10 +913,10 @@ def upload_page(user):
   </form>
 </div>
 <div class="card">
-  <h2 style="font-size:.95rem;margin-top:0">📊 Excel-Tabelle</h2>
+  <h2 style="font-size:.95rem;margin-top:0">Excel-Tabelle</h2>
   <p class="hint">Trage Termine in die Vorlage ein und lade sie hoch – ohne KI, keine Extraktion.</p>
   <a class="btn btn-sec" href="/verein/upload-template"
-     style="margin-bottom:.75rem">⬇ Vorlage herunterladen (.xlsx)</a>
+     style="margin-bottom:.75rem">Vorlage herunterladen (.xlsx)</a>
   <form method="post" action="/verein/upload" enctype="multipart/form-data">
     {csrf_field(tok)}
     <input type="hidden" name="typ" value="excel">
@@ -1233,7 +1234,7 @@ def verein_profil(user):
             gemeinde, landkreis, telefon = new_gemeinde, new_landkreis, f["telefon"]
             anrede, vorname, nachname = f["anrede"], f["vorname"], f["nachname"]
             eingabe_email = email
-            ok = "✅ Profil gespeichert."
+            ok = "Profil gespeichert."
             if email_wechsel:
                 ok += (f" Wir haben einen Bestätigungslink an <strong>{html.escape(email_neu)}</strong> geschickt."
                        " Bis zum Klick darauf bleibt die bisherige Adresse gültig.")
@@ -1328,5 +1329,5 @@ def email_bestaetigen():
             (row["email_neu"], row["id"]),
         )
     return _page("E-Mail bestätigt",
-                 f'<p class="ok">✅ Ab sofort loggst du dich mit <strong>{html.escape(row["email_neu"])}</strong> ein.</p>'
+                 f'<p class="ok">Ab sofort loggst du dich mit <strong>{html.escape(row["email_neu"])}</strong> ein.</p>'
                  '<a class="btn" href="/verein/login">Zum Login</a>')

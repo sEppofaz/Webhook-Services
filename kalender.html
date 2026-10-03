@@ -327,7 +327,7 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
   </div>
   <div class="hdr-right" style="display:flex;align-items:center;gap:6px">
     <div class="hdr-ver" style="display:flex;flex-direction:column;align-items:flex-end;gap:1px">
-      <span class="ver-lbl" style="margin-right:0">v1.36</span>
+      <span class="ver-lbl" style="margin-right:0">v1.37</span>
       <span style="font-size:9px;color:rgba(255,255,255,.28);letter-spacing:.2px;line-height:1">a sEpp-App</span>
     </div>
     <a class="refresh-btn" id="verein-login-btn" href="/verein/login" title="Vereins-Login oder Registrierung" style="width:auto;padding:0 10px;font-size:13px;font-weight:600;letter-spacing:.3px;text-decoration:none;white-space:nowrap">Login</a>
@@ -456,7 +456,7 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title" style="width:55%"></div><div class="sk-line sk-ort"></div></div>
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title"></div><div class="sk-line sk-ort" style="width:30%"></div></div>
     </div>
-    <p class="version">Vereinskalender &middot; v1.36 &middot; 2026-10-03 &middot; a sEpp-App</p>
+    <p class="version">Vereinskalender &middot; v1.37 &middot; 2026-10-03 &middot; a sEpp-App</p>
     <p style="font-size:11px;color:var(--text3);text-align:center;padding:0 0 24px;line-height:2">&#127807; Hosting in Finnland mit &Ouml;kostrom &middot; Werbefrei &middot; DSGVO-konform</p>
   </div>
 
@@ -3380,7 +3380,7 @@ async function saveTermin(idx){
   if(!changes.datum||!changes.bezeichnung){msg.style.color="red";msg.textContent="Datum und Bezeichnung sind Pflichtfelder.";return;}
   if(changes.uhrzeit_bis&&!changes.uhrzeit){msg.style.color="red";msg.textContent="Bitte zur Bis-Uhrzeit auch eine Beginn-Uhrzeit angeben.";return;}
   msg.style.color="var(--text3)";msg.textContent="Speichere…";
-  const body={verein_key:t.verein,datum:t.datum,bezeichnung:t.bezeichnung,changes};
+  const body={id:t.id||"",verein_key:t.verein,datum:t.datum,bezeichnung:t.bezeichnung,changes};
   if(selectedVerein&&selectedVerein!==t.verein)body.new_verein_key=selectedVerein;
   try{
     const r=await fetch("/api/termine",{
@@ -3410,7 +3410,7 @@ async function saveTermin(idx){
 }
 async function _terminFlyer(t,aktion,datei){
   const fd=new FormData();
-  fd.append("verein_key",t.verein);fd.append("datum",t.datum);fd.append("bezeichnung",t.bezeichnung);fd.append("aktion",aktion);
+  fd.append("id",t.id||"");fd.append("verein_key",t.verein);fd.append("datum",t.datum);fd.append("bezeichnung",t.bezeichnung);fd.append("aktion",aktion);
   if(datei)fd.append("flyer",datei);
   try{
     const r=await fetch("/api/termine/flyer",{method:"POST",headers:{"X-Upload-Token":localStorage.getItem("ut")||""},body:fd});
@@ -3439,7 +3439,7 @@ async function deleteTermin(idx){
     const r=await fetch("/api/termine",{
       method:"DELETE",
       headers:{"Content-Type":"application/json","X-Upload-Token":token},
-      body:JSON.stringify({verein_key:t.verein,datum:t.datum,bezeichnung:t.bezeichnung}),
+      body:JSON.stringify({id:t.id||"",verein_key:t.verein,datum:t.datum,bezeichnung:t.bezeichnung}),
     });
     const d=await r.json();
     if(d.ok){_admTermine.splice(idx,1);loadTermine();}
