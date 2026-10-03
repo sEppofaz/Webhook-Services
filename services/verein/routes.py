@@ -138,7 +138,7 @@ def dashboard(user):
     </div>
 
     <div>
-      <div style="font-weight:600;font-size:.9rem;margin-bottom:.25rem">👁 Vorschau vor dem Speichern</div>
+      <div style="font-weight:600;font-size:.9rem;margin-bottom:.25rem">Vorschau vor dem Speichern</div>
       <div style="color:#aeaeb2;font-size:.85rem">Beim Anlegen und Bearbeiten zeigt „Vorschau“ den Termin so, wie er im Kalender erscheint – bei mehrtägigen Terminen alle Tage. Termin antippen zeigt die Beschreibung, die Büroklammer den Flyer. Es wird dabei nichts gespeichert oder hochgeladen.</div>
     </div>
 
@@ -277,7 +277,7 @@ _TAGE_JS = """<script>
 # postMessage. Nichts wird gespeichert oder hochgeladen – Flyer bleiben als blob:-URL auf dem Gerät.
 # Termin-Darstellung kommt ausschließlich aus kalender.html (render()), hier wird keine Karte nachgebaut.
 _VORSCHAU_BTN = ('<button class="btn btn-sec" type="button" id="vorschau-btn" style="margin-top:1rem">'
-                 '👁 Vorschau</button><p id="vorschau-msg" class="err" style="display:none"></p>')
+                 'Vorschau</button><p id="vorschau-msg" class="err" style="display:none"></p>')
 
 _VORSCHAU_JS = """<style>
 .vs-ov{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;display:flex;flex-direction:column;align-items:center;padding:12px}
