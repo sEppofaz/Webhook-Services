@@ -143,6 +143,7 @@ Gottesdienste aus `gottesdienste.json` erreichen die Abonnenten also **nicht**. 
 - `location = /sw.js` → `Cache-Control: no-cache, no-store` + `Service-Worker-Allowed: /`
 - `location = /api/termine` → Rate-Limit 30 req/min, Burst 5 (Scraping-Schutz)
 - `location /api/` → Rate-Limit 10 req/s, Burst 30
+- `location = /api/termine/flyer` → `client_max_body_size 10m`, `proxy_read_timeout 60` (seit 2026-10-03, v1.35). Für den Rest von `/api/` gilt das nginx-Standardlimit **1 MB**.
 - `location ~ ^/verein/(termine|upload)` → wie `/verein`, aber `client_max_body_size 45m` + `proxy_read_timeout 120` (seit 2026-10-03). **Pitfall:** Davor galt für alles unter `/verein` 1 MB – Flyer > 1 MB und größere Terminplan-PDFs scheiterten still mit 413, obwohl die Formulare „max. 8 MB“ versprachen. Neues Formular mit Datei-Upload unter `/verein` ⇒ prüfen, ob es unter diese Location fällt.
 - `location /verein` → proxy_pass Flask (Auth-Seiten, Dashboard)
 - `location /telegram` → Telegram Haupt-Bot-Webhook (**Pflicht!** Muss in dieser Config stehen)
@@ -161,6 +162,7 @@ Gottesdienste aus `gottesdienste.json` erreichen die Abonnenten also **nicht**. 
 |------|--------------|
 | `/` | Vereinskalender-PWA |
 | `/api/termine` | GET/PATCH/DELETE – Termine (PATCH/DELETE: Auth X-Upload-Token) |
+| `/api/termine/flyer` | POST multipart – Admin: Flyer hochladen/ersetzen (`aktion=hochladen`, Datei `flyer`) oder `aktion=entfernen`; Termin über `verein_key`+`datum`+`bezeichnung`, gelöschte Termine ausgenommen; alter Flyer wird in Dropbox gelöscht (Auth X-Upload-Token, nginx 10m) |
 | `/api/ical` | GET – iCal-Export einzelner Termin |
 | `/api/ical/feed` | GET – Abonnierbarer Feed (`webcal://`), optional `?v=key1,key2` oder `?ort=Ortschaft` |
 | `/api/check-token` | POST – Admin-Token prüfen |
@@ -250,6 +252,7 @@ Gottesdienste aus `gottesdienste.json` erreichen die Abonnenten also **nicht**. 
 - **Offline testen ohne Secrets:** `CLAUDE_API_KEY=attrappe` setzen, `vk_db.DB_FILE` auf eine Temp-Datei, Mail-/Telegram-Funktionen in den Modulen ersetzen, Blueprints in eine eigene Flask-App hängen, CSRF-Feld heißt `_csrf`. Geschützte Routen per `inspect.unwrap(V.verein_profil)(user)` aufrufen.
 - **Telefon:** serverseitig Pflicht (Registrierung und Profil).
 - **Feldhöhe (v1.30):** `_CSS` setzt für Text- und Auswahlfelder `line-height:1.25` + feste Höhe (46 px) und `appearance:none` auf `<select>` mit eigenem Pfeil (Lucide `chevron-down` als Data-URI). Ohne das zeichnet Safari/iOS Auswahlfelder niedriger. Checkbox- und Dateifelder sind ausgenommen (`:not([type=checkbox]):not([type=file])`).
+- **Admin-Dialog „Termin bearbeiten“ (v1.35, `showTerminEdit()`):** Felder über `_admFld()` mit Klassen `.adm-lbl`/`.adm-inp` (38 px, Datum `type=date`, Safari-Polsterung von Datum/Uhrzeit über `::-webkit-datetime-edit` entfernt), `Verein zuordnen` als `.ve-sel`, Knöpfe `.adm-btn`/`.adm-btn-sec` (auf `.filter-card` mit `--bg3`, weil die Karte selbst `--bg2` hat). Flyer: Upload erst **nach** erfolgreichem PATCH mit den neuen Werten (`_terminFlyer()`), Entfernen sofort mit Rückfrage. `showTerminEdit(idx,true)` zeichnet neu ohne die Selbstverwaltungs-Rückfrage. **Reiterleiste `.adm-tabs`:** `flex:1 0 auto` + `overflow-x:auto` (wischbar auf dem Handy, vorher 542 px auf 358 px), Inhalt zentriert, Abmelden `.adm-tab-logout`.
 - **Feldhöhe Admin-Dialog „Verein bearbeiten“ (v1.32, `kalender.html`):** Gleiches Problem wie v1.30, aber im Admin-Modal: `#verein-edit-modal input{height:38px}` + Klasse `.ve-sel` für `<select>` (38 px, `appearance:none`, eigener Chevron). Selects in Flex-Zeilen (`#ve-transfer-key`) brauchen `min-width:0`, sonst schiebt ein langer Vereinsname den Nachbarknopf aus dem Dialog. Neue Selects im Modal ⇒ `class="ve-sel"`. Der zweite Dialog im Tab „Vereine“ (`#vd-rubrik`) ist davon nicht erfasst.
 - **`<textarea>` auf Server-Seiten:** `_CSS` setzt `font-family:inherit` (sonst Monospace).
 - **Neue Checkbox `zugangsdaten_notiert`:** Pflicht, serverseitig geprüft (`elif not zn:`). Wird in `form_data` NICHT zurückgegeben (kein Preserve nötig – ist nach Submit weg).
