@@ -26,6 +26,7 @@ from services.auth.routes import (
     _telegram_ortschaft_hinweis, ortschaft_geo, require_verein_login,
 )
 from shared.geo import plz_gueltig
+from shared.termin_felder import BESCHREIBUNG_MAX as _BESCHREIBUNG_MAX, zeit_fehler as _zeit_fehler
 
 verein_bp = Blueprint("verein", __name__)
 
@@ -71,9 +72,9 @@ def dashboard(user):
   <div style="display:flex;justify-content:space-between;align-items:start">
     <div>
       <div style="font-weight:600">{html.escape(t.get('bezeichnung',''))}</div>
-      <div style="color:#aeaeb2;font-size:.85rem">{t.get('datum','')} {t.get('uhrzeit','')}{('–' + t['uhrzeit_bis']) if t.get('uhrzeit_bis') else ''}</div>
+      <div style="color:#aeaeb2;font-size:.85rem">{html.escape(t.get('datum',''))} {html.escape(t.get('uhrzeit',''))}{('–' + html.escape(t['uhrzeit_bis'])) if t.get('uhrzeit_bis') else ''}</div>
       <div style="color:#aeaeb2;font-size:.85rem">{html.escape(t.get('ort',''))}</div>
-      {'<div style="color:#8e8e93;font-size:.8rem">ⓘ mit Beschreibung</div>' if t.get('beschreibung') else ''}
+      {'<div style="color:#8e8e93;font-size:.8rem">mit Beschreibung</div>' if t.get('beschreibung') else ''}
     </div>
     <div>{edit_btn}</div>
   </div>
@@ -177,8 +178,6 @@ def dashboard(user):
 # ── Neuer Termin ─────────────────────────────────────────────────────────────
 
 _MAX_TAGE = 16
-_BESCHREIBUNG_MAX = 1000
-_UHRZEIT_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 _WOCHENTAGE = ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
 _FLYER_ACCEPT = ".pdf,.jpg,.jpeg,.png,.webp"
 _FLYER_SUMME_HINWEIS = (f'<p class="hint">Mehrere Tage: alle Flyer zusammen max. {_MAX_UPLOAD_MB} MB pro Speichern – '
@@ -186,19 +185,6 @@ _FLYER_SUMME_HINWEIS = (f'<p class="hint">Mehrere Tage: alle Flyer zusammen max.
 _FLYER_HINWEIS = ('<p class="hint">Bitte den Flyer zuerst auf dem Gerät speichern (z.B. Bild aus der E-Mail '
                   'per „Speichern unter") und von dort hochladen. Ein Bild direkt aus Outlook/der E-Mail zu '
                   'ziehen funktioniert nicht.</p>')
-
-
-def _zeit_fehler(uhrzeit: str, uhrzeit_bis: str) -> str:
-    """Prüft Beginn/Ende. Ende früher als Beginn = endet nach Mitternacht (erlaubt)."""
-    if uhrzeit and not _UHRZEIT_RE.match(uhrzeit):
-        return "Uhrzeit muss im Format HH:MM sein."
-    if uhrzeit_bis and not _UHRZEIT_RE.match(uhrzeit_bis):
-        return "Bis-Uhrzeit muss im Format HH:MM sein."
-    if uhrzeit_bis and not uhrzeit:
-        return "Bitte zur Bis-Uhrzeit auch eine Beginn-Uhrzeit angeben."
-    if uhrzeit_bis and uhrzeit_bis == uhrzeit:
-        return "Bis-Uhrzeit muss sich vom Beginn unterscheiden."
-    return ""
 
 
 def _tag_label(iso: str) -> str:
@@ -244,7 +230,7 @@ _TAGE_JS = """<script>
     var b=vorlage.cloneNode(true);
     b.querySelector("textarea").name="beschreibung_"+i; b.querySelector("textarea").value="";
     b.querySelector("input[type=file]").name="flyer_"+i; b.querySelector("input[type=file]").value="";
-    var h=b.querySelector(".hint"); if(h)h.remove();
+    b.querySelectorAll(".hint").forEach(function(h){h.remove();});
     return b;
   }
   function sync(){
@@ -452,19 +438,22 @@ def termin_neu(user):
                 data.setdefault("_meta", {}).setdefault(verein_key, {})["selbstverwaltung"] = True
                 return data
 
-            KalenderStore.update(updater)
+            try:
+                KalenderStore.update(updater)
+            except Exception:
+                for _, pfad in flyer.values():
+                    delete_flyer(pfad)
+                raise
             for t in neue:
                 log_audit("erstellt", t["id"], verein_key, user["id"])
             return redirect("/verein/dashboard")
         if request.files and any(d.filename for d in request.files.values()):
             error += " Ausgewählte Flyer bitte erneut auswählen."
 
-    tage_html = "".join(_tag_block(i, f["datum"], b, len(beschreibungen) > 1) for i, b in enumerate(beschreibungen))
-    if len(beschreibungen) > 1:
-        # Tagesköpfe beim Fehler-Rerender mit den echten Daten
-        start = date.fromisoformat(f["datum"])
-        tage_html = "".join(_tag_block(i, (start + timedelta(days=i)).isoformat(), b, True)
-                            for i, b in enumerate(beschreibungen))
+    mehrtaegig = len(beschreibungen) > 1  # nur nach gültigem Datumsbereich (Fehler-Rerender)
+    start = date.fromisoformat(f["datum"]) if mehrtaegig else None
+    tage_html = "".join(_tag_block(i, (start + timedelta(days=i)).isoformat() if mehrtaegig else f["datum"], b, mehrtaegig)
+                        for i, b in enumerate(beschreibungen))
     e = html.escape
     tok = get_csrf_token()
     form = f"""
@@ -564,6 +553,8 @@ def termin_edit(user, termin_id):
                     new_flyer_url, new_flyer_path = upload_flyer(flyer_file.read())
                 except ValueError as e:
                     edit_error = str(e)
+                except Exception:
+                    edit_error = "Flyer-Upload fehlgeschlagen. Bitte erneut versuchen."
             if not edit_error:
                 alter_pfad = termin.get("flyer_path", "") if new_flyer_url else ""
                 def edit_updater(d):
@@ -584,7 +575,12 @@ def termin_edit(user, termin_id):
                                 t["flyer_url"] = new_flyer_url
                                 t["flyer_path"] = new_flyer_path
                     return d
-                KalenderStore.update(edit_updater)
+                try:
+                    KalenderStore.update(edit_updater)
+                except Exception:
+                    if new_flyer_path:
+                        delete_flyer(new_flyer_path)
+                    raise
                 if alter_pfad:
                     delete_flyer(alter_pfad)
                 log_audit("geaendert", termin_id, verein_key, user["id"])
@@ -623,8 +619,8 @@ def termin_edit(user, termin_id):
   <textarea name="beschreibung" rows="3" maxlength="{_BESCHREIBUNG_MAX}" placeholder="Wird beim Antippen des Termins angezeigt">{html.escape(termin.get('beschreibung',''))}</textarea>
   {flyer_section}
   <label>{'Flyer ersetzen' if flyer_url else 'Flyer hochladen'} (PDF/JPG/PNG/WebP, max. 8 MB)</label>
-  <p class="hint">Bitte den Flyer zuerst auf dem Gerät speichern (z.B. Bild aus der E-Mail per „Speichern unter") und von dort hochladen. Ein Bild direkt aus Outlook/der E-Mail zu ziehen funktioniert nicht.</p>
-  <input name="flyer" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp">
+  {_FLYER_HINWEIS}
+  <input name="flyer" type="file" accept="{_FLYER_ACCEPT}">
   {_VORSCHAU_BTN}
   <button class="btn" type="submit" name="aktion" value="speichern">Änderungen speichern</button>
 </form>

@@ -14,6 +14,7 @@ from flask import Blueprint, Response, request
 
 from shared.geo import geo_fuer_termin
 from shared.flyer_store import upload_flyer, delete_flyer
+from shared.termin_felder import BESCHREIBUNG_MAX, DATUM_RE, zeit_fehler
 from shared.vk_db import db_conn
 from shared.kalender_core import (
     ICON_192_FILE,
@@ -942,13 +943,29 @@ def api_termine_patch():
     if not verein_key or not old_datum or not old_bezeichnung:
         return json.dumps({"error": "verein_key, datum und bezeichnung erforderlich"}), 400, {"Content-Type": "application/json"}
     found = [False]
+    fehler = [""]
+    changes = {k: (v.strip() if isinstance(v, str) else v) for k, v in changes.items()}
     _sort = lambda lst: sorted(lst, key=lambda x: (x.get("datum", ""), x.get("uhrzeit", "")))
     def mutator(data):
         liste = data.get(verein_key, [])
         for i, t in enumerate(liste):
+            if t.get("geloescht") or t.get("deleted"):
+                continue  # gelöschte Kopie mit gleichem Datum+Titel nie treffen (Admin sieht sie nicht)
             if t.get("datum") == old_datum and t.get("bezeichnung") == old_bezeichnung:
-                t.update(changes)
+                # 4: bis-Uhrzeit/Beschreibung wie im Vereinsformular prüfen (gegen den Endstand)
+                fehler[0] = zeit_fehler(changes.get("uhrzeit", t.get("uhrzeit", "")),
+                                        changes.get("uhrzeit_bis", t.get("uhrzeit_bis", "")))
+                if len(changes.get("beschreibung", "")) > BESCHREIBUNG_MAX:
+                    fehler[0] = f"Beschreibung höchstens {BESCHREIBUNG_MAX} Zeichen."
+                if "datum" in changes and not DATUM_RE.match(changes["datum"]):
+                    fehler[0] = "Datum muss im Format YYYY-MM-DD sein."
                 found[0] = True
+                if fehler[0]:
+                    return
+                for feld in ("uhrzeit_bis", "beschreibung"):  # leer = Feld entfernen, wie im Vereinsformular
+                    if feld in changes and not changes[feld]:
+                        changes.pop(feld); t.pop(feld, None)
+                t.update(changes)
                 if new_verein_key and new_verein_key != verein_key:
                     moved = liste.pop(i)
                     data[verein_key] = _sort(liste)
@@ -961,6 +978,8 @@ def api_termine_patch():
     KalenderStore.update(mutator)
     if not found[0]:
         return json.dumps({"error": "Termin nicht gefunden"}), 404, {"Content-Type": "application/json"}
+    if fehler[0]:
+        return json.dumps({"error": fehler[0]}, ensure_ascii=False), 400, {"Content-Type": "application/json; charset=utf-8"}
     log(f"Termin bearbeitet: {verein_key} / {old_datum} / {old_bezeichnung}" + (f" → {new_verein_key}" if new_verein_key else ""))
     return json.dumps({"ok": True}, ensure_ascii=False), 200, {"Content-Type": "application/json; charset=utf-8"}
 
@@ -987,6 +1006,9 @@ def api_termine_flyer():
             neu_url, neu_pfad = upload_flyer(datei.read())  # Netzwerk-Call vor dem Lock
         except ValueError as e:
             return json.dumps({"error": str(e)}, ensure_ascii=False), 400, {"Content-Type": "application/json; charset=utf-8"}
+        except Exception as e:
+            log(f"⚠️  Flyer-Upload (Admin) fehlgeschlagen: {type(e).__name__}")
+            return json.dumps({"error": "Flyer-Upload zu Dropbox fehlgeschlagen. Bitte erneut versuchen."}, ensure_ascii=False), 502, {"Content-Type": "application/json; charset=utf-8"}
     alt = {"pfad": "", "gefunden": False}
 
     def mutator(data):
@@ -1001,7 +1023,12 @@ def api_termine_flyer():
                     t.pop("flyer_path", None)
                 break
     from shared.kalender_store import KalenderStore
-    KalenderStore.update(mutator)
+    try:
+        KalenderStore.update(mutator)
+    except Exception:
+        if neu_pfad:
+            delete_flyer(neu_pfad)
+        raise
     if not alt["gefunden"]:
         if neu_pfad:
             delete_flyer(neu_pfad)
@@ -1027,6 +1054,8 @@ def api_termine_delete():
     def mutator(data):
         liste = data.get(verein_key, [])
         for i, t in enumerate(liste):
+            if t.get("geloescht") or t.get("deleted"):
+                continue
             if t.get("datum") == old_datum and t.get("bezeichnung") == old_bezeichnung:
                 liste.pop(i)
                 found[0] = True
@@ -1223,7 +1252,10 @@ def api_ical_feed():
         try:
             dtstart, dtend = _ics_zeiten(date(y, mo, d), uhrzeit, t.get("uhrzeit_bis", ""))
         except ValueError:
-            dtstart, dtend = _ics_zeiten(date(y, mo, d), "00:00", "")
+            try:  # kaputtes Ende → nur Beginn, erst danach 00:00
+                dtstart, dtend = _ics_zeiten(date(y, mo, d), uhrzeit, "")
+            except ValueError:
+                dtstart, dtend = _ics_zeiten(date(y, mo, d), "00:00", "")
 
         uid_raw = f"{t['datum']}-{re.sub(r'[^a-z0-9]', '', bezeichnung.lower()[:20])}-{vkey}@vereinskalender"
         beschr  = t.get("beschreibung", "")
