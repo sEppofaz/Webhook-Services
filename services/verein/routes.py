@@ -138,6 +138,11 @@ def dashboard(user):
     </div>
 
     <div>
+      <div style="font-weight:600;font-size:.9rem;margin-bottom:.25rem">👁 Vorschau vor dem Speichern</div>
+      <div style="color:#aeaeb2;font-size:.85rem">Beim Anlegen und Bearbeiten zeigt „Vorschau“ den Termin so, wie er im Kalender erscheint – bei mehrtägigen Terminen alle Tage. Termin antippen zeigt die Beschreibung, die Büroklammer den Flyer. Es wird dabei nichts gespeichert oder hochgeladen.</div>
+    </div>
+
+    <div>
       <div style="font-weight:600;font-size:.9rem;margin-bottom:.25rem">🖼 Flyer-Upload bei einem Termin</div>
       <div style="color:#aeaeb2;font-size:.85rem">Bild oder PDF (max. 8 MB) zuerst auf dem Gerät speichern und von dort hochladen. Ein Bild direkt aus Outlook/einer E-Mail in das Upload-Feld zu ziehen funktioniert nicht (Outlook gibt dabei nur einen internen Bild-Verweis statt der echten Datei weiter).</div>
     </div>
@@ -268,6 +273,91 @@ _TAGE_JS = """<script>
 </script>"""
 
 
+# Vorschau: zeigt den echten Kalender (/?vorschau=1) im Overlay und übergibt die Formularwerte per
+# postMessage. Nichts wird gespeichert oder hochgeladen – Flyer bleiben als blob:-URL auf dem Gerät.
+# Termin-Darstellung kommt ausschließlich aus kalender.html (render()), hier wird keine Karte nachgebaut.
+_VORSCHAU_BTN = ('<button class="btn btn-sec" type="button" id="vorschau-btn" style="margin-top:1rem">'
+                 '👁 Vorschau</button><p id="vorschau-msg" class="err" style="display:none"></p>')
+
+_VORSCHAU_JS = """<style>
+.vs-ov{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;display:flex;flex-direction:column;align-items:center;padding:12px}
+.vs-box{background:#1c1c1e;border-radius:14px;width:100%;max-width:520px;flex:1;display:flex;flex-direction:column;overflow:hidden;border:1px solid #3a3a3c}
+.vs-kopf{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #3a3a3c}
+.vs-kopf b{font-size:.95rem}.vs-kopf small{display:block;color:#aeaeb2;font-size:.78rem;font-weight:400}
+.vs-zu{background:#2c2c2e;color:#0a84ff;border:none;border-radius:8px;padding:.45rem .8rem;font-size:.9rem;font-weight:600;cursor:pointer;flex-shrink:0}
+.vs-box iframe{flex:1;width:100%;border:0;background:#1c1c1e}
+.vs-flyer{flex:1;overflow:auto;display:flex;align-items:flex-start;justify-content:center;background:#000}
+.vs-flyer img{max-width:100%;height:auto}.vs-flyer iframe{width:100%;height:100%;border:0;background:#fff}
+</style>
+<script>
+(function(){
+  var form=document.getElementById("termin-form"), btn=document.getElementById("vorschau-btn"), msg=document.getElementById("vorschau-msg");
+  if(!form||!btn)return;
+  var blobs=[], typen={}, ov=null, frame=null, daten=null;
+  function val(n){var e=form.elements[n];return e&&e.value?String(e.value).trim():"";}
+  function flyerVon(inp){
+    if(inp&&inp.files&&inp.files[0]){var u=URL.createObjectURL(inp.files[0]);blobs.push(u);typen[u]=inp.files[0].type||"";return u;}
+    return "";
+  }
+  function sammeln(){
+    var datum=val("datum"), bez=val("bezeichnung");
+    if(!datum||!bez)return "Bitte zuerst Datum und Bezeichnung ausfüllen.";
+    var bl=[].slice.call(form.querySelectorAll(".tag-block"));
+    var tage=bl.length?bl.map(function(b){return {b:b.querySelector("textarea"),f:b.querySelector("input[type=file]")};})
+                      :[{b:form.elements["beschreibung"],f:form.elements["flyer"]}];
+    var start=new Date(datum+"T12:00:00"), termine=[];
+    tage.forEach(function(t,i){
+      var d=new Date(start);d.setDate(d.getDate()+i);
+      var iso=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+      termine.push({datum:iso,uhrzeit:val("uhrzeit"),uhrzeit_bis:val("uhrzeit")?val("uhrzeit_bis"):"",bezeichnung:bez,ort:val("ort"),
+        beschreibung:t.b?String(t.b.value).trim():"",flyer_url:flyerVon(t.f)||(i===0?(form.dataset.flyerUrl||""):"")});
+    });
+    return {typ:"vko-vorschau-daten",verein:{key:form.dataset.vereinKey||"",name:form.dataset.vereinName||""},termine:termine};
+  }
+  function schliessen(){
+    if(ov)ov.remove();ov=null;frame=null;daten=null;
+    blobs.forEach(function(u){URL.revokeObjectURL(u);});blobs=[];typen={};
+  }
+  function kopf(titel,sub){
+    var k=document.createElement("div");k.className="vs-kopf";
+    var t=document.createElement("div");t.innerHTML="<b></b><small></small>";
+    t.querySelector("b").textContent=titel;t.querySelector("small").textContent=sub;
+    var z=document.createElement("button");z.type="button";z.className="vs-zu";z.textContent="Schließen";
+    k.appendChild(t);k.appendChild(z);return {k:k,z:z};
+  }
+  function flyerZeigen(url){
+    if(!/^blob:/.test(url)){window.open(url,"_blank","noopener");return;}
+    var o=document.createElement("div");o.className="vs-ov";o.style.zIndex="1001";
+    var box=document.createElement("div");box.className="vs-box";
+    var h=kopf("Flyer-Vorschau","Noch nicht hochgeladen – wird erst beim Speichern übertragen.");
+    h.z.onclick=function(){o.remove();};
+    var inh=document.createElement("div");inh.className="vs-flyer";
+    if(/pdf/i.test(typen[url]||"")){var f=document.createElement("iframe");f.src=url;inh.appendChild(f);}
+    else{var img=document.createElement("img");img.src=url;img.alt="Flyer";inh.appendChild(img);}
+    box.appendChild(h.k);box.appendChild(inh);o.appendChild(box);document.body.appendChild(o);
+  }
+  window.addEventListener("message",function(e){
+    if(e.origin!==location.origin||!frame||e.source!==frame.contentWindow||!e.data)return;
+    if(e.data.typ==="vko-vorschau-bereit"&&daten)frame.contentWindow.postMessage(daten,location.origin);
+    else if(e.data.typ==="vko-vorschau-flyer"&&typeof e.data.url==="string")flyerZeigen(e.data.url);
+  });
+  btn.addEventListener("click",function(){
+    schliessen();
+    var d=sammeln();
+    if(typeof d==="string"){msg.textContent=d;msg.style.display="block";return;}
+    msg.style.display="none";daten=d;
+    ov=document.createElement("div");ov.className="vs-ov";
+    var box=document.createElement("div");box.className="vs-box";
+    var h=kopf("Vorschau","So erscheint der Termin im Kalender – noch nicht gespeichert. Termin antippen zeigt die Beschreibung.");
+    h.z.onclick=schliessen;
+    frame=document.createElement("iframe");frame.title="Vorschau";frame.src="/?vorschau=1";
+    box.appendChild(h.k);box.appendChild(frame);ov.appendChild(box);document.body.appendChild(ov);
+  });
+  document.addEventListener("keydown",function(e){if(e.key==="Escape"&&ov&&!document.querySelectorAll(".vs-ov")[1])schliessen();});
+})();
+</script>"""
+
+
 @verein_bp.route("/verein/termine/neu", methods=["GET", "POST"])
 @require_verein_login
 def termin_neu(user):
@@ -379,7 +469,7 @@ def termin_neu(user):
     tok = get_csrf_token()
     form = f"""
 {'<p class="err">'+e(error)+'</p>' if error else ''}
-<form id="termin-form" method="post" enctype="multipart/form-data" autocomplete="off">
+<form id="termin-form" method="post" enctype="multipart/form-data" autocomplete="off" data-verein-key="{e(user.get('verein_key',''))}" data-verein-name="{e(user.get('verein_name',''))}">
   {csrf_field(tok)}
   <label>Datum *</label>
   <input name="datum" type="date" required value="{e(f['datum'])}">
@@ -397,9 +487,11 @@ def termin_neu(user):
   <input name="ort" type="text" placeholder="z.B. Gasthaus zur Post" value="{e(f['ort'])}">
   <div id="tage">{tage_html}</div>
   <p id="tage-info" class="hint" style="color:#ff9f0a"></p>
+  {_VORSCHAU_BTN}
   <button class="btn" type="submit">Termin speichern</button>
 </form>
 {_TAGE_JS % (_MAX_TAGE, _MAX_UPLOAD_MB * 1024 * 1024, _MAX_UPLOAD_MB)}
+{_VORSCHAU_JS}
 {_BACK_DASH}"""
     return _page("Neuer Termin", form)
 
@@ -508,15 +600,13 @@ def termin_edit(user, termin_id):
   <label>Aktueller Flyer</label>
   <div style="display:flex;gap:8px;align-items:center">
     <a href="{html.escape(flyer_url)}" target="_blank" rel="noopener" class="btn btn-sec" style="font-size:13px">Flyer öffnen</a>
-    <form method="post" style="margin:0" onsubmit="return confirm('Flyer wirklich entfernen?')">
-      {csrf_field(tok)}
-      <button class="btn btn-danger" type="submit" name="aktion" value="flyer_entfernen" style="font-size:13px">Entfernen</button>
-    </form>
+    <!-- kein eigenes <form>: steht im Hauptformular, verschachtelte Formulare verwirft der Browser (samt onsubmit) -->
+    <button class="btn btn-danger" type="submit" name="aktion" value="flyer_entfernen" formnovalidate style="font-size:13px" onclick="return confirm('Flyer wirklich entfernen?')">Entfernen</button>
   </div>
 </div>"""
     form = f"""
 {'<p class="err">'+html.escape(edit_error)+'</p>' if edit_error else ''}
-<form method="post" enctype="multipart/form-data">
+<form id="termin-form" method="post" enctype="multipart/form-data" data-verein-key="{html.escape(verein_key)}" data-verein-name="{html.escape(user.get('verein_name',''))}" data-flyer-url="{html.escape(flyer_url)}">
   {csrf_field(tok)}
   <label>Datum</label>
   <input name="datum" type="date" required value="{html.escape(termin.get('datum',''))}">
@@ -535,8 +625,10 @@ def termin_edit(user, termin_id):
   <label>{'Flyer ersetzen' if flyer_url else 'Flyer hochladen'} (PDF/JPG/PNG/WebP, max. 8 MB)</label>
   <p class="hint">Bitte den Flyer zuerst auf dem Gerät speichern (z.B. Bild aus der E-Mail per „Speichern unter") und von dort hochladen. Ein Bild direkt aus Outlook/der E-Mail zu ziehen funktioniert nicht.</p>
   <input name="flyer" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp">
+  {_VORSCHAU_BTN}
   <button class="btn" type="submit" name="aktion" value="speichern">Änderungen speichern</button>
 </form>
+{_VORSCHAU_JS}
 <hr>
 <form method="post" onsubmit="return confirm('Termin wirklich löschen?')">
   {csrf_field(tok)}

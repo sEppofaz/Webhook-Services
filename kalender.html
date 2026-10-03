@@ -126,6 +126,10 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
 .ev-fav.on svg path{fill:currentColor}
 .ev-flyer{right:90px}
 .ev-card--info{cursor:pointer}
+/* Vorschau-Modus (/?vorschau=1, eingebettet im Vereinsformular): nur die Terminkarten */
+html.vorschau .hdr,html.vorschau #welcome-banner,html.vorschau #s-kal>.filter-card,html.vorschau .disclaimer,html.vorschau #ev-count,
+html.vorschau .cta-card,html.vorschau #s-kal>p,html.vorschau #back-top{display:none!important}
+html.vorschau #ev-list{padding-bottom:16px}
 /* Admin „Verein bearbeiten": Auswahlfelder exakt so hoch wie die Textfelder (Safari zeichnet <select> sonst niedriger) */
 #verein-edit-modal input{height:38px}
 .ve-sel{box-sizing:border-box;height:38px;padding:0 30px 0 10px;border:1.5px solid var(--border2);border-radius:8px;background-color:var(--bg);color:var(--text);font-size:14px;outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;text-overflow:ellipsis;
@@ -286,6 +290,8 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
     var m=document.getElementById("theme-color-meta");
     if(m)m.setAttribute("content",dark?"#5B21B6":"#6D28D9");
   }catch(e){}
+  // Vorschau-Modus für das Vereinsformular (eingebettet unter /?vorschau=1): nur die Terminliste
+  try{if(new URLSearchParams(location.search).has("vorschau"))document.documentElement.classList.add("vorschau");}catch(e){}
 })();
 </script>
 </head>
@@ -310,7 +316,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
   </div>
   <div class="hdr-right" style="display:flex;align-items:center;gap:6px">
     <div class="hdr-ver" style="display:flex;flex-direction:column;align-items:flex-end;gap:1px">
-      <span class="ver-lbl" style="margin-right:0">v1.32</span>
+      <span class="ver-lbl" style="margin-right:0">v1.33</span>
       <span style="font-size:9px;color:rgba(255,255,255,.28);letter-spacing:.2px;line-height:1">a sEpp-App</span>
     </div>
     <a class="refresh-btn" id="verein-login-btn" href="/verein/login" title="Vereins-Login oder Registrierung" style="width:auto;padding:0 10px;font-size:13px;font-weight:600;letter-spacing:.3px;text-decoration:none;white-space:nowrap">Login</a>
@@ -439,7 +445,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title" style="width:55%"></div><div class="sk-line sk-ort"></div></div>
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title"></div><div class="sk-line sk-ort" style="width:30%"></div></div>
     </div>
-    <p class="version">Vereinskalender &middot; v1.32 &middot; 2026-10-03 &middot; a sEpp-App</p>
+    <p class="version">Vereinskalender &middot; v1.33 &middot; 2026-10-03 &middot; a sEpp-App</p>
     <p style="font-size:11px;color:var(--text3);text-align:center;padding:0 0 24px;line-height:2">&#127807; Hosting in Finnland mit &Ouml;kostrom &middot; Werbefrei &middot; DSGVO-konform</p>
   </div>
 
@@ -886,8 +892,11 @@ let activeFavs=(()=>{
   try{return new Set(JSON.parse(stored));}catch(e){return new Set(favorites.map(f=>f.type+":"+String(f.key)));}
 })();
 const ADMIN=window.location.hash==="#admin"||window.location.pathname==="/admin";
+// Vorschau: zeigt nur die vom Vereinsformular übergebenen Termine, liest und schreibt keinen gespeicherten Zustand
+const VORSCHAU=document.documentElement.classList.contains("vorschau");
+if(VORSCHAU){favorites=[];activeFavs=new Set();}
 const RUBRIK_KEY="vk_rubrik";
-let aktRubrikSet=(()=>{try{const v=localStorage.getItem(RUBRIK_KEY);if(!v)return new Set();const p=JSON.parse(v);return new Set(Array.isArray(p)?p:(p&&p!=="alle"?[p]:[]));}catch(e){return new Set();}})();
+let aktRubrikSet=(()=>{if(VORSCHAU)return new Set();try{const v=localStorage.getItem(RUBRIK_KEY);if(!v)return new Set();const p=JSON.parse(v);return new Set(Array.isArray(p)?p:(p&&p!=="alle"?[p]:[]));}catch(e){return new Set();}})();
 const STATE_KEY="vk_state";
 let srchText="",filterOpenBeforeSearch=false;
 
@@ -896,7 +905,7 @@ function fmt(s){const d=pd(s);return WD[d.getDay()]+", "+d.getDate()+". "+MO[d.g
 
 /* ── State-Persistenz ── */
 function saveState(){
-  if(!ready)return;
+  if(!ready||VORSCHAU)return;
   const deaktiviert=Object.keys(labels).filter(k=>!aktVereine.has(k));
   try{
     localStorage.setItem(STATE_KEY,JSON.stringify({
@@ -910,6 +919,7 @@ function saveState(){
 }
 
 function loadState(){
+  if(VORSCHAU)return;
   try{
     const raw=localStorage.getItem(STATE_KEY);
     if(!raw)return;
@@ -951,6 +961,27 @@ function applyStateToUI(){
   updateChecks();
 }
 
+/* ── Vorschau-Modus: Termine kommen per postMessage vom Vereinsformular (gleiche Herkunft) ── */
+function _vorschauTermine(liste,vkey){
+  return (Array.isArray(liste)?liste:[]).filter(t=>t&&typeof t.datum==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(t.datum)&&typeof t.bezeichnung==="string")
+    .map(t=>({datum:t.datum,uhrzeit:String(t.uhrzeit||""),uhrzeit_bis:String(t.uhrzeit_bis||""),bezeichnung:t.bezeichnung,
+      ort:String(t.ort||""),beschreibung:String(t.beschreibung||""),verein:vkey,
+      flyer_url:/^(blob:|https:)/.test(t.flyer_url||"")?t.flyer_url:""}));
+}
+function _vorschauDaten(){
+  return new Promise(res=>{
+    let erst=true;
+    window.addEventListener("message",e=>{
+      if(e.origin!==location.origin||e.source!==window.parent||!e.data||e.data.typ!=="vko-vorschau-daten")return;
+      const vkey=String(e.data.verein?.key||"");
+      const termine=_vorschauTermine(e.data.termine,vkey);
+      if(erst){erst=false;res({verein:e.data.verein,termine});}
+      else{allT=termine;render();}
+    });
+    if(window.parent!==window)window.parent.postMessage({typ:"vko-vorschau-bereit"},location.origin);
+  });
+}
+
 async function load(){
   let j;
   try{
@@ -968,6 +999,12 @@ async function load(){
     document.getElementById("ev-list").innerHTML=
       `<div class="ev-empty"><p>${icon("alertTriangle",32)}</p><small>Keine Internetverbindung &ndash; Termine k&ouml;nnen gerade nicht geladen werden.</small></div>`;
     return;
+  }
+  if(VORSCHAU){
+    const vd=await _vorschauDaten();
+    j={...j,termine:vd.termine,labels:{...(j.labels||{})}};
+    if(vd.verein&&vd.verein.key&&!j.labels[vd.verein.key])j.labels[vd.verein.key]=vd.verein.name||vd.verein.key;
+    zeitraum="alle";_scrollToToday=false;
   }
   labels=j.labels||{};
   allT=j.termine||[];
@@ -988,6 +1025,7 @@ async function load(){
   aktVereine=new Set(Object.keys(labels));
   loadState();
   applyStateToUI();
+  if(VORSCHAU)aktVereine=new Set(Object.keys(labels));  // Pfarr-Ausblendung & Co. gelten in der Vorschau nicht
 
   renderFavBar();
   renderRubrikBar();
@@ -1145,7 +1183,7 @@ function resetAll(){
   activeFavs=new Set();
   saveActiveFavs();
   aktRubrikSet=new Set();
-  localStorage.removeItem(RUBRIK_KEY);
+  if(!VORSCHAU)localStorage.removeItem(RUBRIK_KEY);
   renderRubrikBar();
   srchResults=[];
   srchText="";
@@ -1365,8 +1403,10 @@ function setRubrik(r){
   leaveFavMode();
   if(aktRubrikSet.has(r))aktRubrikSet.delete(r);
   else aktRubrikSet.add(r);
-  if(aktRubrikSet.size===0)localStorage.removeItem(RUBRIK_KEY);
-  else localStorage.setItem(RUBRIK_KEY,JSON.stringify([...aktRubrikSet]));
+  if(!VORSCHAU){
+    if(aktRubrikSet.size===0)localStorage.removeItem(RUBRIK_KEY);
+    else localStorage.setItem(RUBRIK_KEY,JSON.stringify([...aktRubrikSet]));
+  }
   renderRubrikBar();
   updateAllBadges();
   render();
@@ -1398,8 +1438,8 @@ document.querySelectorAll("[data-z]").forEach(c=>c.onclick=()=>{
 
 /* ── Favoriten ── */
 function isFavorite(r){return favorites.some(f=>f.type===r.type&&String(f.key)===String(r.key));}
-function saveFavorites(){localStorage.setItem(FAV_KEY,JSON.stringify(favorites));}
-function saveActiveFavs(){localStorage.setItem(ACTIVE_FAV_KEY,JSON.stringify([...activeFavs]));}
+function saveFavorites(){if(VORSCHAU)return;localStorage.setItem(FAV_KEY,JSON.stringify(favorites));}
+function saveActiveFavs(){if(VORSCHAU)return;localStorage.setItem(ACTIVE_FAV_KEY,JSON.stringify([...activeFavs]));}
 
 /* ── Favoriten-Ansicht ──
    Aktive Favoriten ersetzen Region/Gemeinde/Ortschaft/Verein/Rubrik-Filter (Zeitraum + Suche gelten weiter).
@@ -1784,6 +1824,7 @@ function render(){
 
 /* ── iCal Export ── */
 function exportICS(idx){
+  if(VORSCHAU)return;
   const t=allT[idx];
   if(!t)return;
   const p=new URLSearchParams({d:t.datum,t:t.bezeichnung,v:labels[t.verein]||t.verein});
@@ -1964,6 +2005,7 @@ document.addEventListener("click",e=>{
 /* ── Event-Delegation: Favoriten- und Flyer-Button auf Terminkarren ── */
 document.addEventListener("click",e=>{
   const favBtn=e.target.closest(".js-ev-fav-btn");
+  if(favBtn&&VORSCHAU)return;
   if(favBtn){
     toggleFavVerein(favBtn.dataset.favKey,favBtn.dataset.favLabel);
     const isFavNow=favorites.some(f=>f.type==="verein"&&f.key===favBtn.dataset.favKey);
@@ -1972,7 +2014,9 @@ document.addEventListener("click",e=>{
   }
   const flyerBtn=e.target.closest(".js-ev-flyer-btn");
   if(flyerBtn){
-    window.open(flyerBtn.dataset.flyerUrl,"_blank","noopener");
+    // Vorschau: Flyer liegt noch lokal (blob:) – das Vereinsformular zeigt ihn an
+    if(VORSCHAU)window.parent.postMessage({typ:"vko-vorschau-flyer",url:flyerBtn.dataset.flyerUrl},location.origin);
+    else window.open(flyerBtn.dataset.flyerUrl,"_blank","noopener");
     return;
   }
   // Termin mit Beschreibung: Antippen klappt sie auf/zu (nicht bei Knöpfen, Links oder markiertem Text)
@@ -3612,11 +3656,11 @@ function dismissWelcome(){
   localStorage.setItem("vk_welcome_seen","1");
   document.getElementById("welcome-banner").style.display="none";
 }
-if(!localStorage.getItem("vk_welcome_seen")){
+if(!VORSCHAU&&!localStorage.getItem("vk_welcome_seen")){
   document.getElementById("welcome-banner").style.display="block";
 }
 load();
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
+if (!VORSCHAU && 'serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
 </script>
 </body>
 </html>
