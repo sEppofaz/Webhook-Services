@@ -13,6 +13,7 @@ from pathlib import Path
 from flask import Blueprint, Response, request
 
 from shared.geo import geo_fuer_termin
+from shared.flyer_store import upload_flyer, delete_flyer
 from shared.vk_db import db_conn
 from shared.kalender_core import (
     ICON_192_FILE,
@@ -962,6 +963,53 @@ def api_termine_patch():
         return json.dumps({"error": "Termin nicht gefunden"}), 404, {"Content-Type": "application/json"}
     log(f"Termin bearbeitet: {verein_key} / {old_datum} / {old_bezeichnung}" + (f" → {new_verein_key}" if new_verein_key else ""))
     return json.dumps({"ok": True}, ensure_ascii=False), 200, {"Content-Type": "application/json; charset=utf-8"}
+
+
+@kalender_bp.route("/api/termine/flyer", methods=["POST"])
+def api_termine_flyer():
+    """Admin: Flyer eines Termins hochladen/ersetzen (aktion=hochladen, Datei 'flyer') oder entfernen.
+    Termin wie bei PATCH/DELETE über verein_key + datum + bezeichnung (multipart-Formular)."""
+    token = request.headers.get("X-Upload-Token", "")
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
+        return json.dumps({"error": "Nicht autorisiert"}), 401, {"Content-Type": "application/json"}
+    verein_key = request.form.get("verein_key", "")
+    datum = request.form.get("datum", "")
+    bezeichnung = request.form.get("bezeichnung", "")
+    aktion = request.form.get("aktion", "hochladen")
+    if not verein_key or not datum or not bezeichnung or aktion not in ("hochladen", "entfernen"):
+        return json.dumps({"error": "verein_key, datum, bezeichnung und aktion erforderlich"}), 400, {"Content-Type": "application/json"}
+    neu_url = neu_pfad = ""
+    if aktion == "hochladen":
+        datei = request.files.get("flyer")
+        if not datei or not datei.filename:
+            return json.dumps({"error": "Keine Datei"}), 400, {"Content-Type": "application/json"}
+        try:
+            neu_url, neu_pfad = upload_flyer(datei.read())  # Netzwerk-Call vor dem Lock
+        except ValueError as e:
+            return json.dumps({"error": str(e)}, ensure_ascii=False), 400, {"Content-Type": "application/json; charset=utf-8"}
+    alt = {"pfad": "", "gefunden": False}
+
+    def mutator(data):
+        for t in data.get(verein_key, []):
+            if t.get("datum") == datum and t.get("bezeichnung") == bezeichnung and not t.get("geloescht") and not t.get("deleted"):
+                alt["gefunden"] = True
+                alt["pfad"] = t.get("flyer_path", "")
+                if neu_url:
+                    t["flyer_url"], t["flyer_path"] = neu_url, neu_pfad
+                else:
+                    t.pop("flyer_url", None)
+                    t.pop("flyer_path", None)
+                break
+    from shared.kalender_store import KalenderStore
+    KalenderStore.update(mutator)
+    if not alt["gefunden"]:
+        if neu_pfad:
+            delete_flyer(neu_pfad)
+        return json.dumps({"error": "Termin nicht gefunden"}), 404, {"Content-Type": "application/json"}
+    if alt["pfad"] and alt["pfad"] != neu_pfad:
+        delete_flyer(alt["pfad"])
+    log(f"Flyer {aktion}: {verein_key} / {datum} / {bezeichnung}")
+    return json.dumps({"ok": True, "flyer_url": neu_url}, ensure_ascii=False), 200, {"Content-Type": "application/json; charset=utf-8"}
 
 
 @kalender_bp.route("/api/termine", methods=["DELETE"])

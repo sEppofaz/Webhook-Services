@@ -132,6 +132,15 @@ html.vorschau .cta-card,html.vorschau #s-kal>p,html.vorschau #back-top{display:n
 html.vorschau #ev-list{padding-bottom:16px}
 /* Admin „Verein bearbeiten": Auswahlfelder exakt so hoch wie die Textfelder (Safari zeichnet <select> sonst niedriger) */
 #verein-edit-modal input{height:38px}
+.adm-lbl{font-size:12px;color:var(--text2);display:block;margin-bottom:3px}
+/* Admin-Felder (Termin bearbeiten): einheitlich 38px; Safari polstert Datum/Uhrzeit sonst anders ein */
+.adm-inp{width:100%;box-sizing:border-box;height:38px;padding:0 10px;border:1.5px solid var(--border2);border-radius:8px;font-size:14px;font-family:inherit;background:var(--bg);color:var(--text);outline:none;-webkit-appearance:none;appearance:none;text-align:left}
+textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;resize:vertical}
+.adm-inp::-webkit-datetime-edit{padding:0}
+.adm-inp::-webkit-date-and-time-value{text-align:left;margin:0}
+.adm-btn{padding:10px;border-radius:10px;border:none;font-weight:600;font-size:15px;cursor:pointer;box-sizing:border-box}
+.adm-btn-sec{background:var(--bg2);color:var(--text)}
+.filter-card .adm-btn-sec{background:var(--bg3)}  /* Karte hat selbst --bg2 */
 .ve-sel{box-sizing:border-box;height:38px;padding:0 30px 0 10px;border:1.5px solid var(--border2);border-radius:8px;background-color:var(--bg);color:var(--text);font-size:14px;outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;text-overflow:ellipsis;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center;background-size:16px}
 .ev-info-ico{display:inline-flex;vertical-align:-2px;margin-left:5px;color:var(--accent);opacity:.85}
@@ -246,8 +255,10 @@ html.vorschau #ev-list{padding-bottom:16px}
 .adm-banner{background:rgba(255,149,0,.1);border-bottom:1px solid rgba(255,149,0,.25);padding:7px 16px;font-size:12px;font-weight:600;color:#ff9500;display:flex;align-items:center;gap:6px}
 
 /* ── Admin-Tabs ── */
-.adm-tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:14px}
-.adm-tab{flex:1;padding:9px 4px;font-size:13px;font-weight:500;color:var(--text2);background:none;border:none;cursor:pointer;border-bottom:2.5px solid transparent;transition:color .15s}
+.adm-tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:14px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.adm-tabs::-webkit-scrollbar{display:none}
+.adm-tab{flex:1 0 auto;padding:9px 8px;font-size:13px;font-weight:500;color:var(--text2);background:none;border:none;cursor:pointer;border-bottom:2.5px solid transparent;transition:color .15s;justify-content:center;white-space:nowrap}
+.adm-tab-logout{flex:0 0 auto;padding:9px 10px;margin-left:6px}
 .adm-tab.on{color:var(--tab);border-bottom-color:var(--tab)}
 /* ── Alphabet-Bar ── */
 .alpha-bar{display:flex;flex-wrap:wrap;gap:2px;padding:8px 10px;background:var(--bg2);border-radius:10px;margin-bottom:12px}
@@ -316,7 +327,7 @@ html.vorschau #ev-list{padding-bottom:16px}
   </div>
   <div class="hdr-right" style="display:flex;align-items:center;gap:6px">
     <div class="hdr-ver" style="display:flex;flex-direction:column;align-items:flex-end;gap:1px">
-      <span class="ver-lbl" style="margin-right:0">v1.34</span>
+      <span class="ver-lbl" style="margin-right:0">v1.35</span>
       <span style="font-size:9px;color:rgba(255,255,255,.28);letter-spacing:.2px;line-height:1">a sEpp-App</span>
     </div>
     <a class="refresh-btn" id="verein-login-btn" href="/verein/login" title="Vereins-Login oder Registrierung" style="width:auto;padding:0 10px;font-size:13px;font-weight:600;letter-spacing:.3px;text-decoration:none;white-space:nowrap">Login</a>
@@ -445,7 +456,7 @@ html.vorschau #ev-list{padding-bottom:16px}
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title" style="width:55%"></div><div class="sk-line sk-ort"></div></div>
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title"></div><div class="sk-line sk-ort" style="width:30%"></div></div>
     </div>
-    <p class="version">Vereinskalender &middot; v1.34 &middot; 2026-10-03 &middot; a sEpp-App</p>
+    <p class="version">Vereinskalender &middot; v1.35 &middot; 2026-10-03 &middot; a sEpp-App</p>
     <p style="font-size:11px;color:var(--text3);text-align:center;padding:0 0 24px;line-height:2">&#127807; Hosting in Finnland mit &Ouml;kostrom &middot; Werbefrei &middot; DSGVO-konform</p>
   </div>
 
@@ -475,7 +486,7 @@ html.vorschau #ev-list{padding-bottom:16px}
       <button class="adm-tab" id="admbtn-trm" onclick="switchAdmTab('trm')" style="display:flex;align-items:center;gap:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Termine</button>
       <button class="adm-tab" id="admbtn-sta" onclick="switchAdmTab('sta')" style="display:flex;align-items:center;gap:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg> Stats</button>
       <button class="adm-tab" id="admbtn-lnk" onclick="switchAdmTab('lnk')" style="display:flex;align-items:center;gap:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Verknüpfen<span id="lnk-badge" style="display:none;background:#ff9500;color:#fff;border-radius:8px;padding:0 5px;font-size:10px;margin-left:4px;vertical-align:middle;line-height:16px"></span></button>
-      <button class="adm-tab" onclick="adminLogout()" title="Abmelden" style="margin-left:auto;color:#ff3b30;display:flex;align-items:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
+      <button class="adm-tab adm-tab-logout" onclick="adminLogout()" title="Abmelden" aria-label="Abmelden" style="color:#ff3b30;display:flex;align-items:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
     </div>
 
     <!-- Tab 1: Upload -->
@@ -3272,10 +3283,10 @@ function renderTermineList(){
     }).join("")}
   `;
 }
-function showTerminEdit(idx){
-  _trmScrollPos=document.querySelector(".content")?.scrollTop||0;
+function showTerminEdit(idx,neuZeichnen){
+  if(!neuZeichnen)_trmScrollPos=document.querySelector(".content")?.scrollTop||0;
   const t=_admTermine[idx];
-  if((meta[t.verein]||{}).selbstverwaltung){
+  if(!neuZeichnen&&(meta[t.verein]||{}).selbstverwaltung){
     if(!confirm(`⚠️ "${labels[t.verein]||t.verein}" verwaltet ihre Termine selbst.\nTrotzdem bearbeiten?`))return;
   }
   const el=document.getElementById("trm-tab-content");
@@ -3289,32 +3300,35 @@ function showTerminEdit(idx){
     </div>
     <div class="filter-card" style="padding:14px 14px 16px">
       <div style="margin-bottom:10px">
-        <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:3px">Verein zuordnen</label>
-        <select id="trm-verein" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid var(--border2);border-radius:8px;font-size:14px;background:var(--bg);color:var(--text)">
+        <label class="adm-lbl" for="trm-verein">Verein zuordnen</label>
+        <select id="trm-verein" class="ve-sel" style="width:100%">
           ${vereinsOpts}
         </select>
       </div>
-      ${_admFld("Datum (YYYY-MM-DD)","trm-datum","text",t.datum||"")}
-      ${_admFld("Uhrzeit (HH:MM)","trm-uhrzeit","time",t.uhrzeit||"")}
-      ${_admFld("bis Uhrzeit (optional)","trm-uhrzeit-bis","time",t.uhrzeit_bis||"")}
+      ${_admFld("Datum","trm-datum","date",t.datum||"")}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        ${_admFld("Uhrzeit","trm-uhrzeit","time",t.uhrzeit||"")}
+        ${_admFld("bis Uhrzeit (optional)","trm-uhrzeit-bis","time",t.uhrzeit_bis||"")}
+      </div>
       ${_admFld("Bezeichnung","trm-bezeichnung","text",t.bezeichnung||"")}
       ${_admFld("Ort","trm-ort","text",t.ort||"")}
       ${_admFld("Ortschaft","trm-ortschaft","text",t.ortschaft||"")}
       <div style="margin-bottom:10px">
-        <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:3px">Beschreibung (optional)</label>
-        <textarea id="trm-beschreibung" rows="3" maxlength="1000"
-          style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid var(--border2);border-radius:8px;font-size:14px;background:var(--bg);color:var(--text);outline:none;font-family:inherit;resize:vertical">${escHtml(t.beschreibung||"")}</textarea>
+        <label class="adm-lbl" for="trm-beschreibung">Beschreibung (optional)</label>
+        <textarea id="trm-beschreibung" class="adm-inp" rows="3" maxlength="1000">${escHtml(t.beschreibung||"")}</textarea>
+      </div>
+      <div style="margin-bottom:10px">
+        <label class="adm-lbl" for="trm-flyer">${t.flyer_url?"Flyer ersetzen":"Flyer hochladen"} (optional, PDF/JPG/PNG/WebP, max. 8 MB)</label>
+        ${t.flyer_url&&/^https:/.test(t.flyer_url)?`<div style="display:flex;gap:8px;margin-bottom:6px">
+          <a href="${escHtml(t.flyer_url)}" target="_blank" rel="noopener" class="adm-btn adm-btn-sec" style="flex:1;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:5px">${icon("paperclip",15)} Flyer &ouml;ffnen</a>
+          <button type="button" onclick="removeTerminFlyer(${idx})" class="adm-btn" style="flex:1;background:none;border:1.5px solid #ff3b30;color:#ff3b30">Flyer entfernen</button>
+        </div>`:""}
+        <input id="trm-flyer" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" style="font-size:13px;color:var(--text2);max-width:100%">
       </div>
       <div id="trm-msg" style="font-size:13px;min-height:18px;margin-top:6px"></div>
       <div style="display:flex;gap:8px;margin-top:12px">
-        <button onclick="saveTermin(${idx})"
-          style="flex:1;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer">
-          Speichern
-        </button>
-        <button onclick="loadTermine(true)"
-          style="padding:10px 16px;border:1.5px solid var(--border2);border-radius:10px;background:var(--bg);color:var(--text2);font-size:14px;cursor:pointer">
-          Abbrechen
-        </button>
+        <button onclick="saveTermin(${idx})" class="adm-btn" style="flex:1;background:var(--accent);color:#fff">Speichern</button>
+        <button onclick="loadTermine(true)" class="adm-btn adm-btn-sec" style="flex:1">Abbrechen</button>
       </div>
       <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
         <button onclick="deleteTermin(${idx})"
@@ -3326,11 +3340,9 @@ function showTerminEdit(idx){
   `;
 }
 function _admFld(label,id,type,val){
-  const safe=escHtml(val);
   return `<div style="margin-bottom:10px">
-    <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:3px">${label}</label>
-    <input id="${id}" type="${type}" value="${safe}"
-      style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid var(--border2);border-radius:8px;font-size:14px;background:var(--bg);color:var(--text);outline:none">
+    <label class="adm-lbl" for="${id}">${label}</label>
+    <input id="${id}" type="${type}" value="${escHtml(val)}" class="adm-inp">
   </div>`;
 }
 async function saveTermin(idx){
@@ -3360,14 +3372,42 @@ async function saveTermin(idx){
     });
     const d=await r.json();
     if(d.ok){
-      msg.style.color="green";msg.textContent="Gespeichert";
       Object.assign(_admTermine[idx],changes);
       if(body.new_verein_key)_admTermine[idx].verein=body.new_verein_key;
+      // Flyer erst nach erfolgreichem Speichern hochladen – der Termin ist dann unter den neuen Werten zu finden
+      const datei=document.getElementById("trm-flyer")?.files?.[0];
+      if(datei){
+        if(datei.size>8*1024*1024){msg.style.color="red";msg.textContent="Termin gespeichert, Flyer zu groß (max. 8 MB).";return;}
+        msg.style.color="var(--text3)";msg.textContent="Lade Flyer hoch…";
+        const fr=await _terminFlyer(_admTermine[idx],"hochladen",datei);
+        if(!fr.ok){msg.style.color="red";msg.textContent="Termin gespeichert, Flyer-Fehler: "+(fr.error||"unbekannt");return;}
+        _admTermine[idx].flyer_url=fr.flyer_url;
+      }
+      msg.style.color="green";msg.textContent="Gespeichert";
       setTimeout(()=>loadTermine(true),900);
     }else{
       msg.style.color="red";msg.textContent=(d.error||"Fehler");
     }
   }catch(e){msg.style.color="red";msg.textContent="Netzwerkfehler";}
+}
+async function _terminFlyer(t,aktion,datei){
+  const fd=new FormData();
+  fd.append("verein_key",t.verein);fd.append("datum",t.datum);fd.append("bezeichnung",t.bezeichnung);fd.append("aktion",aktion);
+  if(datei)fd.append("flyer",datei);
+  try{
+    const r=await fetch("/api/termine/flyer",{method:"POST",headers:{"X-Upload-Token":localStorage.getItem("ut")||""},body:fd});
+    if(r.status===413)return {ok:false,error:"Datei zu groß"};
+    return await r.json();
+  }catch(e){return {ok:false,error:"Netzwerkfehler"};}
+}
+async function removeTerminFlyer(idx){
+  const t=_admTermine[idx];
+  if(!confirm(`Flyer von „${t.bezeichnung}" wirklich entfernen?`))return;
+  const msg=document.getElementById("trm-msg");
+  msg.style.color="var(--text3)";msg.textContent="Entferne Flyer…";
+  const d=await _terminFlyer(t,"entfernen");
+  if(d.ok){delete t.flyer_url;showTerminEdit(idx,true);document.getElementById("trm-msg").style.color="green";document.getElementById("trm-msg").textContent="Flyer entfernt";}
+  else{msg.style.color="red";msg.textContent=d.error||"Fehler";}
 }
 async function deleteTermin(idx){
   const t=_admTermine[idx];
