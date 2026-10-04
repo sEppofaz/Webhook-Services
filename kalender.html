@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#6D28D9" id="theme-color-meta">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ffffff" id="theme-color-meta">
 <meta name="apple-mobile-web-app-title" content="Vereinskalender" id="apple-app-title">
 <title>Vereinskalender</title>
 <script>if(location.hostname.includes("veranstaltungen.website")){document.title="Veranstaltungen";var _at=document.getElementById("apple-app-title");if(_at)_at.content="Veranstaltungen";}</script>
@@ -21,14 +21,14 @@
   --card:#fff;--hdr:#6D28D9;
   --accent:#7C3AED;
   --tab:#6D28D9;--radius:12px;
-  --fav-dim:.35;
+  --fav-dim:.35;--pill-pri-bg:#1e1b4b;--pill-pri-fg:#fff;
 }
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#1c1c1e;--bg2:#2c2c2e;--bg3:#3a3a3c;
   --text:#f2f2f7;--text2:#aeaeb2;--text3:#636366;
   --border:rgba(255,255,255,0.1);--border2:rgba(255,255,255,0.2);
   --card:#2c2c2e;--accent:#8B5CF6;--tab:#A78BFA;--hdr:#5B21B6;
-  --fav-dim:.65;
+  --fav-dim:.65;--pill-pri-bg:#f2f2f7;--pill-pri-fg:#1c1c1e;
 }}
 /* identische Dark-Werte für das manuelle Umschalten unabhängig vom System (BKM: PWA-Standards) */
 :root[data-theme="dark"]{
@@ -36,28 +36,35 @@
   --text:#f2f2f7;--text2:#aeaeb2;--text3:#636366;
   --border:rgba(255,255,255,0.1);--border2:rgba(255,255,255,0.2);
   --card:#2c2c2e;--accent:#8B5CF6;--tab:#A78BFA;--hdr:#5B21B6;
-  --fav-dim:.65;
+  --fav-dim:.65;--pill-pri-bg:#f2f2f7;--pill-pri-fg:#1c1c1e;
 }
 html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif}
 .app{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 
 /* ── Header ── */
-.hdr{background:var(--hdr);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0;padding-top:max(10px,env(safe-area-inset-top))}
+.hdr{background:var(--card);color:var(--text);border-bottom:.5px solid var(--border);box-shadow:0 1px 8px rgba(0,0,0,.04);position:relative;z-index:20;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0;padding-top:max(10px,env(safe-area-inset-top))}
 .hdr-icon{width:38px;height:38px;flex-shrink:0}
 .hdr-text h1{font-size:17px;font-weight:700}
-.hdr-text p{font-size:12px;color:rgba(255,255,255,.55);margin-top:1px}
+.hdr-text p{font-size:12px;color:var(--text2);margin-top:1px}
 .hdr-right{margin-left:auto}
-.refresh-btn{background:rgba(255,255,255,.15);border:none;color:#fff;width:34px;height:34px;border-radius:9px;font-size:19px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s}
+.refresh-btn{background:var(--bg2);border:none;color:var(--text);width:34px;height:34px;border-radius:9px;font-size:19px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s}
 /* Schmale Handys: Platz für „Login" schaffen – Titelzusatz und Versionsblock entfallen (Version steht im Info-Sheet) */
 @media(max-width:480px){
   .hdr{gap:10px}
   .hdr-text{min-width:0}
   .hdr-text h1{font-size:16px}
   .hdr-text h1,.hdr-text p{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .hdr-h1-zusatz,.hdr-ver{display:none!important}  /* !important: .hdr-ver trägt inline display:flex */
-  .hdr-right .refresh-btn{flex-shrink:0}
+  .hdr-h1-zusatz{display:none}
+  .hdr-right .refresh-btn,.hdr-right .hdr-pill{flex-shrink:0}
+  .hdr-pill{height:34px;padding:0 12px;font-size:13px}
+  .hdr-pill svg{display:none}
 }
-.refresh-btn:active{background:rgba(255,255,255,.3)}
+.refresh-btn:active{background:var(--bg3)}
+/* Login/Info als Pillen (v1.45, Vorlage) */
+.hdr-pill{display:inline-flex;align-items:center;gap:7px;height:38px;padding:0 16px;border-radius:999px;font-size:14px;font-weight:600;text-decoration:none;cursor:pointer;white-space:nowrap;font-family:inherit;transition:opacity .15s,background .15s}
+.hdr-pill:active{opacity:.75}
+.hdr-pill-pri{background:var(--pill-pri-bg);color:var(--pill-pri-fg);border:1.5px solid var(--pill-pri-bg)}
+.hdr-pill-sec{background:transparent;color:var(--text);border:1.5px solid var(--border2)}
 .refresh-btn.spin{animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
@@ -79,15 +86,17 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
 .reset-btn:active{background:rgba(255,59,48,.1)}
 
 /* ── Collapsible sections ── */
-.f-section{border-bottom:.5px solid var(--border)}
-.f-section:last-child{border-bottom:none}
-.f-toggle{width:100%;background:none;border:none;padding:12px 14px;display:flex;align-items:center;justify-content:flex-start;gap:8px;cursor:pointer;color:var(--text);font-size:14px;font-weight:500;text-align:left}
+.f-section{padding:10px 14px 2px}
+.f-label{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px}
+.f-label svg{color:var(--text2)}
+.f-toggle{width:100%;height:40px;background:var(--card);border:1.5px solid var(--border2);border-radius:10px;padding:0 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;color:var(--text);font-size:14px;font-weight:500;text-align:left;font-family:inherit;margin-bottom:8px}
+.f-toggle .f-badge{color:var(--text);font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .f-name{display:flex;align-items:center;gap:8px}
 .f-badge{font-size:12px;font-weight:600;color:var(--tab)}
-.f-arrow{color:var(--tab);transition:transform .2s;flex-shrink:0;display:flex;align-items:center}
-.f-arrow.open{transform:rotate(90deg)}
-.f-content{max-height:0;overflow:hidden;transition:max-height .3s ease,padding-bottom .3s ease;padding:0 14px}
-.f-content.open{max-height:1000px;padding-bottom:13px}
+.f-arrow{color:var(--text2);transition:transform .2s;flex-shrink:0;display:flex;align-items:center}
+.f-arrow.open{transform:rotate(180deg)}
+.f-content{max-height:0;overflow:hidden;transition:max-height .3s ease,padding-bottom .3s ease;padding:0 2px}
+.f-content.open{max-height:1000px;padding-bottom:10px}
 
 /* ── Chips ── */
 .chips{display:flex;gap:6px;flex-wrap:wrap;padding-top:4px}
@@ -104,16 +113,33 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
 .v-sel-row{grid-column:1/-1;display:flex;gap:8px;padding-bottom:8px;border-bottom:.5px solid var(--border);margin-bottom:2px}
 
 /* ── Event cards ── */
-.ev-list{display:flex;flex-direction:column;gap:8px}
-.ev-card{background:var(--card);border-radius:var(--radius);padding:14px 16px;border-left:4px solid #999;box-shadow:0 2px 6px rgba(0,0,0,.08);position:relative}
+.ev-list{display:flex;flex-direction:column;gap:10px}
+.ev-card{background:var(--card);border-radius:14px;padding:12px 14px;border-left:4px solid #999;box-shadow:0 1px 2px rgba(0,0,0,.05),0 4px 14px rgba(0,0,0,.06);position:relative;transition:box-shadow .15s,transform .15s}
+@media(hover:hover){.ev-card:not(.sk-card):hover{box-shadow:0 2px 4px rgba(0,0,0,.06),0 8px 24px rgba(0,0,0,.1);transform:translateY(-1px)}}
+/* Karten-Aufbau (v1.45): Zeit-Kachel links, Inhalt rechts */
+.ev-row{display:flex;gap:12px;align-items:flex-start}
+.ev-tile{flex-shrink:0;width:58px;min-height:58px;border-radius:11px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:6px 2px;color:var(--text);text-align:center}
+.ev-tile-t{font-size:16px;font-weight:700;letter-spacing:-.3px;line-height:1.1}
+.ev-tile-s{font-size:10.5px;color:var(--text2);line-height:1.2}
+.ev-tile svg{opacity:.75}
+.ev-main{flex:1;min-width:0}
+.ev-rubrik{display:inline-block;font-size:11px;font-weight:600;border-radius:6px;padding:2px 7px;margin-bottom:4px;background:rgba(124,58,237,.12);color:var(--tab)}
+.ev-meta{display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--text2);margin-top:4px;min-width:0}
+.ev-meta svg{flex-shrink:0;color:var(--text3)}
+.ev-meta-txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ev-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin:0 3px}
+.ev-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:7px}
+.ev-tag{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:500;border-radius:6px;padding:2px 7px;background:var(--bg2);color:var(--text2)}
+.ev-tag a{color:inherit;text-decoration:none}
+@media(max-width:480px){.ev-row{gap:10px}.ev-tile{width:50px;min-height:50px;border-radius:10px}.ev-tile-t{font-size:14.5px}}
 .ev-card--past{opacity:.7}
 .ev-date{font-size:12px;color:var(--text2);margin-bottom:2px}
-.ev-date-sep{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;padding:20px 2px 6px;display:block}
+.ev-date-sep{font-size:12px;font-weight:700;color:var(--tab);text-transform:uppercase;letter-spacing:.6px;padding:20px 2px 4px;display:block}
 .ev-date-sep:first-child{padding-top:6px}
 .ev-now-sep{display:flex;align-items:center;gap:10px;font-size:11px;font-weight:800;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;padding:14px 2px 6px;margin-top:8px}
 .ev-now-sep::before,.ev-now-sep::after{content:'';flex:1;height:1.5px;background:var(--border2);border-radius:1px}
 .ev-now-sep + .ev-date-sep{padding-top:6px}
-.ev-title{font-weight:600;font-size:15px;color:var(--text);line-height:1.3;padding-right:32px}
+.ev-title{font-weight:700;font-size:16px;color:var(--text);line-height:1.3;padding-right:32px}
 .ev-ort{font-size:12px;color:var(--text3);margin-top:3px}
 .ev-badge{display:inline-block;font-size:11px;font-weight:600;border-radius:8px;padding:2px 7px;margin-top:5px}
 .fav-star{background:none;border:none;cursor:pointer;padding:0 1px;opacity:.35;display:inline-flex;align-items:center;transition:opacity .15s,color .15s;vertical-align:middle}
@@ -127,7 +153,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
 .ev-flyer{right:90px}
 .ev-card--info{cursor:pointer}
 /* Vorschau-Modus (/?vorschau=1, eingebettet im Vereinsformular): nur die Terminkarten */
-html.vorschau .hdr,html.vorschau #welcome-banner,html.vorschau #s-kal>.filter-card,html.vorschau .disclaimer,html.vorschau #ev-count,
+html.vorschau .hdr,html.vorschau #welcome-banner,html.vorschau .kal-hero,html.vorschau .kal-side,html.vorschau .kal-search,html.vorschau #srch-chips,html.vorschau .disclaimer,html.vorschau #ev-count,
 html.vorschau .cta-card,html.vorschau #s-kal>p,html.vorschau #back-top{display:none!important}
 html.vorschau #ev-list{padding-bottom:16px}
 /* Admin „Verein bearbeiten": Auswahlfelder exakt so hoch wie die Textfelder (Safari zeichnet <select> sonst niedriger) */
@@ -177,8 +203,6 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
 .pw-gate .pw-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:36px;height:36px;max-width:none;padding:0;background:none;color:var(--text3);display:flex;align-items:center;justify-content:center;border-radius:8px}
 .pw-err{font-size:13px;color:#ff3b30;min-height:18px}
 
-/* ── Version label ── */
-.ver-lbl{font-size:11px;font-weight:600;color:rgba(255,255,255,.4);margin-right:4px;letter-spacing:.3px;align-self:center}
 
 /* ── Back-to-top button ── */
 .back-top{position:fixed;bottom:24px;right:16px;width:40px;height:40px;border-radius:50%;background:var(--accent);color:#fff;border:none;font-size:20px;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.25);display:none;align-items:center;justify-content:center;z-index:200;transition:opacity .2s}
@@ -229,11 +253,11 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
 .theme-switch[aria-checked="true"] .theme-switch-knob{transform:translateX(20px)}
 
 /* ── Search ── */
-.srch-wrap{padding:10px 14px 6px;position:relative}
-.srch-input{width:100%;padding:8px 34px 8px 34px;border:1.5px solid var(--border2);border-radius:10px;font-size:14px;background:var(--bg);color:var(--text);outline:none;-webkit-appearance:none}
+.srch-wrap{position:relative;flex:1;min-width:0}
+.srch-input{width:100%;height:46px;padding:0 40px 0 44px;border:none;border-radius:999px;font-size:16px;background:transparent;color:var(--text);outline:none;-webkit-appearance:none;font-family:inherit}
 .srch-input::placeholder{color:var(--text3)}
-.srch-icon-abs{position:absolute;left:24px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--text3);display:flex;align-items:center}
-.srch-clear{position:absolute;right:18px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text3);font-size:16px;line-height:1;padding:4px;cursor:pointer;display:none;border-radius:50%;width:24px;height:24px;align-items:center;justify-content:center}
+.srch-icon-abs{position:absolute;left:16px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--text3);display:flex;align-items:center}
+.srch-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text3);font-size:16px;line-height:1;padding:4px;cursor:pointer;display:none;border-radius:50%;width:24px;height:24px;align-items:center;justify-content:center}
 .srch-clear:hover{color:var(--text);background:var(--bg2)}
 .mini-srch-clear{position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text3);font-size:15px;line-height:1;padding:4px;cursor:pointer;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center}
 .mini-srch-clear:hover{color:var(--text);background:var(--bg2)}
@@ -246,7 +270,7 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
 .srch-item-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .srch-item-sub{font-size:11px;color:var(--text3);margin-top:1px}
 .srch-type{font-size:11px;color:var(--text3);flex-shrink:0;background:var(--bg2);border-radius:6px;padding:2px 6px}
-.srch-chips{display:flex;gap:6px;flex-wrap:wrap;padding:0 14px 10px}
+.srch-chips{display:flex;gap:6px;flex-wrap:wrap;padding:0 4px 10px;justify-content:center}
 .srch-chip{display:inline-flex;align-items:center;gap:4px;background:var(--accent);color:#fff;border-radius:16px;padding:4px 10px 4px 8px;font-size:12px;font-weight:500}
 .srch-chip-x{cursor:pointer;font-size:14px;line-height:1;opacity:.75;margin-left:2px}
 .srch-chip-x:active{opacity:1}
@@ -290,6 +314,97 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
 .rubrik-bar{display:flex;gap:6px;padding:7px 14px 6px;border-bottom:.5px solid var(--border);flex-wrap:wrap}
 .rubrik-chip{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;border-radius:20px;font-size:13px;font-weight:500;cursor:pointer;border:1.5px solid var(--border2);background:var(--bg);color:var(--text2);transition:all .15s;white-space:nowrap}
 .rubrik-chip.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+/* ── Hero (v1.45) – Foto (KI-Bild Region, static/hero-region*.jpg) mit Abdunklung; Text deshalb explizit weiß (BKM Kontrast).
+   Lila Verlauf darunter = Rückfall, solange das Bild lädt oder fehlt. ── */
+.kal-hero{position:relative;overflow:hidden;border-radius:16px;margin-bottom:12px;padding:20px 18px 18px;min-height:150px;display:flex;flex-direction:column;justify-content:flex-end;color:#fff;background-color:#4C1D95;
+  background-image:linear-gradient(180deg,rgba(20,10,40,.15) 0%,rgba(20,10,40,.6) 100%),url("/hero-region-1000.jpg?v=1"),linear-gradient(135deg,#4C1D95 0%,#7C3AED 100%);
+  background-size:cover;background-position:center 40%}
+.kal-hero h2{font-size:21px;font-weight:800;line-height:1.2;letter-spacing:-.3px;max-width:560px;color:#fff;text-shadow:0 1px 8px rgba(0,0,0,.45)}
+.kal-hero p{font-size:13.5px;line-height:1.45;margin-top:6px;max-width:520px;color:rgba(255,255,255,.92);text-shadow:0 1px 6px rgba(0,0,0,.5)}
+
+#ev-count{font-size:13px!important;font-weight:600;color:var(--text2)!important}
+
+/* ── Suchleiste im Übergang (v1.45): ragt halb ins Titelbild ── */
+.kal-hero{margin-bottom:0;padding-bottom:40px}
+.kal-search{position:relative;z-index:5;display:flex;align-items:center;gap:8px;margin:-26px 10px 14px;padding:4px;background:var(--card);border-radius:999px;box-shadow:0 6px 24px rgba(0,0,0,.14),0 1px 3px rgba(0,0,0,.08)}
+.kal-sel{display:none;align-items:center;gap:6px;height:40px;padding:0 12px;border:1.5px solid var(--border);border-radius:999px;color:var(--text);flex-shrink:0;position:relative}
+.kal-sel svg{color:var(--text2)}
+.kal-sel select{border:none;background:transparent;color:var(--text);font-size:14px;font-weight:500;font-family:inherit;outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;padding-right:18px;max-width:170px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right center;background-size:14px}
+.kal-sel select option{color:#1c1c1e;background:#fff}
+
+/* ── Rubrik-Leiste mit Zählern ── */
+.rb-cnt{font-size:11px;font-weight:600;opacity:.6;margin-left:2px}
+.rb-cnt:empty{display:none}
+.rubrik-chip.on .rb-cnt{opacity:.85}
+
+/* ── Filter zurücksetzen + Vereinskarte: nur Desktop-Seitenleiste ── */
+.f-reset-row,.verein-cta,.ft-desk{display:none}
+.f-reset{width:100%;height:40px;border:1.5px solid var(--border2);border-radius:999px;background:var(--card);color:var(--text);font-size:14px;font-weight:500;font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px}
+.f-reset:active{background:var(--bg2)}
+.verein-cta{align-items:center;gap:12px;margin-top:14px;padding:16px;border-radius:14px;background:color-mix(in srgb,var(--accent) 8%,var(--card));border:1px solid color-mix(in srgb,var(--accent) 18%,transparent);text-decoration:none;color:var(--text)}
+.verein-cta-ico{flex-shrink:0;width:38px;height:38px;border-radius:10px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center}
+.verein-cta-ico svg{width:20px;height:20px}
+.verein-cta-txt{flex:1;font-size:13px;line-height:1.45;color:var(--text2)}
+.verein-cta-txt strong{display:block;font-size:14px;color:var(--text);margin-bottom:2px}
+.verein-cta-arr{color:var(--accent);flex-shrink:0;display:flex}
+
+/* ── Desktop (v1.45): Seitenleiste links, Termine rechts ── */
+@media(min-width:1024px){
+  #s-kal.on{display:grid;grid-template-columns:320px minmax(0,1fr);column-gap:28px;max-width:1240px;padding:20px 24px;align-items:start}
+  #s-kal>*{grid-column:2}
+  #s-kal>.kal-hero{grid-column:1/-1;padding:36px 40px 64px;min-height:320px;justify-content:center;
+    background-image:linear-gradient(90deg,rgba(20,10,40,.62) 0%,rgba(20,10,40,.35) 38%,rgba(20,10,40,0) 62%),url("/hero-region.jpg?v=1"),linear-gradient(135deg,#4C1D95 0%,#7C3AED 100%);
+    background-position:center 35%}
+  .kal-hero h2{font-size:38px;max-width:520px}
+  .kal-hero p{font-size:16px;margin-top:10px;max-width:460px}
+  #s-kal>.kal-search{grid-column:1/-1;width:min(940px,82%);justify-self:center;margin:-34px 0 22px;padding:6px 6px 6px 4px}
+  #s-kal>.srch-chips{justify-content:flex-start;padding-left:0}
+  .kal-sel{display:inline-flex}
+  .kal-sel.kal-sel-off{display:none}
+  /* fest stehend, kein inneres Scrollen; ist sie höher als der Platz, setzt _fitSide() top negativ → sie läuft mit, bis ihr Ende sichtbar ist */
+  #s-kal>.kal-side{grid-column:1;grid-row:3/span 7;position:sticky;top:0;padding-bottom:12px}
+  .kal-side .filter-card{margin-bottom:0;box-shadow:0 1px 2px rgba(0,0,0,.04),0 4px 14px rgba(0,0,0,.05)}
+  /* „✕ Zurücksetzen“ neben FILTER erscheint nur bei aktiven Filtern – wichtig, wenn eingeklappt; großer Knopf klappt mit ein */
+  /* „Filter“-Zeile mit Pfeil unter die Rubriken, direkt über Zeitraum – sie klappt nur die Auswahlfelder */
+  .kal-side .filter-card{display:flex;flex-direction:column}
+  .kal-side .rubrik-bar{order:-1}
+  .kal-side .filter-hdr{position:static;border-radius:0;padding:10px 14px 4px;border-bottom:none}
+  .kal-side .ft-mob{display:none}
+  .kal-side .ft-desk{display:inline}
+  .kal-side .filter-title{font-size:13px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px}
+  .kal-side #filter-body>div:last-child{display:none}  /* „einklappen“ */
+  .kal-side .f-reset-row{display:block;padding:8px 14px 10px}
+  .kal-side .verein-cta{display:flex}
+  .kal-side .rubrik-chip{height:34px!important}
+  /* Abschnitte kompakt: Beschriftung links, Auswahlfeld rechts */
+  .kal-side .f-section{display:grid;grid-template-columns:100px minmax(0,1fr);column-gap:8px;align-items:center;padding:4px 14px}
+  .kal-side .f-label{margin:0}
+  .kal-side .f-toggle{height:38px;margin:0}
+  .kal-side .f-content{grid-column:1/-1}
+  .kal-side .f-content.open{padding-top:8px;max-height:none}  /* lange Vereinsliste nicht bei 1000px abschneiden */
+  .kal-side #filter-body{padding-bottom:4px}
+  .kal-side .verein-cta{padding:12px 14px;margin-top:12px}
+  /* Rubriken als senkrechte Liste mit Zählern rechts */
+  .kal-side .rubrik-bar{flex-direction:column;gap:2px;padding:8px;border-bottom:.5px solid var(--border)}
+  .kal-side .rubrik-chip{width:100%;height:40px;border:none;border-radius:9px;background:none;color:var(--text);padding:0 10px;font-size:14px;gap:10px}
+  .kal-side .rubrik-chip svg{width:17px;height:17px;color:var(--text2)}
+  .kal-side .rubrik-chip:hover{background:var(--bg2)}
+  .kal-side .rubrik-chip.on{background:color-mix(in srgb,var(--accent) 12%,var(--card));color:var(--tab);font-weight:600}
+  .kal-side .rubrik-chip.on svg{color:var(--tab)}
+  .kal-side .rb-lbl{flex:1;text-align:left}
+  .kal-side .rb-cnt{font-size:12px;font-weight:500;color:var(--text3);opacity:1}
+  #s-kal>.disclaimer{text-align:left;padding:0 2px 12px}
+  #ev-count{font-size:17px!important;font-weight:700;color:var(--text)!important;padding-bottom:6px!important}
+  .ev-card{padding:14px 18px}
+  .ev-tile{width:66px;min-height:66px}
+  .ev-tile-t{font-size:18px}
+  .ev-title{font-size:17px}
+  .ev-meta{font-size:13px}
+  .v-list{grid-template-columns:1fr}
+  html.vorschau #s-kal.on{display:block;max-width:720px}  /* Vorschau ohne Filter: keine leere Seitenspalte */
+}
 </style>
 <script>
 /* Anti-Flacker: gespeicherte Theme-Wahl anwenden bevor gerendert wird (BKM: PWA-Standards) */
@@ -299,7 +414,7 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
     if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t);
     var dark=t==="dark"||(t!=="light"&&window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches);
     var m=document.getElementById("theme-color-meta");
-    if(m)m.setAttribute("content",dark?"#5B21B6":"#6D28D9");
+    if(m)m.setAttribute("content",dark?"#2c2c2e":"#ffffff");
   }catch(e){}
   // Vorschau-Modus für das Vereinsformular (eingebettet unter /?vorschau=1): nur die Terminliste
   try{if(new URLSearchParams(location.search).has("vorschau"))document.documentElement.classList.add("vorschau");}catch(e){}
@@ -326,21 +441,17 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
     <p id="hdr-sub">Alle Vereinstermine unserer Region &ndash; kostenlos, werbefrei.</p>
   </div>
   <div class="hdr-right" style="display:flex;align-items:center;gap:6px">
-    <div class="hdr-ver" style="display:flex;flex-direction:column;align-items:flex-end;gap:1px">
-      <span class="ver-lbl" style="margin-right:0">v1.44</span>
-      <span style="font-size:9px;color:rgba(255,255,255,.28);letter-spacing:.2px;line-height:1">a sEpp-App</span>
-    </div>
-    <a class="refresh-btn" id="verein-login-btn" href="/verein/login" title="Vereins-Login oder Registrierung" style="width:auto;padding:0 10px;font-size:13px;font-weight:600;letter-spacing:.3px;text-decoration:none;white-space:nowrap">Login</a>
-    <button class="refresh-btn" onclick="showInfoModal()" title="Info" style="font-size:13px;font-weight:600;letter-spacing:.3px">Info</button>
+    <a class="hdr-pill hdr-pill-pri" id="verein-login-btn" href="/verein/login" title="Vereins-Login oder Registrierung"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Login</a>
+    <button class="hdr-pill hdr-pill-sec" onclick="showInfoModal()" title="Info"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>Info</button>
     <button class="refresh-btn" id="admin-import-btn" onclick="toggleImport()" title="Import" style="display:none"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
     <a class="refresh-btn" id="verein-admin-btn" href="/verein/dashboard" title="Mein Verein" style="display:none;text-decoration:none"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></a>
   </div>
 </header>
 
-<div id="welcome-banner" style="display:none;background:var(--hdr);color:#fff;padding:10px 44px 12px 16px;font-size:13px;line-height:1.5;position:relative">
+<div id="welcome-banner" style="display:none;background:color-mix(in srgb,var(--accent) 9%,var(--card));color:var(--text);border-bottom:.5px solid var(--border);padding:10px 44px 12px 16px;font-size:13px;line-height:1.5;position:relative">
   Alle Vereins- und Veranstaltungstermine unserer Region &ndash; kostenlos und werbefrei.
-  Fehlt dein Verein? Einfach <a href="/verein/register" style="color:#fff;font-weight:600;text-decoration:underline">registrieren</a> und Termine selbst pflegen.
-  <button onclick="dismissWelcome()" style="position:absolute;top:50%;right:12px;transform:translateY(-50%);background:rgba(255,255,255,.15);border:none;border-radius:50%;color:#fff;font-size:18px;cursor:pointer;line-height:1;padding:0;width:28px;height:28px;display:flex;align-items:center;justify-content:center">&times;</button>
+  Fehlt dein Verein? Einfach <a href="/verein/register" style="color:var(--accent);font-weight:600;text-decoration:underline">registrieren</a> und Termine selbst pflegen.
+  <button onclick="dismissWelcome()" style="position:absolute;top:50%;right:12px;transform:translateY(-50%);background:var(--bg3);border:none;border-radius:50%;color:var(--text2);font-size:18px;cursor:pointer;line-height:1;padding:0;width:28px;height:28px;display:flex;align-items:center;justify-content:center">&times;</button>
 </div>
 
 <!-- Content -->
@@ -348,27 +459,34 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
 
   <!-- ════ KALENDER ════ -->
   <div id="s-kal" class="screen on">
+    <section class="kal-hero">
+      <h2>Entdecke, was in unserer Region los ist!</h2>
+      <p>Alle Veranstaltungen der Vereine &ndash; &uuml;bersichtlich, aktuell und auf einen Blick.</p>
+    </section>
+    <!-- Suchleiste im Übergang Titelbild → Inhalt (v1.45); Region/Zeitraum-Auswahl nur am Desktop -->
+    <div class="kal-search" id="srch-section">
+      <div class="srch-wrap">
+        <span class="srch-icon-abs"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span>
+        <input class="srch-input" id="srch-input" type="search"
+               placeholder="Verein oder Ort suchen&#8230;"
+               oninput="onSearchInput(this.value)"
+               onfocus="if(this.value.length>=2){_positionDropdown();document.getElementById('srch-dropdown').classList.add('open')}"
+               autocomplete="off" autocorrect="off" spellcheck="false">
+        <button class="srch-clear" id="srch-clear" onclick="document.getElementById('srch-input').value='';onSearchInput('');" aria-label="Suche leeren">&#10005;</button>
+        <div class="srch-dropdown" id="srch-dropdown"></div>
+      </div>
+      <label class="kal-sel kal-sel-desk"><span class="kal-sel-ico" data-ico="mapPin"></span><select id="sel-region" onchange="selectLandkreis(this.value)" aria-label="Region"><option value="alle">Alle Regionen</option></select></label>
+      <label class="kal-sel kal-sel-desk"><span class="kal-sel-ico" data-ico="calendar"></span><select id="sel-zeit" onchange="const c=document.querySelector('.chip[data-z=&quot;'+this.value+'&quot;]');if(c)c.click()" aria-label="Zeitraum"></select></label>
+    </div>
+    <div class="srch-chips" id="srch-chips" style="display:none"></div>
+    <aside class="kal-side">
     <div class="filter-card">
       <div class="filter-hdr" id="filter-hdr" onclick="toggleFilterCard()" style="cursor:pointer">
         <span class="filter-title" style="display:flex;align-items:center;gap:8px">
           <span id="fc-arrow" style="font-size:13px;color:var(--tab);transition:transform .2s;display:inline-block"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:block"><polyline points="9 18 15 12 9 6"/></svg></span>
-          Filter
+          <span class="ft-mob">Filter</span><span class="ft-desk">Weitere Filter</span>
         </span>
         <button class="reset-btn" id="reset-btn" onclick="event.stopPropagation();resetAll()" style="display:none">&#10005; Zur&#252;cksetzen</button>
-      </div>
-      <!-- Suche: immer sichtbar -->
-      <div id="srch-section" style="border-bottom:.5px solid var(--border)">
-        <div class="srch-wrap">
-          <span class="srch-icon-abs"><svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span>
-          <input class="srch-input" id="srch-input" type="search"
-                 placeholder="Verein oder Ort suchen&#8230;"
-                 oninput="onSearchInput(this.value)"
-                 onfocus="if(this.value.length>=2){_positionDropdown();document.getElementById('srch-dropdown').classList.add('open')}"
-                 autocomplete="off" autocorrect="off" spellcheck="false">
-          <button class="srch-clear" id="srch-clear" onclick="document.getElementById('srch-input').value='';onSearchInput('');" aria-label="Suche leeren">&#10005;</button>
-          <div class="srch-dropdown" id="srch-dropdown"></div>
-        </div>
-        <div class="srch-chips" id="srch-chips" style="display:none"></div>
       </div>
       <div id="active-pills" style="display:none;flex-wrap:wrap;gap:6px;padding:6px 14px;border-bottom:.5px solid var(--border)"></div>
       <div id="fav-hint" style="display:none"></div>
@@ -378,9 +496,10 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
 
       <!-- Zeitraum -->
       <div class="f-section">
+        <div class="f-label"><span data-ico="calendar"></span>Zeitraum</div>
         <button class="f-toggle" onclick="toggleSection('zeit')">
-          <span class="f-arrow" id="zeit-arrow"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:block"><polyline points="9 18 15 12 9 6"/></svg></span>
-          <span class="f-name">Zeitraum <span class="f-badge" id="zeit-badge">K&#252;nftig</span></span>
+          <span class="f-badge" id="zeit-badge">K&#252;nftig</span>
+          <span class="f-arrow" id="zeit-arrow"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:block"><path d="m6 9 6 6 6-6"/></svg></span>
         </button>
         <div class="f-content" id="zeit-content">
           <div class="chips">
@@ -397,9 +516,10 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
 
       <!-- Landkreis/Region (dynamisch) -->
       <div class="f-section" id="lk-section" style="display:none">
+        <div class="f-label"><span data-ico="map"></span>Region</div>
         <button class="f-toggle" onclick="toggleSection('lk')">
-          <span class="f-arrow" id="lk-arrow"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:block"><polyline points="9 18 15 12 9 6"/></svg></span>
-          <span class="f-name">Region <span class="f-badge" id="lk-badge">Alle</span></span>
+          <span class="f-badge" id="lk-badge">Alle</span>
+          <span class="f-arrow" id="lk-arrow"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:block"><path d="m6 9 6 6 6-6"/></svg></span>
         </button>
         <div class="f-content" id="lk-content">
           <div class="chips" id="lk-chips"></div>
@@ -408,9 +528,10 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
 
       <!-- Gemeinde (dynamisch) -->
       <div class="f-section" id="gem-section" style="display:none">
+        <div class="f-label"><span data-ico="landmark"></span>Gemeinde</div>
         <button class="f-toggle" onclick="toggleSection('gem')">
-          <span class="f-arrow" id="gem-arrow"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:block"><polyline points="9 18 15 12 9 6"/></svg></span>
-          <span class="f-name">Gemeinde <span class="f-badge" id="gem-badge">Alle</span></span>
+          <span class="f-badge" id="gem-badge">Alle</span>
+          <span class="f-arrow" id="gem-arrow"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:block"><path d="m6 9 6 6 6-6"/></svg></span>
         </button>
         <div class="f-content" id="gem-content">
           <div class="chips" id="gem-chips"></div>
@@ -419,9 +540,10 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
 
       <!-- Ortschaft (dynamisch) -->
       <div class="f-section" id="ort-section" style="display:none">
+        <div class="f-label"><span data-ico="mapPin"></span>Ortschaft</div>
         <button class="f-toggle" onclick="toggleSection('ort')">
-          <span class="f-arrow" id="ort-arrow"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:block"><polyline points="9 18 15 12 9 6"/></svg></span>
-          <span class="f-name">Ortschaft <span class="f-badge" id="ort-badge">Alle</span></span>
+          <span class="f-badge" id="ort-badge">Alle</span>
+          <span class="f-arrow" id="ort-arrow"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:block"><path d="m6 9 6 6 6-6"/></svg></span>
         </button>
         <div class="f-content" id="ort-content">
           <div class="chips" id="ort-chips"></div>
@@ -430,9 +552,10 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
 
       <!-- Verein -->
       <div class="f-section" id="ver-section">
+        <div class="f-label"><span data-ico="users"></span>Verein</div>
         <button class="f-toggle" onclick="toggleSection('ver')">
-          <span class="f-arrow" id="ver-arrow"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:block"><polyline points="9 18 15 12 9 6"/></svg></span>
-          <span class="f-name">Verein <span class="f-badge" id="ver-badge">Alle</span></span>
+          <span class="f-badge" id="ver-badge">Alle</span>
+          <span class="f-arrow" id="ver-arrow"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="display:block"><path d="m6 9 6 6 6-6"/></svg></span>
         </button>
         <div class="f-content" id="ver-content">
           <div class="chips" id="ver-chips" style="padding-bottom:10px;border-bottom:.5px solid var(--border);margin-bottom:4px"></div>
@@ -440,11 +563,18 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
         </div>
       </div>
 
+      <div class="f-reset-row"><button class="f-reset" onclick="resetAll()"><span data-ico="refreshCw"></span> Filter zur&uuml;cksetzen</button></div>
       <div style="padding:8px 14px;text-align:center;border-top:.5px solid var(--border)">
         <button onclick="toggleFilterCard()" style="background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:4px 16px;border-radius:8px;display:inline-flex;align-items:center;gap:4px"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg> einklappen</button>
       </div>
       </div><!-- filter-body -->
     </div>
+    <a class="verein-cta" href="/verein/register">
+      <span class="verein-cta-ico" data-ico="calendarPlus"></span>
+      <span class="verein-cta-txt"><strong>Du bist ein Verein?</strong>Trage deine Termine selbst ein und erreiche viele Menschen in unserer Region.</span>
+      <span class="verein-cta-arr"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
+    </a>
+    </aside>
 
     <p class="disclaimer" style="margin-bottom:10px">Alle Angaben ohne Gew&#228;hr. Ma&#223;geblich sind die offiziellen Ank&#252;ndigungen der jeweiligen Vereine.<br><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> <strong>Beta-Version</strong> &ndash; Diese Seite befindet sich noch im Aufbau. Es k&#246;nnen Fehler und unvollst&#228;ndige Daten auftreten.</p>
 
@@ -456,7 +586,6 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title" style="width:55%"></div><div class="sk-line sk-ort"></div></div>
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title"></div><div class="sk-line sk-ort" style="width:30%"></div></div>
     </div>
-    <p class="version">Vereinskalender &middot; v1.44 &middot; 2026-10-04 &middot; a sEpp-App</p>
     <p style="font-size:11px;color:var(--text3);text-align:center;padding:0 0 24px;line-height:2">&#127807; Hosting in Finnland mit &Ouml;kostrom &middot; Werbefrei &middot; DSGVO-konform</p>
   </div>
 
@@ -728,6 +857,9 @@ function icon(name,size=18,filled=false){
   const p=ICON_PATHS[name]||"";
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="${filled?"currentColor":"none"}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
 }
+// Statisches Markup: <span data-ico="name"> bekommt das Lucide-Icon (v1.45)
+document.querySelectorAll("[data-ico]").forEach(e=>{e.innerHTML=icon(e.dataset.ico,16);});
+(()=>{const z=document.getElementById("sel-zeit");if(z)z.innerHTML=Object.entries(ZEIT_LBL).map(([k,l])=>`<option value="${k}">${k==="alle"?"Alle Termine":l}</option>`).join("");})();
 
 let allT=[],labels={},colors={},meta={},allOrteAll={},rubriken={};
 let zeitraum="zukunft",aktOrte=new Set(),aktVereine=new Set(),aktLandkreis=null,aktGemeinden=new Set(),ready=false;
@@ -1074,13 +1206,44 @@ async function load(){
 
 /* ── Filter-Card Haupt-Toggle ── */
 let filterOpen=false;
+const _deskMQ=window.matchMedia("(min-width:1024px)");
+const _isDesk=()=>_deskMQ.matches;  // Filter als Seitenleiste
+// Klappzustand je Ansicht getrennt: Desktop startet offen, Handy eingeklappt.
+// filterOpen = aktuelle Ansicht, _filterOpenAndere = die jeweils andere (Wechsel beim Breiter-/Schmalerziehen).
+let _filterOpenAndere=!VORSCHAU&&!_isDesk();
+function _applyFilterOpen(){
+  const fb=document.getElementById("filter-body");
+  let show=filterOpen;
+  if(show&&srchText.length>0&&!_isDesk()){filterOpenBeforeSearch=true;show=false;}  // Handy: während der Suche eingeklappt
+  fb.style.display=show?"":"none";
+  document.getElementById("fc-arrow").style.transform=filterOpen?"rotate(90deg)":"";
+}
+function _onDeskWechsel(){
+  const t=filterOpen;filterOpen=_filterOpenAndere;_filterOpenAndere=t;
+  _applyFilterOpen();
+}
+if(!VORSCHAU)_deskMQ.addEventListener("change",_onDeskWechsel);
+// Desktop-Seitenleiste: steht fest (top:0). Ist sie höher als der sichtbare Bereich (z. B. Vereinsliste aufgeklappt),
+// klebt sie stattdessen mit ihrem unteren Ende – so bleibt alles erreichbar, ohne eigenen Scrollbalken.
+function _fitSide(){
+  const side=document.querySelector(".kal-side"),c=document.querySelector(".content");
+  if(!side||!c)return;
+  if(!_isDesk()){side.style.top="";return;}
+  side.style.top=Math.min(0,c.clientHeight-side.offsetHeight-16)+"px";
+}
+if(!VORSCHAU&&window.ResizeObserver){
+  const _ro=new ResizeObserver(_fitSide);
+  _ro.observe(document.querySelector(".kal-side"));_ro.observe(document.querySelector(".content"));
+}
 function toggleFilterCard(){
-  if(srchText.length>0)return;
+  if(srchText.length>0&&!_isDesk())return;
   filterOpen=!filterOpen;
   document.getElementById("filter-body").style.display=filterOpen?"":"none";
   const arr=document.getElementById("fc-arrow");
   arr.style.transform=filterOpen?"rotate(90deg)":"";
 }
+// Desktop: Filter steht als Seitenleiste daneben – dort von Anfang an aufgeklappt
+if(!VORSCHAU&&_isDesk())toggleFilterCard();
 
 /* ── Section toggle ── */
 function toggleSection(id){
@@ -1095,6 +1258,12 @@ function buildLandkreisFilter(){
   const container=document.getElementById("lk-chips");
   const landkreise=[...new Set(Object.keys(meta).map(_regionForVerein).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"de"));
   container.innerHTML="";
+  const sel=document.getElementById("sel-region");
+  if(sel){
+    sel.innerHTML=`<option value="alle">Alle Regionen</option>`+landkreise.map(lk=>`<option value="${escHtml(lk)}">${escHtml(lk.replace(/^Landkreis\s+/,"Lkr. "))}</option>`).join("");
+    sel.value=aktLandkreis||"alle";
+    sel.closest(".kal-sel").classList.toggle("kal-sel-off",landkreise.length<=1);
+  }
   if(landkreise.length<=1){section.style.display="none";return;}
   section.style.display="";
   landkreise.forEach(lk=>{
@@ -1174,6 +1343,8 @@ function updateAllBadges(){
   if(_favMode())["lk-badge","gem-badge","ort-badge","ver-badge"].forEach(id=>{const b=document.getElementById(id);if(b)b.textContent="pausiert";});
   const active=zeitraum!=="zukunft"||aktOrte.size>0||aktGemeinden.size>0||act!==tot||aktLandkreis!==null||searchChips.length>0||srchText.length>0||_favMode()||aktRubrikSet.size>0;
   document.getElementById("reset-btn").style.display=active?"":"none";
+  const _sz=document.getElementById("sel-zeit");if(_sz)_sz.value=zeitraum;
+  const _sr=document.getElementById("sel-region");if(_sr)_sr.value=aktLandkreis||"alle";
   renderActiveFilterPills();
 }
 
@@ -1404,6 +1575,7 @@ function toggleFavVerein(k,l){
   render();
 }
 
+const RUBRIK_KURZ={"Kunst und Kultur":"Kunst & Kultur","Gaststätte/Pub/Bar":"Gaststätte & Bar"};
 function renderRubrikBar(){
   const bar=document.getElementById("rubrik-bar");
   if(!bar)return;
@@ -1414,13 +1586,30 @@ function renderRubrikBar(){
   const tabs=[...reihenfolge.filter(r=>vorh.has(r)),...extra];
   const icons={"Verein":icon("house",14)+" Vereine","Pfarrei":icon("church",14)+" Pfarreien","Kunst und Kultur":icon("palette",14)+" Kunst &amp; Kultur","Gaststätte/Pub/Bar":icon("beer",14)+" Gaststätten &amp; Bars","Gemeinde":icon("landmark",14)+" Gemeinde"};
   bar.style.display="flex";
-  bar.innerHTML=tabs.map(r=>{
+  // Zähler (data-rcnt) füllt render() – sie zeigen, was die übrigen Filter je Rubrik übrig lassen
+  bar.innerHTML=`<button class="rubrik-chip rubrik-alle${aktRubrikSet.size===0?" on":""}" onclick="clearRubrik()">${icon("calendar",14)} <span class="rb-lbl">Alle Veranstaltungen</span><span class="rb-cnt" data-rcnt="*"></span></button>`+tabs.map(r=>{
     const on=aktRubrikSet.has(r);
-    const lbl=icons[r]||r;
-    return `<button class="rubrik-chip${on?" on":""}" onclick="setRubrik('${r}')">${lbl}</button>`;
+    const lbl=(icons[r]||r).replace(/^(<svg.*?<\/svg>) (.*)$/,'$1 <span class="rb-lbl">$2</span>');
+    return `<button class="rubrik-chip${on?" on":""}" onclick="setRubrik('${r}')">${lbl}<span class="rb-cnt" data-rcnt="${escHtml(r)}"></span></button>`;
   }).join("");
+  _fillRubrikCounts();
 }
 
+let _rubrikCnt={};
+function _fillRubrikCounts(){
+  document.querySelectorAll("[data-rcnt]").forEach(e=>{
+    const k=e.dataset.rcnt;
+    e.textContent=k==="*"?Object.values(_rubrikCnt).reduce((a,b)=>a+b,0):(_rubrikCnt[k]||0);
+  });
+}
+function clearRubrik(){
+  leaveFavMode();
+  aktRubrikSet=new Set();
+  if(!VORSCHAU)localStorage.removeItem(RUBRIK_KEY);
+  renderRubrikBar();
+  updateAllBadges();
+  render();
+}
 function setRubrik(r){
   leaveFavMode();
   if(aktRubrikSet.has(r))aktRubrikSet.delete(r);
@@ -1621,8 +1810,8 @@ function onSearchInput(val){
     return;
   }
 
-  // Filter-Body einklappen solange Suche aktiv
-  if(filterOpen&&fb.style.display!=="none"){
+  // Filter-Body einklappen solange Suche aktiv – nicht am Desktop, dort ist er die Seitenleiste
+  if(filterOpen&&fb.style.display!=="none"&&!_isDesk()){
     filterOpenBeforeSearch=true;
     fb.style.display="none";
   }
@@ -1748,7 +1937,6 @@ function render(){
     if(hasFavs)return favorites.some(f=>_termMatchFav(t,f));
     // Normaler UND-Filter
     if(!aktVereine.has(t.verein))return false;
-    if(aktRubrikSet.size>0){const r=rubriken[t.verein]||"Verein";if(!aktRubrikSet.has(r))return false;}
     if(aktLandkreis!==null&&_regionForVerein(t.verein)!==aktLandkreis)return false;
     if(aktGemeinden.size>0&&!aktGemeinden.has(_gemOf[t.verein]||""))return false;
     if(aktOrte.size>0&&!_terminOrte(t).some(o=>aktOrte.has(o)))return false;
@@ -1785,6 +1973,12 @@ function render(){
     });
   }
 
+  // Rubrik zuletzt: vorher zählen, damit die Rubrikleiste zeigt, was die übrigen Filter je Rubrik übrig lassen
+  _rubrikCnt={};
+  out.forEach(t=>{const r=rubriken[t.verein]||"Verein";_rubrikCnt[r]=(_rubrikCnt[r]||0)+1;});
+  _fillRubrikCounts();
+  if(!hasFavs&&aktRubrikSet.size>0)out=out.filter(t=>aktRubrikSet.has(rubriken[t.verein]||"Verein"));
+
   out.sort((a,b)=>a.datum.localeCompare(b.datum)||(a.uhrzeit||"").localeCompare(b.uhrzeit||""));
 
   const countEl=document.getElementById("ev-count");
@@ -1811,21 +2005,27 @@ function render(){
   const NOW_SEP=`<div class="ev-now-sep">Jetzt</div>`;
   el.innerHTML=out.map((t,i)=>{
     const col=colors[t.verein]||"#777";
-    const uz=t.uhrzeit?`${escHtml(t.uhrzeit)}${t.uhrzeit_bis?"&ndash;"+escHtml(t.uhrzeit_bis):""} Uhr`:"";
     const beschr=(t.beschreibung||"").trim();
-    const ort=t.ort?`<div class="ev-ort" style="display:flex;align-items:center;gap:4px">${icon("mapPin",13)} ${escHtml(t.ort)}</div>`:"";
+    const ort=t.ort?`<div class="ev-meta">${icon("mapPin",14)}<span class="ev-meta-txt">${escHtml(t.ort)}</span></div>`:"";
     const veranstLabel=escHtml(t.veranstalter||labels[t.verein]||t.verein);
+    const veranst=`<div class="ev-meta"><span class="ev-dot" style="background:${col}"></span><span class="ev-meta-txt">${veranstLabel}</span></div>`;
     const ortBadgeTxt=(t.ortschaft&&t.ortschaft.trim())?escHtml(t.ortschaft.trim()):null;
     const lk=(meta[t.verein]||{}).landkreis||"Landkreis Landshut";
     const lkLabel=escHtml(lk.replace(/^Landkreis\s+/,""));
     const safeQuelleUrl=(t.quelle_url&&/^https?:\/\//i.test(t.quelle_url))?t.quelle_url:null;
     const quelleBadge=t.quelle?(safeQuelleUrl
-      ?`<a href="${escHtml(safeQuelleUrl)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">Quelle: ${escHtml(t.quelle)}</a>`
+      ?`<a href="${escHtml(safeQuelleUrl)}" target="_blank" rel="noopener">Quelle: ${escHtml(t.quelle)}</a>`
       :`Quelle: ${escHtml(t.quelle)}`):"";
-    const badge=`<span class="ev-badge" style="background:${col}22;color:${col}">${veranstLabel}</span>`
-      +(ortBadgeTxt?`<span class="ev-badge" style="background:var(--bg2);color:var(--text2);margin-left:3px;display:inline-flex;align-items:center;gap:3px">${icon("mapPin",11)} ${ortBadgeTxt}</span>`:"")
-      +(lkLabel?`<span class="ev-badge" style="background:var(--bg2);color:var(--text2);margin-left:3px;display:inline-flex;align-items:center;gap:3px">${icon("map",11)} ${lkLabel}</span>`:"")
-      +(quelleBadge?`<span class="ev-badge" style="background:var(--bg2);color:var(--text2);margin-left:3px">${quelleBadge}</span>`:"");
+    const tags=(ortBadgeTxt?`<span class="ev-tag">${icon("mapPin",11)} ${ortBadgeTxt}</span>`:"")
+      +(lkLabel?`<span class="ev-tag">${icon("map",11)} ${lkLabel}</span>`:"")
+      +(quelleBadge?`<span class="ev-tag">${quelleBadge}</span>`:"");
+    // Rubrik-Pille nur abseits des Normalfalls „Verein“ – sonst stünde sie auf fast jeder Karte
+    const rub=rubriken[t.verein]||"Verein";
+    const rubrikPill=rub!=="Verein"?`<span class="ev-rubrik">${escHtml(RUBRIK_KURZ[rub]||rub)}</span>`:"";
+    // Zeit-Kachel: Datum steht schon im Tages-Trenner darüber
+    const tile=t.uhrzeit
+      ?`<div class="ev-tile" style="background:color-mix(in srgb,${col} 13%,transparent)"><span class="ev-tile-t">${escHtml(t.uhrzeit)}</span><span class="ev-tile-s">${t.uhrzeit_bis?"bis "+escHtml(t.uhrzeit_bis):"Uhr"}</span></div>`
+      :`<div class="ev-tile" style="background:color-mix(in srgb,${col} 13%,transparent)">${icon("calendar",18)}<span class="ev-tile-s">ganzt&auml;gig</span></div>`;
     const idx=allT.indexOf(t);
     const isFav=favorites.some(f=>f.type==="verein"&&f.key===t.verein);
     const sep=t.datum!==_lastDatum?`<div class="ev-date-sep" data-d="${escHtml(t.datum)}">${fmt(t.datum)}</div>`:"";
@@ -1838,10 +2038,12 @@ function render(){
       <button class="ev-icon-btn ev-cal" onclick="exportICS(${idx})" title="Zum Kalender hinzufügen">${icon("calendarPlus",20)}</button>
       <button class="ev-icon-btn ev-fav js-ev-fav-btn${isFav?' on':''}" data-favk="${escHtml(t.verein)}" data-fav-key="${escHtml(t.verein)}" data-fav-label="${escHtml(labels[t.verein]||t.verein)}" title="Verein als Favorit">${icon("heart",18)}</button>
       ${flyerBtn}
-      ${uz?`<div class="ev-date" style="display:flex;align-items:center;gap:4px">${icon("clock",13)} ${uz}</div>`:""}
-      <div class="ev-title" style="padding-right:${titlePadding}">${escHtml(t.bezeichnung)}${beschr?`<span class="ev-info-ico" aria-label="mit Beschreibung">${icon("info",15)}</span>`:""}</div>
-      ${ort}${badge}
-      ${beschr?`<div class="ev-beschr">${escHtml(beschr)}</div>`:""}
+      <div class="ev-row">${tile}<div class="ev-main">
+        <div style="padding-right:${titlePadding}">${rubrikPill}<div class="ev-title" style="padding-right:0">${escHtml(t.bezeichnung)}${beschr?`<span class="ev-info-ico" aria-label="mit Beschreibung">${icon("info",15)}</span>`:""}</div></div>
+        ${ort}${veranst}
+        ${tags?`<div class="ev-tags">${tags}</div>`:""}
+        ${beschr?`<div class="ev-beschr">${escHtml(beschr)}</div>`:""}
+      </div></div>
     </div>`;
   }).join("")+
   (nowIdx===-1?NOW_SEP:"")+
@@ -1851,8 +2053,10 @@ function render(){
     // läuft ein Termin von gestern noch (über Mitternacht), bei dessen Tag ansetzen
     const lauf=out.find(t=>t.datum<todayStr&&!_isPastT(t));
     const ab=lauf?lauf.datum:todayStr;
-    const sep=[...el.querySelectorAll('.ev-date-sep')].find(x=>x.dataset.d>=ab);
-    if(sep)sep.scrollIntoView({behavior:'instant',block:'start'});
+    const seps=[...el.querySelectorAll('.ev-date-sep')];
+    const sep=seps.find(x=>x.dataset.d>=ab);
+    // erster Tag der Liste = nichts Vergangenes darüber → oben bleiben, damit das Titelbild sichtbar ist
+    if(sep&&sep!==seps[0])sep.scrollIntoView({behavior:'instant',block:'start'});
   });
   saveState();
 }
@@ -3767,7 +3971,10 @@ function showInfoModal(){
       <div class="help-row" style="padding:8px 0">
         <span class="help-icon">${icon("users",20)}</span>
         <div><strong>Verein</strong><span>Einzelne Vereine gezielt ein- oder ausblenden.</span></div>
-        <div><strong>Rubrik</strong><span>Die Chips &uuml;ber der Terminliste &ndash; Vereine, Pfarreien, Kunst &amp; Kultur, Gastst&auml;tten &amp; Bars und ${icon("landmark",14)} Gemeinde (Sitzungen und Termine der Gemeindeverwaltung). Kein Chip aktiv = alle Rubriken.</span></div>
+      </div>
+      <div class="help-row" style="padding:8px 0">
+        <span class="help-icon">${icon("palette",20)}</span>
+        <div><strong>Rubrik</strong><span>Die Auswahl oben im Filter (am Computer: Liste links mit Anzahl der Termine) &ndash; Vereine, Pfarreien, Kunst &amp; Kultur, Gastst&auml;tten &amp; Bars und ${icon("landmark",14)} Gemeinde (Sitzungen und Termine der Gemeindeverwaltung). &bdquo;Alle Veranstaltungen&ldquo; = keine Einschr&auml;nkung; die Zahl dahinter z&auml;hlt die Termine, die die &uuml;brigen Filter &uuml;brig lassen.</span></div>
       </div>
       <div class="help-row" style="padding:8px 0;border-bottom:none">
         <span class="help-icon">${icon("heart",20)}</span>
@@ -3781,6 +3988,7 @@ function showInfoModal(){
         <span class="help-icon">${icon("scale",20)}</span>
         <div><strong>Impressum</strong><span>Josef Fischer &middot; H&ouml;lskofen 13 &middot; 84092 Bayerbach b. Ergoldsbach<br><a href="mailto:Vereinskalender@icloud.com" style="color:var(--accent);text-decoration:none">Vereinskalender@icloud.com</a></span></div>
       </div>
+      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.45 &middot; 2026-10-04 &middot; a sEpp-App</p>
       <button onclick="document.getElementById('info-modal').remove()" style="width:100%;margin-top:16px;padding:12px;background:none;border:1.5px solid var(--border2);border-radius:12px;font-size:14px;color:var(--text2);cursor:pointer">Schlie&szlig;en</button>
     </div>`;
   document.body.appendChild(m);
@@ -3799,7 +4007,7 @@ function applyTheme(theme){
   else document.documentElement.removeAttribute("data-theme");
   const dark=theme==="light"?false:theme==="dark"?true:systemPrefersDark();
   const meta=document.getElementById("theme-color-meta");
-  if(meta)meta.setAttribute("content",dark?"#5B21B6":"#6D28D9");
+  if(meta)meta.setAttribute("content",dark?"#2c2c2e":"#ffffff");
 }
 function setupThemeToggle(){
   const btn=document.getElementById("theme-toggle");
