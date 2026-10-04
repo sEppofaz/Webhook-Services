@@ -310,7 +310,7 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
 /* ── Hero (v1.45) – Foto (KI-Bild Region, static/hero-region*.jpg) mit Abdunklung; Text deshalb explizit weiß (BKM Kontrast).
    Lila Verlauf darunter = Rückfall, solange das Bild lädt oder fehlt. ── */
 .kal-hero{position:relative;overflow:hidden;border-radius:16px;margin-bottom:12px;padding:20px 18px 18px;min-height:150px;display:flex;flex-direction:column;justify-content:flex-end;color:#fff;background-color:#4C1D95;
-  background-image:linear-gradient(180deg,rgba(20,10,40,.15) 0%,rgba(20,10,40,.6) 100%),url("/hero-region-1000.jpg?v=1"),linear-gradient(135deg,#4C1D95 0%,#7C3AED 100%);
+  background-image:linear-gradient(180deg,rgba(20,10,40,0) 30%,rgba(20,10,40,.72) 100%),url("/hero-region-1000.jpg?v=1"),linear-gradient(135deg,#4C1D95 0%,#7C3AED 100%);
   background-size:cover;background-position:center 40%}
 .kal-hero h2{font-size:21px;font-weight:800;line-height:1.2;letter-spacing:-.3px;max-width:560px;color:#fff;text-shadow:0 1px 8px rgba(0,0,0,.45)}
 .kal-hero p{font-size:13.5px;line-height:1.45;margin-top:6px;max-width:520px;color:rgba(255,255,255,.92);text-shadow:0 1px 6px rgba(0,0,0,.5)}
@@ -318,7 +318,13 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
 #ev-count{font-size:13px!important;font-weight:600;color:var(--text2)!important}
 
 /* ── Suchleiste im Übergang (v1.45): ragt halb ins Titelbild ── */
-.kal-hero{margin-bottom:0;padding-bottom:40px}
+.kal-hero{margin-bottom:0;padding-bottom:40px;min-height:175px}
+/* Handy: Panorama (3:1) in voller Breite oben – sonst schneidet „cover“ Landshut links ab; Überschrift auf dunklem Streifen darunter */
+@media(max-width:1023px){
+  .kal-hero p{display:none}
+  .kal-hero{background-color:#1d1a24;background-size:100% auto,100% auto,cover;background-repeat:no-repeat;background-position:top center;
+    background-image:linear-gradient(180deg,rgba(29,26,36,0) 38%,rgba(29,26,36,.85) 62%,#1d1a24 72%),url("/hero-region-1000.jpg?v=1"),linear-gradient(135deg,#4C1D95 0%,#7C3AED 100%)}
+}
 .kal-search{position:relative;z-index:60;display:flex;align-items:center;gap:8px;margin:-26px 10px 14px;padding:4px;background:var(--card);border-radius:999px;box-shadow:0 6px 24px rgba(0,0,0,.14),0 1px 3px rgba(0,0,0,.08)}
 .kal-sel{display:none;align-items:center;gap:6px;height:40px;padding:0 12px;border:1.5px solid var(--border);border-radius:999px;color:var(--text);flex-shrink:0;position:relative}
 .kal-sel svg{color:var(--text2)}
@@ -351,11 +357,12 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
 @media(min-width:1024px){
   #s-kal.on{display:grid;grid-template-columns:320px minmax(0,1fr);column-gap:28px;max-width:1240px;padding:20px 24px;align-items:start}
   #s-kal>*{grid-column:2}
-  #s-kal>.kal-hero{grid-column:1/-1;padding:36px 40px 64px;min-height:320px;justify-content:center;
-    background-image:linear-gradient(90deg,rgba(20,10,40,.62) 0%,rgba(20,10,40,.35) 38%,rgba(20,10,40,0) 62%),url("/hero-region.jpg?v=1"),linear-gradient(135deg,#4C1D95 0%,#7C3AED 100%);
-    background-position:center 35%}
-  .kal-hero h2{font-size:38px;max-width:520px}
-  .kal-hero p{font-size:16px;margin-top:10px;max-width:460px}
+  /* Text unten links über den Feldern, Abdunklung nur von unten – Skyline (Landshut links oben) bleibt frei */
+  #s-kal>.kal-hero{grid-column:1/-1;padding:36px 40px 62px;min-height:380px;justify-content:flex-end;
+    background-image:linear-gradient(180deg,rgba(20,10,40,0) 42%,rgba(20,10,40,.72) 100%),url("/hero-region.jpg?v=1"),linear-gradient(135deg,#4C1D95 0%,#7C3AED 100%);
+    background-position:center 30%}
+  .kal-hero h2{font-size:34px;max-width:none}
+  .kal-hero p{font-size:16px;margin-top:6px;max-width:620px}
   #s-kal>.kal-search{grid-column:1/-1;width:min(940px,82%);justify-self:center;margin:-34px 0 22px;padding:6px 6px 6px 4px}
   .kal-sel{display:inline-flex}
   .kal-sel.kal-sel-off{display:none}
@@ -561,7 +568,7 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
     </div>
     <a class="verein-cta" href="/verein/register">
       <span class="verein-cta-ico" data-ico="calendarPlus"></span>
-      <span class="verein-cta-txt"><strong>Du bist ein Verein?</strong>Trage deine Termine selbst ein und erreiche viele Menschen in unserer Region.</span>
+      <span class="verein-cta-txt"><strong>Du bist ein Verein oder Veranstalter?</strong>Trage deine Termine selbst ein und erreiche viele Menschen in unserer Region.</span>
       <span class="verein-cta-arr"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span>
     </a>
     </aside>
@@ -1175,7 +1182,9 @@ async function load(){
   const nTermine=allT.filter(t=>pd(t.datum)>=h).length;
   const nVereine=Object.keys(labels).length;
   const nOrte=Object.keys(allOrteAll).length;
-  document.getElementById("hdr-sub").textContent=
+  // Zahlen im Untertitel vorerst ausgeblendet (Josef, 2026-10-04) – es bleibt der feste Text aus dem HTML; zum Einblenden auf true
+  const ZAHLEN_IM_KOPF=false;
+  if(ZAHLEN_IM_KOPF)document.getElementById("hdr-sub").textContent=
     "die Termine unserer Region · "+nTermine+" Termine · "+nVereine+" Vereine · "+nOrte+" Ortschaften";
   updateAllBadges();
 }
@@ -3937,7 +3946,7 @@ function showInfoModal(){
         <span class="help-icon">${icon("scale",20)}</span>
         <div><strong>Impressum</strong><span>Josef Fischer &middot; H&ouml;lskofen 13 &middot; 84092 Bayerbach b. Ergoldsbach<br><a href="mailto:Vereinskalender@icloud.com" style="color:var(--accent);text-decoration:none">Vereinskalender@icloud.com</a></span></div>
       </div>
-      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.49 &middot; 2026-10-04 &middot; a sEpp-App</p>
+      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.50 &middot; 2026-10-04 &middot; a sEpp-App</p>
       <button onclick="document.getElementById('info-modal').remove()" style="width:100%;margin-top:16px;padding:12px;background:none;border:1.5px solid var(--border2);border-radius:12px;font-size:14px;color:var(--text2);cursor:pointer">Schlie&szlig;en</button>
     </div>`;
   document.body.appendChild(m);
