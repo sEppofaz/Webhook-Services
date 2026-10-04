@@ -325,10 +325,13 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
   .kal-hero{background-color:#1d1a24;background-size:100% auto,100% auto,cover;background-repeat:no-repeat;background-position:top center;
     background-image:linear-gradient(180deg,rgba(29,26,36,0) 38%,rgba(29,26,36,.85) 62%,#1d1a24 72%),url("/hero-region-1000.jpg?v=1"),linear-gradient(135deg,#4C1D95 0%,#7C3AED 100%)}
 }
-/* Streifen um die Pille: klebt oben; Hintergrund erst, wenn er festsitzt (.fest) – sonst schwebt die Pille frei über dem Titelbild (v1.54) */
-.kal-search-band{position:sticky;top:0;z-index:60;margin:-34px -16px 6px;padding:8px 26px;transition:background .15s,box-shadow .15s}
-/* volle Fensterbreite auch über 1240px: Schatten seitlich ausdehnen, clip-path begrenzt ihn auf die Höhe des Streifens + 1px Linie */
-.kal-search-band.fest{background:var(--bg2);box-shadow:0 0 0 100vmax var(--bg2),0 1px 0 100vmax var(--border);clip-path:inset(0 -100vmax -1px)}
+/* Streifen um die Pille: klebt oben; sein Hintergrund blendet beim Andocken weich ein (--band-a, _bandFest) – vorher schwebt die Pille frei über dem Titelbild */
+.kal-search-band{position:sticky;top:0;z-index:60;margin:-34px -16px 6px;padding:8px 26px}
+/* Hintergrund als ::before mit Deckkraft --band-a (0…1): blendet stufenlos ein, während der Rest des Titelbilds unter der Leiste verschwindet (v1.55).
+   Volle Fensterbreite auch über 1240px: Schatten seitlich ausdehnen, clip-path begrenzt ihn auf die Streifenhöhe + 1px Linie.
+   z-index:-1 liegt im Stapelkontext des Streifens – unter der Pille, über nichts sonst. */
+.kal-search-band::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;opacity:var(--band-a,0);
+  background:var(--bg2);box-shadow:0 0 0 100vmax var(--bg2),0 1px 0 100vmax var(--border);clip-path:inset(0 -100vmax -1px)}
 .kal-search{position:relative;display:flex;align-items:center;gap:8px;margin:0;padding:4px;background:var(--card);border-radius:999px;box-shadow:0 6px 24px rgba(0,0,0,.14),0 1px 3px rgba(0,0,0,.08)}
 .kal-sel{display:none;align-items:center;gap:6px;height:40px;padding:0 12px;border:1.5px solid var(--border);border-radius:999px;color:var(--text);flex-shrink:0;position:relative}
 .kal-sel svg{color:var(--text2)}
@@ -1779,10 +1782,14 @@ document.querySelector(".content").addEventListener("scroll",()=>{
   if(document.getElementById("srch-dropdown").classList.contains("open"))_positionDropdown();
   _bandFest();
 },{passive:true});
-// Streifen hinter der Suchleiste nur zeigen, solange sie oben festsitzt (v1.54)
+// Streifen-Hintergrund an den Scroll koppeln: 0, solange das Titelbild unter der angedockten Leiste noch sichtbar ist,
+// 1, sobald es ganz darunter verschwunden ist – kein hartes Umschalten (v1.55)
 function _bandFest(){
-  const b=document.querySelector(".kal-search-band"),c=document.querySelector(".content");
-  if(b&&c)b.classList.toggle("fest",c.scrollTop>0&&b.getBoundingClientRect().top-c.getBoundingClientRect().top<1);
+  const b=document.querySelector(".kal-search-band"),h=document.querySelector(".kal-hero"),c=document.querySelector(".content");
+  if(!b||!h||!c)return;
+  const ueberlapp=_isDesk()?42:34;  // so weit ragt der Streifen ins Titelbild (negativer Rand)
+  const rest=h.getBoundingClientRect().bottom-c.getBoundingClientRect().top;  // noch sichtbarer Bildrand unter der Oberkante
+  b.style.setProperty("--band-a",Math.max(0,Math.min(1,1-rest/ueberlapp)).toFixed(3));
 }
 
 function onSearchInput(val){
@@ -3972,7 +3979,7 @@ function showInfoModal(){
         <span class="help-icon">${icon("scale",20)}</span>
         <div><strong>Impressum</strong><span>Josef Fischer &middot; H&ouml;lskofen 13 &middot; 84092 Bayerbach b. Ergoldsbach<br><a href="mailto:Vereinskalender@icloud.com" style="color:var(--accent);text-decoration:none">Vereinskalender@icloud.com</a></span></div>
       </div>
-      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.54 &middot; 2026-10-04 &middot; a sEpp-App</p>
+      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.55 &middot; 2026-10-04 &middot; a sEpp-App</p>
       <button onclick="document.getElementById('info-modal').remove()" style="width:100%;margin-top:16px;padding:12px;background:none;border:1.5px solid var(--border2);border-radius:12px;font-size:14px;color:var(--text2);cursor:pointer">Schlie&szlig;en</button>
     </div>`;
   document.body.appendChild(m);
