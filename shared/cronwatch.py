@@ -33,6 +33,12 @@ TOLERANZ_MIN = 2                   # Start darf so viel vor dem Soll-Zeitpunkt l
 DIENST_AUS = "dienst_aus"          # systemd-Service läuft nicht
 SELBSTTEST = "selbsttest"          # Service läuft, aber sein Start-Selbsttest meldet einen Fehler
 DIENST_PREFIX = "dienst:"          # Schlüssel-Präfix in den Bewertungen, damit Dienste nicht mit Jobs kollidieren
+NICHT_ERREICHBAR = "nicht_erreichbar"  # öffentliche URL liefert unerwarteten Status
+LAEUFT_AB = "laeuft_ab"            # TLS-Zertifikat läuft bald ab
+FAST_VOLL = "fast_voll"            # Platte über Grenzwert
+# Präfix → Bezeichnung in Meldungen und Lebenszeichen (Jobs ohne Präfix heissen „Cron“)
+KATEGORIEN = {"dienst:": ("Dienst", "Dienste"), "timer:": ("Timer", "Timer"), "url:": ("Seite", "Seiten"),
+              "zert:": ("Zertifikat", "Zertifikate"), "system:": ("System", "System")}
 LAEUFT = ("active", "activating", "reloading")  # Neustart gerade im Gange zählt nicht als Ausfall
 
 
@@ -167,6 +173,46 @@ def bewerte_dienst(name: str, dienst: dict, aktiv: str, selbsttest: dict | None)
     return {"status": OK, "grund": ""}
 
 
+def bewerte_timer(name: str, cfg: dict, info: dict, jetzt: datetime) -> dict:
+    """systemd-Timer: `info` = {timer_aktiv, letzter_lauf (datetime|None), result, laeuft}."""
+    log = "Log: journalctl -u %s.service -n 50 --no-pager" % name
+    if info.get("timer_aktiv") not in LAEUFT:
+        return {"status": DIENST_AUS, "grund": "Timer ist „%s“\n%s" % (info.get("timer_aktiv") or "unbekannt", log)}
+    if not info.get("laeuft") and info.get("result") not in (None, "", "success"):
+        return {"status": FEHLGESCHLAGEN, "grund": "letzter Lauf: %s\n%s" % (info["result"], log)}
+    lauf = info.get("letzter_lauf")
+    max_alter = timedelta(minutes=int(cfg.get("max_alter_min", 60)))
+    if lauf is None or jetzt - lauf > max_alter:
+        wann = lauf.astimezone(TZ).strftime("%d.%m. %H:%M") if lauf else "nie"
+        return {"status": UEBERFAELLIG, "grund": "letzter Lauf %s (erwartet alle %d Min)\n%s" % (wann, max_alter.total_seconds() // 60, log)}
+    return {"status": OK, "grund": ""}
+
+
+def bewerte_url(cfg: dict, code: int | None, fehler: str = "") -> dict:
+    erwartet = cfg.get("erwartet") or [200]
+    if code in erwartet:
+        return {"status": OK, "grund": ""}
+    ist = "HTTP %s" % code if code else (fehler or "keine Antwort")
+    return {"status": NICHT_ERREICHBAR, "grund": "%s → %s (erwartet %s)" % (cfg["url"], ist, "/".join(map(str, erwartet)))}
+
+
+def bewerte_zertifikat(name: str, ablauf: datetime | None, jetzt: datetime, tage: int = 14) -> dict:
+    if ablauf is None:
+        return {"status": LAEUFT_AB, "grund": "Ablaufdatum nicht lesbar (/etc/letsencrypt/live/%s/cert.pem)" % name}
+    rest = ablauf - jetzt
+    if rest < timedelta(days=tage):
+        return {"status": LAEUFT_AB, "grund": "läuft am %s ab (noch %d Tage) – Erneuerung prüfen: journalctl -u certbot -n 50 --no-pager"
+                % (ablauf.astimezone(TZ).strftime("%d.%m.%Y"), max(rest.days, 0))}
+    return {"status": OK, "grund": ""}
+
+
+def bewerte_platte(pfad: str, prozent: float, grenze: int = 85) -> dict:
+    if prozent >= grenze:
+        return {"status": FAST_VOLL, "grund": "%s zu %d %% belegt (Grenze %d %%) – df -h; du -xh %s --max-depth=2 | sort -h | tail"
+                % (pfad, prozent, grenze, pfad)}
+    return {"status": OK, "grund": ""}
+
+
 def alarm_schwelle(job: dict) -> int:
     """Fehlschläge in Folge bis zum Alarm: je Job `alarm_ab_fehlern`; sonst 2 bei Intervallen ≤ 30 Min, 1 bei Festzeiten."""
     if job.get("alarm_ab_fehlern"):
@@ -212,14 +258,21 @@ def entscheide(bewertungen: dict, state: dict, jetzt: datetime,
     return meldungen, {"alarme": neu}
 
 
-_SYMBOL = {UEBERFAELLIG: "⏰", FEHLGESCHLAGEN: "❌", HAENGT: "🧱", DIENST_AUS: "🛑", SELBSTTEST: "🧪"}
+_SYMBOL = {UEBERFAELLIG: "⏰", FEHLGESCHLAGEN: "❌", HAENGT: "🧱", DIENST_AUS: "🛑", SELBSTTEST: "🧪",
+           NICHT_ERREICHBAR: "🌐", LAEUFT_AB: "🔒", FAST_VOLL: "💾"}
 _TITEL = {UEBERFAELLIG: "überfällig", FEHLGESCHLAGEN: "fehlgeschlagen", HAENGT: "hängt",
-          DIENST_AUS: "läuft nicht", SELBSTTEST: "Selbsttest fehlgeschlagen"}
+          DIENST_AUS: "läuft nicht", SELBSTTEST: "Selbsttest fehlgeschlagen",
+          NICHT_ERREICHBAR: "nicht erreichbar", LAEUFT_AB: "läuft bald ab", FAST_VOLL: "fast voll"}
+
+
+def kategorie(name: str) -> str | None:
+    return next((k for k in KATEGORIEN if name.startswith(k)), None)
 
 
 def _label(name: str) -> str:
-    if name.startswith(DIENST_PREFIX):
-        return "Dienst „%s“" % name[len(DIENST_PREFIX):]
+    k = kategorie(name)
+    if k:
+        return "%s „%s“" % (KATEGORIEN[k][0], name[len(k):])
     return "Cron „%s“" % name
 
 
@@ -232,16 +285,17 @@ def _alarmtext(name: str, b: dict, erinnerung: bool) -> str:
 
 def lebenszeichen(bewertungen: dict, jetzt: datetime) -> str:
     """Tägliche Kurzmeldung – bleibt sie aus, ist der Wächter (oder cron) selbst tot."""
-    dienste = {n: b for n, b in bewertungen.items() if n.startswith(DIENST_PREFIX)}
-    jobs = {n: b for n, b in bewertungen.items() if n not in dienste}
+    jobs = {n: b for n, b in bewertungen.items() if kategorie(n) is None}
     beob = [n for n, b in jobs.items() if b["status"] != UNBEOBACHTET]
     ok = [n for n in beob if jobs[n]["status"] == OK]
     schlecht = [n for n in beob if jobs[n]["status"] != OK]
-    schlecht += [n[len(DIENST_PREFIX):] for n, b in dienste.items() if b["status"] != OK]
     offen = len(jobs) - len(beob)
     zeile = "🫀 Cron-Wächter %s: %d/%d Jobs ok" % (jetzt.astimezone(TZ).strftime("%d.%m. %H:%M"), len(ok), len(beob))
-    if dienste:
-        zeile += ", %d/%d Dienste ok" % (sum(b["status"] == OK for b in dienste.values()), len(dienste))
+    for k, (_, mehrzahl) in KATEGORIEN.items():
+        teil = {n: b for n, b in bewertungen.items() if n.startswith(k)}
+        if teil:
+            zeile += ", %d/%d %s ok" % (sum(b["status"] == OK for b in teil.values()), len(teil), mehrzahl)
+            schlecht += [n[len(k):] for n, b in teil.items() if b["status"] != OK]
     if schlecht:
         zeile += " – Problem: %s" % ", ".join(sorted(schlecht))
     if offen:
@@ -261,10 +315,15 @@ def lade_registry(pfad: Path) -> dict:
     return jobs
 
 
-def lade_dienste(pfad: Path) -> dict:
-    """Abschnitt `dienste` der Registry als {name: dienst}; fehlt er, wird nichts überwacht."""
+def lade_dienste(pfad: Path, abschnitt: str = "dienste") -> dict:
+    """Abschnitt `dienste`/`timer`/`urls` der Registry als {name: eintrag}; fehlt er, wird nichts überwacht."""
     roh = json.loads(Path(pfad).read_text(encoding="utf-8"))
-    return {d["name"]: d for d in roh.get("dienste", []) if d.get("name")}
+    return {d["name"]: d for d in roh.get(abschnitt, []) if d.get("name")}
+
+
+def lade_grenzwerte(pfad: Path) -> dict:
+    roh = json.loads(Path(pfad).read_text(encoding="utf-8"))
+    return {"zert_tage": 14, "platte_prozent": 85, "platte_pfade": ["/"], **roh.get("grenzwerte", {})}
 
 
 def _atomar_schreiben(pfad: Path, daten: dict) -> None:

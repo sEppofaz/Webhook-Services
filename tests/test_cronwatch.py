@@ -276,6 +276,51 @@ def test_dienste():
         pruefe(cw.lade_dienste(reg) == {}, "Registry ohne Abschnitt dienste → nichts überwacht")
 
 
+def test_timer_urls_system():
+    print("\nTimer, Seiten, Zertifikate, Platte")
+    jetzt = t("2026-10-04 09:10")
+    cfg = {"max_alter_min": 90}
+    gut = {"timer_aktiv": "active", "letzter_lauf": t("2026-10-04 09:00"), "result": "success", "laeuft": False}
+    pruefe(cw.bewerte_timer("nf", cfg, gut, jetzt)["status"] == cw.OK, "Timer frisch + success → ok")
+    pruefe(cw.bewerte_timer("nf", cfg, {**gut, "timer_aktiv": "inactive"}, jetzt)["status"] == cw.DIENST_AUS, "Timer inaktiv → läuft nicht")
+    f = cw.bewerte_timer("nf", cfg, {**gut, "result": "exit-code"}, jetzt)
+    pruefe(f["status"] == cw.FEHLGESCHLAGEN and "exit-code" in f["grund"] and "journalctl -u nf.service" in f["grund"],
+           "letzter Lauf exit-code → fehlgeschlagen mit Log-Befehl", f)
+    pruefe(cw.bewerte_timer("nf", cfg, {**gut, "result": "exit-code", "laeuft": True}, jetzt)["status"] == cw.OK,
+           "läuft gerade erneut → altes Ergebnis zählt nicht")
+    alt = cw.bewerte_timer("nf", cfg, {**gut, "letzter_lauf": t("2026-10-04 07:00")}, jetzt)
+    pruefe(alt["status"] == cw.UEBERFAELLIG and "04.10. 07:00" in alt["grund"], "letzter Lauf zu alt → überfällig", alt)
+    pruefe(cw.bewerte_timer("nf", cfg, {**gut, "letzter_lauf": None}, jetzt)["status"] == cw.UEBERFAELLIG, "nie gelaufen → überfällig")
+    u = {"url": "https://x/kargl/"}
+    pruefe(cw.bewerte_url(u, 200)["status"] == cw.OK, "URL 200 → ok")
+    n = cw.bewerte_url(u, 404)
+    pruefe(n["status"] == cw.NICHT_ERREICHBAR and "HTTP 404" in n["grund"] and "https://x/kargl/" in n["grund"], "URL 404 → nicht erreichbar", n)
+    pruefe("URLError" in cw.bewerte_url(u, None, "URLError")["grund"], "keine Antwort → Fehlertyp im Text")
+    pruefe(cw.bewerte_url({**u, "erwartet": [200, 302]}, 302)["status"] == cw.OK, "302 erlaubt, wenn erwartet")
+    pruefe(cw.bewerte_url(u, 302)["status"] == cw.NICHT_ERREICHBAR, "302 ohne Erlaubnis → Alarm")
+    pruefe(cw.bewerte_zertifikat("a.de", t("2026-11-05 04:00"), jetzt)["status"] == cw.OK, "Zertifikat 32 Tage → ok")
+    z = cw.bewerte_zertifikat("a.de", t("2026-10-14 04:00"), jetzt)
+    pruefe(z["status"] == cw.LAEUFT_AB and "14.10.2026" in z["grund"] and "noch 9 Tage" in z["grund"], "Zertifikat 9 Tage → Alarm", z)
+    pruefe(cw.bewerte_zertifikat("a.de", t("2026-10-01 00:00"), jetzt)["status"] == cw.LAEUFT_AB, "abgelaufen → Alarm")
+    pruefe(cw.bewerte_zertifikat("a.de", None, jetzt)["status"] == cw.LAEUFT_AB, "unlesbar → Alarm")
+    pruefe(cw.bewerte_platte("/", 37.0)["status"] == cw.OK, "Platte 37 % → ok")
+    v = cw.bewerte_platte("/", 91.2)
+    pruefe(v["status"] == cw.FAST_VOLL and "91 %" in v["grund"], "Platte 91 % → fast voll", v)
+    m, _ = cw.entscheide({"url:kargl": n, "zert:a.de": z, "timer:nf": f, "system:platte /": v}, {"alarme": {}}, jetzt)
+    kopf = sorted(x.splitlines()[0] for x in m)
+    pruefe(kopf == sorted(["❌ Timer „nf“ fehlgeschlagen", "💾 System „platte /“ fast voll",
+                    "🌐 Seite „kargl“ nicht erreichbar", "🔒 Zertifikat „a.de“ läuft bald ab"]), "Alarmköpfe je Kategorie", kopf)
+    lz = cw.lebenszeichen({"j": {"status": cw.OK, "grund": ""}, "url:kargl": n, "url:b": {"status": cw.OK, "grund": ""},
+                           "timer:nf": {"status": cw.OK, "grund": ""}}, jetzt)
+    pruefe("1/1 Jobs ok" in lz and "1/1 Timer ok" in lz and "1/2 Seiten ok" in lz and "Problem: kargl" in lz,
+           "Lebenszeichen zählt Timer und Seiten", lz)
+    reg = ROOT / "cron_registry.json"
+    timer, urls, grenz = cw.lade_dienste(reg, "timer"), cw.lade_dienste(reg, "urls"), cw.lade_grenzwerte(reg)
+    pruefe({"newsletter-fetch", "orgkompass-erinnerungen", "certbot"} <= set(timer), "Registry: Timer eingetragen", sorted(timer))
+    pruefe(all(u["url"].startswith("https://") for u in urls.values()) and len(urls) >= 10, "Registry: URLs https, mindestens 10")
+    pruefe(grenz["zert_tage"] == 14 and grenz["platte_prozent"] == 85, "Grenzwerte geladen")
+
+
 if __name__ == "__main__":
     test_soll()
     test_bewertung()
@@ -284,5 +329,6 @@ if __name__ == "__main__":
     test_cronwrap()
     test_registry()
     test_dienste()
+    test_timer_urls_system()
     print("\n%s" % ("ALLE PRÜFUNGEN BESTANDEN" if not _fehler else "%d FEHLGESCHLAGEN: %s" % (len(_fehler), "; ".join(_fehler))))
     sys.exit(1 if _fehler else 0)

@@ -3,17 +3,24 @@
 
 Alle 10 Min (Cron): bewertet jeden Job aus `cron_registry.json` anhand seines
 Heartbeats und meldet überfällige, fehlgeschlagene und hängende Jobs per Telegram
-(Josefs Bot). Dazu jeden Dienst aus dem Abschnitt `dienste`: läuft er (`systemctl
-is-active`), und – wo angegeben – war sein Start-Selbsttest ok. Ein Alarm je Vorfall, Erinnerung nach 24 h, Entwarnung bei Rückkehr.
+(Josefs Bot). Dazu aus derselben Registry: Dienste (`dienste`: läuft er, war sein
+Start-Selbsttest ok), systemd-Timer (`timer`: aktiv, letzter Lauf erfolgreich und
+nicht zu alt), öffentliche Seiten (`urls`: erwarteter HTTP-Status), TLS-Zertifikate
+unter /etc/letsencrypt/live (nur cert.pem) und Plattenplatz (`grenzwerte`). Ein Alarm je Vorfall, Erinnerung nach 24 h, Entwarnung bei Rückkehr.
 
   --dry-run        nichts senden, Zustand nicht speichern, Ergebnis ausgeben
   --lebenszeichen  zusätzlich die tägliche „alles ok"-Meldung senden (Cron 08:00)
 
 Logik und Tests: `shared/cronwatch.py`, `tests/test_cronwatch.py`. ADR-015.
 """
+import shutil
+import ssl
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -53,12 +60,88 @@ def dienst_bewertungen(dienste: dict) -> dict:
     return out
 
 
+def _show(unit: str, *props: str) -> dict:
+    r = subprocess.run(["systemctl", "show", unit, *("-p" + p for p in props)],
+                       capture_output=True, text=True, timeout=15)
+    return dict(z.split("=", 1) for z in r.stdout.splitlines() if "=" in z)
+
+
+def _systemd_zeit(wert: str):
+    """„Sun 2026-10-04 09:00:02 CEST“ → datetime (Server-Zeitzone = Europe/Berlin); „n/a“/leer → None."""
+    teile = wert.split()
+    if len(teile) < 3:
+        return None
+    try:
+        return datetime.strptime(teile[1] + " " + teile[2], "%Y-%m-%d %H:%M:%S").replace(tzinfo=cw.TZ)
+    except ValueError:
+        return None
+
+
+def timer_bewertungen(timer: dict, jetzt) -> dict:
+    out = {}
+    for name, cfg in timer.items():
+        try:
+            t = _show(name + ".timer", "ActiveState", "LastTriggerUSec")
+            s = _show(name + ".service", "Result", "ActiveState")
+            info = {"timer_aktiv": t.get("ActiveState"),
+                    "letzter_lauf": _systemd_zeit(t.get("LastTriggerUSec", "")),
+                    "result": s.get("Result"), "laeuft": s.get("ActiveState") in ("activating", "active", "deactivating")}
+        except Exception as e:
+            info = {"timer_aktiv": "Abfrage fehlgeschlagen (%s)" % type(e).__name__}
+        out["timer:" + name] = cw.bewerte_timer(name, cfg, info, jetzt)
+    return out
+
+
+class _KeinRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *a, **k):
+        return None  # 301/302 selbst bewerten statt folgen
+
+
+def _http_code(url: str) -> tuple[int | None, str]:
+    opener = urllib.request.build_opener(_KeinRedirect)
+    try:
+        with opener.open(urllib.request.Request(url, headers={"User-Agent": "pka-cron-watchdog"}), timeout=15) as r:
+            return r.status, ""
+    except urllib.error.HTTPError as e:
+        return e.code, ""
+    except Exception as e:
+        return None, type(e).__name__
+
+
+def url_bewertungen(urls: dict) -> dict:
+    out = {}
+    for name, cfg in urls.items():
+        code, fehler = _http_code(cfg["url"])
+        if code not in (cfg.get("erwartet") or [200]):
+            time.sleep(10)  # kurzer Aussetzer (Neustart, Netz)? Einmal nachfassen
+            code, fehler = _http_code(cfg["url"])
+        out["url:" + name] = cw.bewerte_url(cfg, code, fehler)
+    return out
+
+
+def system_bewertungen(grenz: dict, jetzt) -> dict:
+    out = {}
+    for cert in sorted(Path("/etc/letsencrypt/live").glob("*/cert.pem")):  # nur das öffentliche Zertifikat
+        try:
+            ablauf = datetime.fromtimestamp(ssl.cert_time_to_seconds(ssl._ssl._test_decode_cert(str(cert))["notAfter"]), cw.TZ)
+        except Exception:
+            ablauf = None
+        out["zert:" + cert.parent.name] = cw.bewerte_zertifikat(cert.parent.name, ablauf, jetzt, int(grenz["zert_tage"]))
+    for pfad in grenz["platte_pfade"]:
+        u = shutil.disk_usage(pfad)
+        out["system:platte " + pfad] = cw.bewerte_platte(pfad, 100 * u.used / u.total, int(grenz["platte_prozent"]))
+    return out
+
+
 def main(argv: list[str]) -> int:
     dry = "--dry-run" in argv
     jetzt = cw.jetzt_berlin()
     jobs = cw.lade_registry(REGISTRY)
     bew = bewertungen(jobs, jetzt)
     bew.update(dienst_bewertungen(cw.lade_dienste(REGISTRY)))
+    bew.update(timer_bewertungen(cw.lade_dienste(REGISTRY, "timer"), jetzt))
+    bew.update(url_bewertungen(cw.lade_dienste(REGISTRY, "urls")))
+    bew.update(system_bewertungen(cw.lade_grenzwerte(REGISTRY), jetzt))
     meldungen, neuer_zustand = cw.entscheide(bew, cw.lade_zustand(), jetzt)
     if "--lebenszeichen" in argv:
         meldungen.append(cw.lebenszeichen(bew, jetzt))
