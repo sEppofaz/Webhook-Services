@@ -45,6 +45,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
 .hdr{background:var(--card);color:var(--text);border-bottom:.5px solid var(--border);box-shadow:0 1px 8px rgba(0,0,0,.04);position:relative;z-index:20;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0;padding-top:max(10px,env(safe-area-inset-top))}
 .hdr-icon{width:38px;height:38px;flex-shrink:0}
 .hdr-text h1{font-size:17px;font-weight:700}
+.hdr-umbruch{display:none}  /* Zeilenumbruch nach „und“ nur am Handy */
 .hdr-text p{font-size:12px;color:var(--text2);margin-top:1px}
 .hdr-right{margin-left:auto}
 .refresh-btn{background:var(--bg2);border:none;color:var(--text);width:34px;height:34px;border-radius:9px;font-size:19px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s}
@@ -52,13 +53,15 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
 @media(max-width:480px){
   .hdr{gap:10px}
   .hdr-text{min-width:0}
-  .hdr-text h1{font-size:16px}
-  .hdr-text h1,.hdr-text p{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .hdr-h1-zusatz{display:none}
+  /* Handy: Titel zweizeilig („Vereinskalender und / Veranstaltungen“), ohne Untertitel (v1.57) */
+  .hdr-text h1{font-size:clamp(13px,4.1vw,16px);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}  /* Umbruch nur am <br> nach „und“; Schrift schrumpft auf schmalen Handys mit */
+  .hdr-umbruch{display:inline}
+  .hdr-text p{display:none}
   .hdr-right .refresh-btn,.hdr-right .hdr-pill{flex-shrink:0}
-  .hdr-pill{height:34px;padding:0 12px;font-size:13px}
-  .hdr-pill svg{display:none}
+  .hdr-right .hdr-pill{height:34px;padding:0 12px;font-size:13px}  /* .hdr-right erhöht die Spezifität – die Grundregel .hdr-pill steht weiter unten */
+  .hdr-right .hdr-pill svg{display:none}
 }
+@media(max-width:380px){.hdr-right .hdr-pill{padding:0 10px;font-size:12px;height:32px}.hdr{gap:8px}.hdr-icon{width:32px;height:32px}}
 .refresh-btn:active{background:var(--bg3)}
 /* Login/Info als Pillen (v1.45, Vorlage) */
 .hdr-pill{display:inline-flex;align-items:center;gap:7px;height:38px;padding:0 16px;border-radius:999px;font-size:14px;font-weight:600;text-decoration:none;cursor:pointer;white-space:nowrap;font-family:inherit;transition:opacity .15s,background .15s}
@@ -464,7 +467,7 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
     <rect x="15" y="27" width="19" height="7"  rx="2.5" fill="#1abc9c"/>
   </svg>
   <div class="hdr-text">
-    <h1>Vereinskalender<span class="hdr-h1-zusatz"> / Veranstaltungen</span></h1>
+    <h1>Vereinskalender und<br class="hdr-umbruch"> Veranstaltungen</h1>
     <p id="hdr-sub">Vereinstermine und Veranstaltungen unserer Region &ndash; kostenlos und werbefrei.</p>
   </div>
   <div class="hdr-right" style="display:flex;align-items:center;gap:6px">
@@ -4027,7 +4030,7 @@ function showInfoModal(){
         <span class="help-icon">${icon("scale",20)}</span>
         <div><strong>Impressum</strong><span>Josef Fischer &middot; H&ouml;lskofen 13 &middot; 84092 Bayerbach b. Ergoldsbach<br><a href="mailto:Vereinskalender@icloud.com" style="color:var(--accent);text-decoration:none">Vereinskalender@icloud.com</a></span></div>
       </div>
-      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.56 &middot; 2026-10-04 &middot; a sEpp-App</p>
+      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.57 &middot; 2026-10-04 &middot; a sEpp-App</p>
       <button onclick="document.getElementById('info-modal').remove()" style="width:100%;margin-top:16px;padding:12px;background:none;border:1.5px solid var(--border2);border-radius:12px;font-size:14px;color:var(--text2);cursor:pointer">Schlie&szlig;en</button>
     </div>`;
   document.body.appendChild(m);
