@@ -315,7 +315,7 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
 .kal-hero h2{font-size:21px;font-weight:800;line-height:1.2;letter-spacing:-.3px;max-width:560px;color:#fff;text-shadow:0 1px 8px rgba(0,0,0,.45)}
 .kal-hero p{font-size:13.5px;line-height:1.45;margin-top:6px;max-width:520px;color:rgba(255,255,255,.92);text-shadow:0 1px 6px rgba(0,0,0,.5)}
 
-#ev-count{font-size:13px!important;font-weight:600;color:var(--text2)!important}
+#ev-count{display:none!important}  /* Terminzähler ausgeblendet (Josef, v1.56) */
 
 /* ── Suchleiste im Übergang (v1.45): ragt halb ins Titelbild; seit v1.53 sticky – bleibt beim Scrollen unter der Kopfleiste stehen ── */
 .kal-hero{margin-bottom:0;padding-bottom:40px;min-height:175px}
@@ -338,6 +338,25 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
 .kal-sel select{border:none;background:transparent;color:var(--text);font-size:14px;font-weight:500;font-family:inherit;outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;padding-right:18px;max-width:170px;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right center;background-size:14px}
 .kal-sel select option{color:#1c1c1e;background:#fff}
+
+/* ── Handy (v1.56): unter Bild + Suchleiste direkt die Termine; Filter als Panel, das beim Hochwischen
+   oder per Filter-Knopf unter der Suchleiste hereingleitet (.kal-side.zeigen, Position --panel-top aus _panelPos) ── */
+.srch-filter-btn{display:none;position:relative;flex-shrink:0;width:40px;height:40px;margin-right:2px;border:none;border-radius:999px;background:var(--bg2);color:var(--text);align-items:center;justify-content:center;cursor:pointer}
+.srch-filter-btn span{display:flex}
+.srch-filter-btn svg{width:18px;height:18px}
+.srch-filter-btn.on{background:var(--accent);color:#fff}
+.srch-filter-btn.aktiv::after{content:"";position:absolute;top:6px;right:6px;width:9px;height:9px;border-radius:50%;background:#ff3b30;border:2px solid var(--card)}
+@media(max-width:1023px){
+  #s-kal.on{display:flex;flex-direction:column}
+  #s-kal>.disclaimer{order:9;margin-top:14px}
+  #s-kal>p:last-child{order:10}
+  .srch-filter-btn{display:flex}
+  .kal-side{position:fixed;left:10px;right:10px;top:var(--panel-top,120px);z-index:55;max-height:calc(100dvh - var(--panel-top,120px) - 12px);overflow-y:auto;
+    border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.2);opacity:0;transform:translateY(-8px);visibility:hidden;pointer-events:none;
+    transition:opacity .18s,transform .18s,visibility 0s .18s}
+  .kal-side.zeigen{opacity:1;transform:none;visibility:visible;pointer-events:auto;transition:opacity .18s,transform .18s}
+  .kal-side .filter-card{margin-bottom:0}
+}
 
 /* ── Rubrik-Leiste mit Zählern ── */
 .rb-cnt{font-size:11px;font-weight:600;opacity:.6;margin-left:2px}
@@ -405,7 +424,6 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
   .kal-side .rb-lbl{flex:1;text-align:left}
   .kal-side .rb-cnt{font-size:12px;font-weight:500;color:var(--text3);opacity:1}
   #s-kal>.disclaimer{text-align:left;padding:0 2px 12px}
-  #ev-count{font-size:17px!important;font-weight:700;color:var(--text)!important;padding-bottom:6px!important}
   .ev-card{padding:14px 18px}
   .ev-tile{width:66px;min-height:66px}
   .ev-tile-t{font-size:18px}
@@ -485,6 +503,7 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
         <button class="srch-clear" id="srch-clear" onclick="document.getElementById('srch-input').value='';onSearchInput('');" aria-label="Suche leeren">&#10005;</button>
         <div class="srch-dropdown" id="srch-dropdown"></div>
       </div>
+      <button class="srch-filter-btn" id="srch-filter-btn" onclick="toggleFilterPanel()" aria-label="Filter ein- oder ausblenden" title="Filter"><span data-ico="slidersHorizontal"></span></button>
       <label class="kal-sel kal-sel-desk"><span class="kal-sel-ico" data-ico="mapPin"></span><select id="sel-region" onchange="selectLandkreis(this.value)" aria-label="Region"><option value="alle">Alle Regionen</option></select></label>
       <label class="kal-sel kal-sel-desk"><span class="kal-sel-ico" data-ico="calendar"></span><select id="sel-zeit" onchange="const c=document.querySelector('.chip[data-z=&quot;'+this.value+'&quot;]');if(c)c.click()" aria-label="Zeitraum"></select></label>
     </div>
@@ -818,6 +837,7 @@ const WD=["So","Mo","Di","Mi","Do","Fr","Sa"];
 const MO=["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
 const ZEIT_LBL={"zukunft":"Künftig","-14":"14 Tage zurück","-30":"30 Tage zurück","30":"Nächste 30 Tage","90":"3 Monate","365":"1 Jahr","alle":"Alle"};
 const ICON_PATHS={
+  slidersHorizontal:`<line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/>`,
   eye:`<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>`,
   eyeOff:`<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>`,
   x:`<path d="M18 6 6 18"/><path d="m6 6 12 12"/>`,
@@ -1217,6 +1237,7 @@ function _applyFilterOpen(){
   document.getElementById("fc-arrow").style.transform=filterOpen?"rotate(90deg)":"";
 }
 function _onDeskWechsel(){
+  if(typeof _panelSetzen==="function")_panelSetzen(false);
   const t=filterOpen;filterOpen=_filterOpenAndere;_filterOpenAndere=t;
   _applyFilterOpen();
 }
@@ -1343,6 +1364,7 @@ function updateAllBadges(){
   document.getElementById("ver-badge").textContent=act===tot?"Alle":act+"/"+tot;
   const active=zeitraum!=="zukunft"||aktOrte.size>0||aktGemeinden.size>0||act!==tot||aktLandkreis!==null||searchChips.length>0||srchText.length>0||aktRubrikSet.size>0;
   document.getElementById("reset-btn").style.display=active?"":"none";
+  const _fb=document.getElementById("srch-filter-btn");if(_fb)_fb.classList.toggle("aktiv",active);  // roter Punkt: Filter aktiv (Panel evtl. zu)
   const _sz=document.getElementById("sel-zeit");if(_sz)_sz.value=zeitraum;
   const _sr=document.getElementById("sel-region");if(_sr)_sr.value=aktLandkreis||"alle";
   renderActiveFilterPills();
@@ -1781,7 +1803,33 @@ function _positionDropdown(){
 document.querySelector(".content").addEventListener("scroll",()=>{
   if(document.getElementById("srch-dropdown").classList.contains("open"))_positionDropdown();
   _bandFest();
+  _panelBeimScrollen();
 },{passive:true});
+/* ── Handy: Filter-Panel (v1.56) – Hochwischen blendet ein, Runterwischen aus; Knopf in der Suchleiste schaltet um ── */
+let _panelZeigen=false,_panelLastY=0;
+function _panelPos(){
+  const b=document.querySelector(".kal-search-band"),side=document.querySelector(".kal-side");
+  if(b&&side)side.style.setProperty("--panel-top",Math.round(b.getBoundingClientRect().bottom+2)+"px");
+}
+function _panelSetzen(an){
+  const side=document.querySelector(".kal-side");
+  if(!side||VORSCHAU)return;
+  _panelZeigen=!!an&&!_isDesk();
+  if(_panelZeigen)_panelPos();
+  side.classList.toggle("zeigen",_panelZeigen);
+  const btn=document.getElementById("srch-filter-btn");if(btn)btn.classList.toggle("on",_panelZeigen);
+}
+function toggleFilterPanel(){_panelSetzen(!_panelZeigen);}
+function _panelBeimScrollen(){
+  if(_isDesk())return;
+  const y=document.querySelector(".content").scrollTop,d=y-_panelLastY;
+  if(Math.abs(d)>8){
+    if(d<0&&y>40)_panelSetzen(true);   // Richtung Anfang gewischt
+    else if(d>0)_panelSetzen(false);   // weiter in die Liste
+    _panelLastY=y;
+  }
+  if(_panelZeigen)_panelPos();
+}
 // Streifen-Hintergrund an den Scroll koppeln: 0, solange das Titelbild unter der angedockten Leiste noch sichtbar ist,
 // 1, sobald es ganz darunter verschwunden ist – kein hartes Umschalten (v1.55)
 function _bandFest(){
@@ -3965,7 +4013,7 @@ function showInfoModal(){
       </div>
       <div class="help-row" style="padding:8px 0">
         <span class="help-icon">${icon("palette",20)}</span>
-        <div><strong>Rubrik</strong><span>Die Auswahl oben im Filter (am Computer: Liste links mit Anzahl der Termine) &ndash; Vereine, Pfarreien, Kunst &amp; Kultur, Gastst&auml;tten &amp; Bars und ${icon("landmark",14)} Gemeinde (Sitzungen und Termine der Gemeindeverwaltung). &bdquo;Alle Veranstaltungen&ldquo; = keine Einschr&auml;nkung; die Zahl dahinter z&auml;hlt die Termine, die die &uuml;brigen Filter &uuml;brig lassen.</span></div>
+        <div><strong>Rubrik</strong><span>Die Auswahl oben im Filter (am Handy &uuml;ber das ${icon("slidersHorizontal",14)}-Symbol in der Suchleiste oder durch Hochwischen in der Liste; am Computer: Liste links mit Anzahl der Termine) &ndash; Vereine, Pfarreien, Kunst &amp; Kultur, Gastst&auml;tten &amp; Bars und ${icon("landmark",14)} Gemeinde (Sitzungen und Termine der Gemeindeverwaltung). &bdquo;Alle Veranstaltungen&ldquo; = keine Einschr&auml;nkung; die Zahl dahinter z&auml;hlt die Termine, die die &uuml;brigen Filter &uuml;brig lassen.</span></div>
       </div>
       <div class="help-row" style="padding:8px 0;border-bottom:none">
         <span class="help-icon">${icon("heart",20)}</span>
@@ -3979,7 +4027,7 @@ function showInfoModal(){
         <span class="help-icon">${icon("scale",20)}</span>
         <div><strong>Impressum</strong><span>Josef Fischer &middot; H&ouml;lskofen 13 &middot; 84092 Bayerbach b. Ergoldsbach<br><a href="mailto:Vereinskalender@icloud.com" style="color:var(--accent);text-decoration:none">Vereinskalender@icloud.com</a></span></div>
       </div>
-      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.55 &middot; 2026-10-04 &middot; a sEpp-App</p>
+      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.56 &middot; 2026-10-04 &middot; a sEpp-App</p>
       <button onclick="document.getElementById('info-modal').remove()" style="width:100%;margin-top:16px;padding:12px;background:none;border:1.5px solid var(--border2);border-radius:12px;font-size:14px;color:var(--text2);cursor:pointer">Schlie&szlig;en</button>
     </div>`;
   document.body.appendChild(m);
