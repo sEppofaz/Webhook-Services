@@ -329,7 +329,7 @@ Der iCal-Feed filtert `?ort=` über dieselbe Zuordnung (exakter Ortsname), der F
 
 | Datei | Zweck |
 |---|---|
-| `orte.json` | **Ortschaften** (amtlich), 62 Einträge mit PLZ, Gemeinde, Landkreis, Bundesland, `hauptort`, `alias`, `geprueft`/`quelle` |
+| `orte.json` | **Ortschaften** (amtlich), 114 Einträge (seit v1.39 inkl. 51 Gemeindeteile Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen – `quelle`, BayernAtlas-Bestätigung offen) mit PLZ, Gemeinde, Landkreis, Bundesland, `hauptort`, `alias`, `geprueft`/`quelle` |
 | `orte_frei.json` | **Orte** (alles Mögliche: Lokale, Gebäude, falsche Schreibweisen) → Ortschaft. Winklmoos → Hölskofen. Wird vor `orte.json` geprüft |
 | `shared/geo.py` | `geo_fuer_termin()` → `{orte, plz, gemeinden, landkreise, bundeslaender}` |
 | `tests/test_geo.py` | Offline-Abnahme gegen `tests/fixtures/termine.json` (inkl. PLZ-Prüfungen) |
@@ -360,6 +360,7 @@ python3 tests/test_geo.py --register  # Register mit Herkunft und Nutzung je Ort
      verlässlich ist der **`display_name`** (Gemeinde steht vor der VGem bzw. vor dem
      Landkreis). Und jede Abfrage braucht Gemeinde + Landkreis im Suchstring, sonst trifft
      sie gleichnamige Orte in ganz Bayern. Kleine Ortsteile fehlen dort ganz.
+- **Register ist global, ohne Regionsbezug:** ein Ortsname trifft als Wort in *jedem* Veranstaltungsort, egal welcher Landkreis. Mit Mallersdorf-Pfaffenberg kamen Allerweltsnamen dazu (Klause, Westen, Weinberg, Waldhof, Neuburg, Ried, Holzen, Winkl …): „Gasthaus zur Klause, Ergoldsbach" würde zusätzlich der Mallersdorfer Einöde Klause zugeordnet. Am 2026-10-04 gegen alle 519 Live-Termine geprüft: kein Fehltreffer. Vor dem Eintragen einer weiteren Gemeinde dieselbe Prüfung machen (Namen gegen `/api/termine`-Orte).
 - Bestätigte Einträge tragen `geprueft: "<Datum>"`; `--register` weist sie aus, damit sie
   nicht erneut geprüft werden.
 - **`t.ortschaft` ist als Ortsangabe unzuverlässig:** `heimat_import.py:398` schreibt dort
