@@ -45,6 +45,26 @@
     "alias": []
   },
   {
+    "ort": "Ascholtshausen",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
+    "ort": "Baumühle",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
     "ort": "Bayerbach",
     "plz": "84092",
     "gemeinde": "Bayerbach",
@@ -57,6 +77,26 @@
     ]
   },
   {
+    "ort": "Berghausen",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
+    "ort": "Breitenhart",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
     "ort": "Böglkreut",
     "plz": "84092",
     "gemeinde": "Bayerbach",
@@ -65,6 +105,16 @@
     "hauptort": false,
     "alias": [],
     "quelle": "Gemeinde Bayerbach (Auskunft des Gemeinde-Chatbots, 2026-10-02) + Nominatim: Gemeinde Bayerbach bei Ergoldsbach, PLZ 84092"
+  },
+  {
+    "ort": "Dillkofen",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
   },
   {
     "ort": "Dünzlhof",
@@ -115,6 +165,16 @@
     "alias": []
   },
   {
+    "ort": "Ettersdorf",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
     "ort": "Feistenaich",
     "plz": "84092",
     "gemeinde": "Bayerbach",
@@ -141,6 +201,16 @@
     "bundesland": "Bayern",
     "hauptort": true,
     "alias": []
+  },
+  {
+    "ort": "Galling",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
   },
   {
     "ort": "Ganslmaier",
@@ -190,6 +260,26 @@
     "alias": []
   },
   {
+    "ort": "Hainkirchen",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
+    "ort": "Hainthal",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
     "ort": "Hinzlbach",
     "plz": "84187",
     "gemeinde": "Weng",
@@ -197,6 +287,16 @@
     "bundesland": "Bayern",
     "hauptort": false,
     "alias": []
+  },
+  {
+    "ort": "Hirschenkreuth",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
   },
   {
     "ort": "Hochmoos",
@@ -209,6 +309,36 @@
     "quelle": "Gemeinde Bayerbach (Auskunft des Gemeinde-Chatbots, 2026-10-02) + Nominatim: Gemeinde Bayerbach bei Ergoldsbach, PLZ 84092"
   },
   {
+    "ort": "Hochstetten",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
+    "ort": "Holzen",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
+    "ort": "Holztraubach",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
     "ort": "Hölskofen",
     "plz": "84092",
     "gemeinde": "Bayerbach",
@@ -218,6 +348,16 @@
     "alias": [],
     "geprueft": "2026-09-30",
     "beleg": "BayernAtlas: Winklmoos liegt in Gemeinde Bayerbach, Ortschaft Hölskofen (Josef, 2026-09-30). Winklmoos steht als Ort in orte_frei.json, nicht als Alias."
+  },
+  {
+    "ort": "Hörgelsdorf",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
   },
   {
     "ort": "Hörmannsdorf",
@@ -249,6 +389,16 @@
     "geprueft": "2026-09-30"
   },
   {
+    "ort": "Klause",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
     "ort": "Kleinfeuchten",
     "plz": "84092",
     "gemeinde": "Bayerbach",
@@ -257,6 +407,16 @@
     "hauptort": false,
     "alias": [],
     "quelle": "Gemeinde Bayerbach (Auskunft des Gemeinde-Chatbots, 2026-10-02) + Nominatim: Gemeinde Bayerbach bei Ergoldsbach, PLZ 84092"
+  },
+  {
+    "ort": "Kleinzaitzkofen",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
   },
   {
     "ort": "Kläham",
@@ -278,6 +438,16 @@
     "alias": []
   },
   {
+    "ort": "Kumpfmühle",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
     "ort": "Langenhettenbach",
     "plz": "84061",
     "gemeinde": "Ergoldsbach",
@@ -285,6 +455,16 @@
     "bundesland": "Bayern",
     "hauptort": false,
     "alias": []
+  },
+  {
+    "ort": "Lehrlbach",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
   },
   {
     "ort": "Lottokreut",
@@ -295,6 +475,16 @@
     "hauptort": false,
     "alias": [],
     "quelle": "Gemeinde Bayerbach (Auskunft des Gemeinde-Chatbots, 2026-10-02) + Nominatim: Gemeinde Bayerbach bei Ergoldsbach, PLZ 84092"
+  },
+  {
+    "ort": "Mallersdorf",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": true,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
   },
   {
     "ort": "Martinshaun",
@@ -348,6 +538,16 @@
     "alias": []
   },
   {
+    "ort": "Mitterhaselbach",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
     "ort": "Moosberg",
     "plz": "84187",
     "gemeinde": "Weng",
@@ -365,6 +565,16 @@
     "bundesland": "Bayern",
     "hauptort": false,
     "alias": []
+  },
+  {
+    "ort": "Neuburg",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
   },
   {
     "ort": "Neufahrn",
@@ -386,6 +596,16 @@
     "alias": []
   },
   {
+    "ort": "Niederlindhart",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
     "ort": "Nißlpram",
     "plz": "84092",
     "gemeinde": "Bayerbach",
@@ -405,6 +625,36 @@
     "alias": []
   },
   {
+    "ort": "Oberellenbach",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
+    "ort": "Oberhaselbach",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
+    "ort": "Oberhausen",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
     "ort": "Oberköllnbach",
     "plz": "84103",
     "gemeinde": "Postau",
@@ -412,6 +662,16 @@
     "bundesland": "Bayern",
     "hauptort": false,
     "alias": []
+  },
+  {
+    "ort": "Oberlindhart",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
   },
   {
     "ort": "Obermünchen",
@@ -450,6 +710,16 @@
     "alias": []
   },
   {
+    "ort": "Pfaffenberg",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
     "ort": "Pirket",
     "plz": "84092",
     "gemeinde": "Bayerbach",
@@ -458,6 +728,16 @@
     "hauptort": false,
     "alias": [],
     "quelle": "Gemeinde Bayerbach (Chatbot, 2026-10-02); Nominatim kennt nur die Schreibweise Neu-Birket (Penk) – ungeklärt"
+  },
+  {
+    "ort": "Pisat",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
   },
   {
     "ort": "Postau",
@@ -497,6 +777,26 @@
     "alias": []
   },
   {
+    "ort": "Ried",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
+    "ort": "Roith",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
     "ort": "Runding",
     "plz": "84092",
     "gemeinde": "Bayerbach",
@@ -517,6 +817,46 @@
     "quelle": "Gemeinde Bayerbach (Auskunft des Gemeinde-Chatbots, 2026-10-02) + Nominatim: Gemeinde Bayerbach bei Ergoldsbach, PLZ 84092"
   },
   {
+    "ort": "Scharn",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
+    "ort": "Schierlmühle",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
+    "ort": "Schöfbach",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
+    "ort": "Seethal",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
     "ort": "Siegensdorf",
     "plz": "84061",
     "gemeinde": "Ergoldsbach",
@@ -527,6 +867,46 @@
     "geprueft": "2026-09-30"
   },
   {
+    "ort": "Steinkirchen",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
+    "ort": "Steinrain",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
+    "ort": "Stiersdorf",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
+    "ort": "Stofflach",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
     "ort": "Unholzing",
     "plz": "84103",
     "gemeinde": "Postau",
@@ -534,6 +914,36 @@
     "bundesland": "Bayern",
     "hauptort": false,
     "alias": []
+  },
+  {
+    "ort": "Unterellenbach",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
+    "ort": "Unterhaselbach",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
+    "ort": "Unterhausen",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
   },
   {
     "ort": "Unterköllnbach",
@@ -555,6 +965,16 @@
     "alias": []
   },
   {
+    "ort": "Upfkofen",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
     "ort": "Veitsbuch",
     "plz": "84187",
     "gemeinde": "Weng",
@@ -574,6 +994,56 @@
     "alias": []
   },
   {
+    "ort": "Wagensonn",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
+    "ort": "Waldhof",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
+    "ort": "Waschmühle",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
+    "ort": "Weilnberg",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
+    "ort": "Weinberg",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
     "ort": "Weng",
     "plz": "84187",
     "gemeinde": "Weng",
@@ -581,6 +1051,26 @@
     "bundesland": "Bayern",
     "hauptort": true,
     "alias": []
+  },
+  {
+    "ort": "Westen",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
+    "ort": "Winisau",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
   },
   {
     "ort": "Winkelmoos",
@@ -591,6 +1081,26 @@
     "hauptort": false,
     "alias": [],
     "quelle": "Gemeinde Bayerbach (Auskunft des Gemeinde-Chatbots, 2026-10-02) + Nominatim: Gemeinde Bayerbach bei Ergoldsbach, PLZ 84092"
+  },
+  {
+    "ort": "Winkl",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
+  },
+  {
+    "ort": "Winklmühle",
+    "plz": "84066",
+    "gemeinde": "Mallersdorf-Pfaffenberg",
+    "landkreis": "Landkreis Straubing-Bogen",
+    "bundesland": "Bayern",
+    "hauptort": false,
+    "alias": [],
+    "quelle": "Wikipedia „Liste der Orte im Landkreis Straubing-Bogen“ (51 Gemeindeteile, Beleg BayernPortal-Ortsteilverzeichnis, Abruf 2021-09-29) + plz_gemeinden.json: PLZ 84066 = nur Markt Mallersdorf-Pfaffenberg, Landkreis Straubing-Bogen. Nicht im BayernAtlas geprüft – Bestätigung durch Josef offen (2026-10-04)"
   },
   {
     "ort": "Wörth a. d. Isar",
