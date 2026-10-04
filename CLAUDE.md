@@ -41,51 +41,46 @@ Dateien in `/Dokumente/Vereinskalender/input/` (Dropbox) werden automatisch vera
 
 ---
 
-## heimat-info.de Import (heimat_import.py)
+## Termin-Import Gemeinden (heimat_import.py + termin_scraper.py, seit v1.38)
 
-**Script:** `/opt/rename-webhook/heimat_import.py`
-**Gemeinden-Konfiguration:** `/opt/rename-webhook/heimat_gemeinden.json`
-**Log:** `/var/log/pka-heimat.log`
+**Scripts:** `/opt/rename-webhook/heimat_import.py` (Lauf, Pending, Import), `termin_scraper.py` (Abrufwege ohne heimat-info)
+**Gemeinden-Konfiguration:** `/opt/rename-webhook/heimat_gemeinden.json` – **Laufzeitdatei, seit v1.38 nicht mehr in Git** (`.gitignore`), Sicherung `/root/heimat_gemeinden.json.bak-2026-10-04`
+**Log:** `/var/log/pka-heimat.log` · **Pending:** `/opt/rename-webhook/imports/heimat_pending_*.json` · **Status Admin-Trigger:** `imports/letzter_lauf.json`
+**Tests:** `python3 tests/test_scraper.py` (offline, Fixtures `tests/fixtures/scraper/`, KI per Attrappe) · **ADR-020**
 
-### Funktionsweise
+### Abrufwege (Feld `typ` je Gemeinde)
+| `typ` | Quelle | Felder |
+|---|---|---|
+| `heimat` (oder fehlt) | heimat-info Export-API | `c_id` |
+| `html` | Parser für bekannten Seiten-Baukasten (`termin_scraper.PARSER`) | `parser` (z. B. `event_overview` = Mallersdorf-Pfaffenberg) |
+| `jsonld` | schema.org-Events im Quelltext | – |
+| `ical` | iCal-Export | `ical_url` |
+| `ki` | Claude liest den Seitentext (`KI_MODELL = claude-haiku-4-5`, ~2 ct/Abruf) | – |
 
-1. Export-API: `https://heimatinfo-api-platform.azurewebsites.net/export/events?pageIndex=0&pageSize=50&c=<UUID>` (max. pageSize=50, CORS-Guard: Header `Origin: https://www.heimat-info.de` erforderlich)
-2. UUID (`c=`) ist pro Gemeinde eindeutig – einmalig via Playwright ermittelt
-3. `_fetch_all_events(c_id)` holt alle Events paginiert; `_parse_api_events()` parst JSON (UTC → Europe/Berlin via zoneinfo; T00:00:00Z = ganztägig)
-4. **Duplikatprüfung:** `_existing_events()` → `set[(datum, uhrzeit, bezeichnung.lower())]` cross-key. `_is_duplicate()` prüft exakten Match + Substring-Match (nur wenn datum+uhrzeit übereinstimmen und Bezeichnung ≥ 6 Zeichen)
-5. Bei ✅: `do_import(uid)` prüft `_neu`-Flag, dann `_is_duplicate()`; schreibt in `vereinstermine.json`
-6. Bei ❌: Pending-Datei wird gelöscht
+Weitere Felder: `name`, `label` (`Veranstaltungen <Name>`), `verein_key` (Sammel-Key für Termine ohne Veranstalter), `url`, `landkreis`, `gemeinde` (amtlich, z. B. „Markt Mallersdorf-Pfaffenberg"), `plz`.
 
-### Gemeinde hinzufügen
-```bash
-/heimat-add https://www.gemeinde-xyz.de/veranstaltungen/
-# Oder direkt:
-ssh root@89.167.104.145 "/opt/rename-webhook/bin/python3 /opt/rename-webhook/heimat_import.py --add https://..."
-```
+**Neue URL** (Admin „Starten" oder `heimat_import.py --add <url>`): 1. Parser/JSON-LD/iCal ohne Browser (JSON-LD/iCal erst ab 3 Treffern) → 2. heimat-info per Playwright → 3. KI-Rückfall: Telegram an Josef (Kosten, Anzahl) + PKA-Todo „Parser bauen" (`shared/pka_todos.py`). Findet auch die KI nichts, wird nichts gespeichert. Gemeinde/Landkreis über PLZ im Seitentext + Abgleich mit Titel/Domain (`gemeinde_aus_seite`, `plz_gemeinden.json`); VG-Sammelseiten über den URL-Pfad, aber nur wenn eine Seiten-PLZ im selben Landkreis liegt.
+**Wochenlauf** (Mi 07:00): alle Gemeinden je nach `typ`. `ki`-Gemeinden werden zuerst gegen die Parser geprüft und **wechseln automatisch**, sobald einer passt (Telegram-Hinweis). Kostenbremse `MAX_KI_PRO_LAUF = 5`.
+**Neuen Baukasten abfangen:** Parser-Funktion in `termin_scraper.py`, Eintrag in `PARSER` (Signatur + Blätter-Funktion), Fixture + Test ergänzen – mehr nicht.
 
-### Felder in heimat_gemeinden.json
-```json
-[{"name": "Bayerbach", "label": "Veranstaltungen Bayerbach", "verein_key": "bayerbach",
-  "c_id": "77bc043e-...", "url": "https://www.gemeinde-bayerbach.de/veranstaltungen/"}]
-```
+### Zuordnung + Duplikate
+- Verein = `_slugify(Veranstalter)` (über `_heimat_aliases` aufgelöst), sonst Sammel-Key der Gemeinde. Sitzungstitel ohne Veranstalter (`_SITZUNG_TITEL`) → amtliche Gemeinde. Veranstalter `Gemeinde/Markt/Stadt/VG/Rathaus…` → `_rubrik = "Gemeinde"` (wird in `_meta.rubrik` gesetzt, wenn leer).
+- **Namenslisten** als Veranstalter („Werner K., Helmut H., …") werden geleert (`termin_scraper.ist_namensliste`) – nicht als Verein veröffentlichen (Josef 2026-10-04). Eine einzelne Person bleibt.
+- Duplikat = gleiches Datum + Uhrzeit + gleicher/enthaltener Titel (≥ 6 Zeichen), gegen den ganzen Kalender inkl. gelöschter Termine (verworfene kommen nicht wieder). Geprüft beim Abruf (`_neu`) **und** beim Bestätigen.
+- `do_import(uid, vereine, excluded_events, geo)` läuft komplett im Lock von `KalenderStore.update()`; Geo-Angaben aus der Admin-Ansicht gelten nur für tatsächlich übernommene Vereine, leere Felder ändern nichts. `uhrzeit_bis` wird übernommen. Fehlende Pending-Datei → `FileNotFoundError` (Admin 404, Telegram „fehlgeschlagen").
+- Admin-Ansicht zeigt nur Vereine mit neuen Terminen (Rest: „N Vereine ohne neue Termine ausgeblendet"); bleiben nach Teilbestätigung nur Duplikate übrig, wird die Pending-Datei gelöscht.
 
 ### Pitfalls
-- **Pending-Dir:** `/opt/rename-webhook/imports/heimat_pending_*.json` – persistiert Server-Neustart
-- **Export-API pageSize-Limit:** Max. `pageSize=50`. Paginierung via `pageIndex=0,1,2…`
-- **Export-API CORS-Guard:** Ohne `Origin: https://www.heimat-info.de` kommt HTTP 400
-- **Ganztägige Termine:** `startDate` endet auf `T00:00:00Z` → kein Uhrzeitfeld
-- **Log-Ownership:** `/var/log/pka-heimat.log` kann als `root` erstellt werden → `chown webhook:webhook`
-- **`_meta.heimatort`:** Label-Format muss `"Veranstaltungen <Gemeindename>"` sein (letztes Wort = Heimatort-Fallback)
-- **`veranstalter`-Feld:** Nur bei heimat-info-Importen. Badge-Fallback: `t.veranstalter || labels[t.verein] || t.verein`
-- **Duplikat-Logik:** Substring-Check nur wenn datum + uhrzeit identisch
-- **`_neu`-Flag in `do_import()`:** Erste Bedingung (vor `_is_duplicate()`). `_neu=False` schließt Event aus
-- **`quelle`/`quelle_url`:** Werden aus Pending-Datei übernommen. `quelle = "heimat-info.de"`
-- **Geo-Schutz in `do_import()`:** Geo-Felder werden nur gesetzt wenn `key not in data["_meta"]`
-- **Borlabs Cookie:** `discover_c_id()` versucht zuerst Base64-Decode, fällt auf Playwright-Intercept zurück
-- **`--run` CLI-Argument nicht implementiert:** `main()` kennt nur `--add`. Alles andere fällt auf `cmd_import()` → alle Gemeinden. Einzelnen Import per Code: `fetch_and_save_pending_for_url("https://...")`
-- **Playwright nach Update:** Browser können fehlen → `playwright install chromium` auf dem Server
-- **`api_admin_importe_confirm` gibt immer `ok: True` zurück** solange kein Exception auftritt – auch wenn `do_import()` „⚠️ Pending-Datei nicht gefunden" meldet
-- **`heimatort_gespeichert`:** Im Pending-Meta-Response enthalten – aus bestehendem `_meta[k].heimatort`. Frontend nutzt das zur Vorausfüllung im Import-Dialog
+- **`heimat_gemeinden.json` nicht wieder einchecken.** Beim Herausnehmen aus Git (v1.38) hat der nächste `git pull` die Datei auf dem Server gelöscht (Pull einer Löschung entfernt die Arbeitskopie) – aus `git show 0d4d3e3:heimat_gemeinden.json` wiederhergestellt.
+- **`imports/` muss `webhook` gehören** (`chown -R webhook:webhook`). Bis 2026-10-04 war es `root:root 755` (vom Cron angelegt): der Admin-Trigger konnte keine Pending-Datei schreiben, und das Löschen nach dem Bestätigen scheiterte still (`except OSError: pass`).
+- **Playwright-Browser liegen pro Benutzer** (`$HOME/.cache/ms-playwright`). Der Service (`webhook`, HOME `/opt/rename-webhook`) braucht eigene: `sudo -u webhook HOME=/opt/rename-webhook /opt/rename-webhook/bin/python3 -m playwright install chromium`. Nach jedem Playwright-Update nötig (Vorfall 2026-10-04: Discovery brach mit „Executable doesn't exist" ab, root hatte die Browser, webhook nicht).
+- **Export-API:** max. `pageSize=50`, Paginierung `pageIndex`; ohne `Origin: https://www.heimat-info.de` HTTP 400; `startDate` auf `T00:00:00Z` = ganztägig.
+- **Borlabs Cookie:** `discover_c_id()` versucht zuerst Base64-Decode, fällt auf Playwright-Intercept zurück.
+- **Baukasten `event_overview`:** „bis Folgetag 0:00 Uhr" = offenes Ende, „0:00 Uhr" = ganztägig; Jahr fehlt in der Liste (aus Monatsfolge abgeleitet).
+- **Einzelne URL per Code:** `fetch_and_save_pending_for_url("https://...")`; `--run` gibt es nicht.
+- **Selbstverwaltende Vereine** werden normal dedupliziert und mit `_sv` markiert (ADR-003).
+- **`heimatort_gespeichert`/`gemeinde_vorschlag`/`landkreis_vorschlag`** in der Pending-Übersicht: aus `_meta`, sonst aus der Gemeinde-Konfiguration – Vorbelegung der Admin-Felder.
+- **Neue Gemeinde ⇒ Ortschaften in `orte.json`** (Geo-Register, siehe unten) – die Import-Meldung erinnert daran.
 
 ---
 
@@ -114,7 +109,7 @@ Gottesdienste aus `gottesdienste.json` erreichen die Abonnenten also **nicht**. 
 
 | täglich 00:10, 20:00 | `kalender_report.py` | Vereinskalender-Bericht (verifiziert, DE) |
 | täglich 00:05 | `stats_collector.py` | Besucherstatistik → `page_stats`-Tabelle |
-| wöchentlich Mi 07:00 (`0 7 * * 3`) | `heimat_import.py` | heimat-info.de alle Gemeinden fetchen |
+| wöchentlich Mi 07:00 (`0 7 * * 3`) | `heimat_import.py` | Termine aller Gemeinden (heimat-info, Parser, KI) fetchen → Telegram-Vorschau |
 | Di+Do 06:00 | `traffic_info.py` | Verkehrsinfo-Check |
 | alle 15 Min | `pka_todos_reminder.py` | PKA Todos Fälligkeits-Erinnerungen |
 | alle 30 Min | `telegram_webhook_guard.py` | Prüft `getWebhookInfo`, setzt Webhook automatisch neu + Telegram-Alarm falls weg (seit 2026-08-27, siehe Pitfall oben) |
@@ -252,7 +247,7 @@ Gottesdienste aus `gottesdienste.json` erreichen die Abonnenten also **nicht**. 
 - **Profil → Kalender:** `_profil_in_kalender()` schreibt Rubrik, Ortschaft, PLZ, Gemeinde, Landkreis nach `_meta[verein_key]` und den Namen nach `_labels` – nur wenn der Key in `_labels` steht (freigegeben). Leere Werte überschreiben nichts, `selbstverwaltung`/`ortschaft_gemeinde` bleiben. Vorher landeten Profiländerungen nur in der DB und waren im Kalender unsichtbar.
 - **Anrede in Mails:** `gruss_aus(row)` → „Hallo Frau Huber,“ (bei „keine Angabe“ voller Name, ohne Namen „Hallo,“), eingesetzt unter der `<h2>`. Selects, die eine Mail auslösen, müssen `u.anrede, u.vorname, u.nachname` mitselektieren (Freigabe in `auth` **und** `telegram`, Reset, Resend-Verify).
 - **Admin-Dialog „Name“** ändert nur `vk_users.name`, nicht Vor-/Nachname – die Begrüßung nutzt Vor-/Nachname. Das Profil schreibt beides.
-- **Rubriken:** zentral in `shared/rubriken.py`; `kalender.html` hat eine Kopie (`RUBRIKEN_OPT`, `#vd-rubrik`, Chip-Icons in `renderRubrikBar()`). Neue Rubrik ⇒ an allen drei Stellen. Seit v1.29: „Gaststätte/Pub/Bar“ (Lucide `beer`).
+- **Rubriken:** zentral in `shared/rubriken.py`; `kalender.html` hat eine Kopie (`RUBRIKEN_OPT`, `#vd-rubrik`, Chip-Icons in `renderRubrikBar()`). Neue Rubrik ⇒ an allen drei Stellen. Seit v1.29: „Gaststätte/Pub/Bar“ (Lucide `beer`). Seit v1.38: „Gemeinde“ (Lucide `landmark`, Info-Abschnitt „Rubrik“) – gesetzt für Gemeinde Bayerbach, Markt Ergoldsbach, Markt Essenbach, Gemeinde Postau, Gemeinde Weng und automatisch beim Import für Gemeindeverwaltungen.
 - **Offline testen ohne Secrets:** `CLAUDE_API_KEY=attrappe` setzen, `vk_db.DB_FILE` auf eine Temp-Datei, Mail-/Telegram-Funktionen in den Modulen ersetzen, Blueprints in eine eigene Flask-App hängen, CSRF-Feld heißt `_csrf`. Geschützte Routen per `inspect.unwrap(V.verein_profil)(user)` aufrufen.
 - **Telefon:** serverseitig Pflicht (Registrierung und Profil).
 - **Feldhöhe (v1.30):** `_CSS` setzt für Text- und Auswahlfelder `line-height:1.25` + feste Höhe (46 px) und `appearance:none` auf `<select>` mit eigenem Pfeil (Lucide `chevron-down` als Data-URI). Ohne das zeichnet Safari/iOS Auswahlfelder niedriger. Checkbox- und Dateifelder sind ausgenommen (`:not([type=checkbox]):not([type=file])`).

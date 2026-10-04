@@ -12,6 +12,7 @@ __pycache__/
 
 # Laufzeitdaten (nicht in Git)
 heimat_gemeinden.json
+imports/
 vereinstermine.json
 vereinstermine.json.bak*
 vk_accounts.db
