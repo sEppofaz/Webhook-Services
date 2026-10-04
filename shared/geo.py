@@ -139,6 +139,29 @@ def heimatort_of(meta_eintrag: dict | None, label: str = "") -> str:
     return wort if len(wort) > 4 and wort[0].isalpha() else ""
 
 
+def ortschaft_aus_name(name: str, gemeinde: str) -> str:
+    """Ortschaft, die im Vereinsnamen steht – nur wenn sie zur Gemeinde gehört und eindeutig ist.
+
+    „Freiwillige Feuerwehr Oberlindhart" → Oberlindhart, „Oberlindharther Theaterbrettl"
+    → Oberlindhart (Adjektiv auf -er/-her zählt), „Eltern-Kind-Gruppen
+    Mallersdorf-Pfaffenberg" → "" (zwei Ortschaften). Für den Heimatort neuer Vereine
+    beim Import; sonst stünde dort der Gemeindename, der keine Ortschaft ist.
+    """
+    register, _ = _lade()
+    gem = _gem_norm(gemeinde).casefold()
+    if not name or not gem:
+        return ""
+    treffer = set()
+    for e in register:
+        if _gem_norm(e.get("gemeinde", "")).casefold() != gem:
+            continue
+        for n in [e.get("ort", "")] + list(e.get("alias") or []):
+            if n and re.search(r"(?<![a-zäöüßA-ZÄÖÜ])" + re.escape(n) + r"(?:h?er)?(?![a-zäöüßA-ZÄÖÜ])",
+                               name, re.I):
+                treffer.add(e["ort"])
+    return treffer.pop() if len(treffer) == 1 else ""
+
+
 def geo_fuer_termin(termin: dict, meta_eintrag: dict | None = None,
                     label: str = "") -> dict | None:
     """Geo-Labels eines Termins, oder None wenn kein Register vorhanden ist.

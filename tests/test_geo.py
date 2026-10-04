@@ -192,6 +192,16 @@ def test_landkreis_abgleich():
            == ["Mallersdorf"], "Rathaus-Sitzung des Marktes → Heimatort Mallersdorf")
     pruefe(geo_fuer_termin({"ort": "hinter dem Rathaus", "ortschaft": "Ergoldsbach"}, lh)["orte"] == ["Ergoldsbach"],
            "„Rathaus“ anderswo bleibt unberührt")
+    from shared.geo import ortschaft_aus_name as oan
+    faelle = [("Freiwillige Feuerwehr Oberlindhart", "Mallersdorf-Pfaffenberg", "Oberlindhart"),
+              ("Oberlindharther Theaterbrettl", "Mallersdorf-Pfaffenberg", "Oberlindhart"),
+              ("Freiwillige Feuerwehr Oberhaselbach 1875 e.V.", "Markt Mallersdorf-Pfaffenberg", "Oberhaselbach"),
+              ("Eltern-Kind-Gruppen Mallersdorf-Pfaffenberg", "Mallersdorf-Pfaffenberg", ""),
+              ("Schützenverein Waldrose", "Mallersdorf-Pfaffenberg", ""),
+              ("Freiwillige Feuerwehr Oberlindhart", "Bayerbach", ""),
+              ("FF Hölskofen", "Gemeinde Bayerbach b. Ergoldsbach", "Hölskofen")]
+    for name, gem, soll in faelle:
+        pruefe(oan(name, gem) == soll, f"Heimatort aus Name: {name} ({gem}) → {soll or 'keiner'}", oan(name, gem))
 
 
 def test_killswitch():

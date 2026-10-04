@@ -24,6 +24,7 @@ from shared.secrets import load_secrets
 from shared.telegram import send_telegram, send_telegram_inline
 from shared.kalender_store import KalenderStore
 from shared.termin_felder import UHRZEIT_RE
+from shared.geo import ortschaft_aus_name
 import termin_scraper
 
 GEMEINDEN_FILE      = Path("/opt/rename-webhook/heimat_gemeinden.json")
@@ -390,7 +391,7 @@ def do_import(uid: str, verein_keys: list | None = None,
             # Geo-Felder nur setzen wenn noch kein Eintrag vorhanden (nie überschreiben)
             if key not in meta_:
                 meta_[key] = {
-                    "heimatort": e["_gemeinde"],
+                    "heimatort": ortschaft_aus_name(e["_label"], e["_gemeinde"]) or e["_gemeinde"],
                     "gemeinde":  verein_gemeinde,
                     "landkreis": e.get("_landkreis") or "Landkreis Landshut",
                 }
