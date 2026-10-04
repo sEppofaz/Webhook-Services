@@ -158,7 +158,8 @@
       ],
       "grace_min": 60,
       "max_laufzeit_min": 30,
-      "_zweck": "update_geoip.sh – GeoLite2-DB (Vereinskalender-Statistik), Log /var/log/pka-geoip.log"
+      "_zweck": "update_geoip.sh – GeoLite2-DB (Vereinskalender-Statistik), Log /var/log/pka-geoip.log",
+      "aktiv_seit": "2026-10-04T09:15:00+02:00"
     }
   ],
   "dienste": [
@@ -282,6 +283,14 @@
     {
       "name": "qg-team-reports",
       "url": "https://umbenennen.duckdns.org/qg-team-reports/"
+    },
+    {
+      "name": "autoquartett-api",
+      "url": "https://umbenennen.duckdns.org/autoquartett/car-lookup",
+      "erwartet": [
+        405
+      ],
+      "_zweck": "Nur API (App auf GitHub Pages). GET → 405 heisst: Route lebt; kein Claude-Aufruf"
     }
   ],
   "grenzwerte": {
@@ -291,5 +300,18 @@
       "/"
     ]
   },
-  "_hinweis_timer_urls": "timer: systemd-Timer, Alarm wenn Timer nicht aktiv, letzter Service-Lauf nicht `success` oder letzter Auslöser älter als max_alter_min (≈ Takt + Puffer). urls: öffentliche Seiten, erwarteter Status ohne Redirect-Folgen (Default 200), einmal nach 10 s nachgefasst; Seiten mit Login-Redirect erwarten 302; claude-remote über manifest.json statt /login (Login-Rate-Limit). grenzwerte: Zertifikate unter /etc/letsencrypt/live (nur cert.pem) werden automatisch erfasst, Alarm < zert_tage; Platte ab platte_prozent. Neue App mit eigener URL ⇒ unter urls eintragen."
+  "_hinweis_timer_urls": "timer: systemd-Timer, Alarm wenn Timer nicht aktiv, letzter Service-Lauf nicht `success` oder letzter Auslöser älter als max_alter_min (≈ Takt + Puffer). urls: öffentliche Seiten, erwarteter Status ohne Redirect-Folgen (Default 200), einmal nach 10 s nachgefasst; Seiten mit Login-Redirect erwarten 302; claude-remote über manifest.json statt /login (Login-Rate-Limit). grenzwerte: Zertifikate unter /etc/letsencrypt/live (nur cert.pem) werden automatisch erfasst, Alarm < zert_tage; Platte ab platte_prozent. Neue App mit eigener URL ⇒ unter urls eintragen.",
+  "ignoriert": {
+    "_hinweis": "Bewusst nicht überwacht (Muster mit * erlaubt). Ohne Eintrag hier oder in dienste/timer/urls meldet der Wächter alles Neue einmal (Erinnerung nach 24 h).",
+    "dienst": [
+      "claude-code"
+    ],
+    "timer": [],
+    "url": [
+      "/.well-known/acme-challenge/",
+      "/api/",
+      "/projects/data/",
+      "/qg-ts-report/"
+    ]
+  }
 }

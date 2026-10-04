@@ -340,6 +340,32 @@ def test_timer_urls_system():
     pruefe(grenz["zert_tage"] == 14 and grenz["platte_prozent"] == 85, "Grenzwerte geladen")
 
 
+def test_abgleich():
+    print("\nAbgleich: läuft, aber nicht überwacht")
+    jetzt = t("2026-10-04 09:30")
+    ist = {"dienst": {"kargl-invoice", "neue-app", "claude-code"}, "timer": {"newsletter-fetch", "neu-fetch"},
+           "url": {"/kargl/", "/neu/", "/api/", "/acme/x/"}}
+    bekannt = {"dienst": {"kargl-invoice"}, "timer": {"newsletter-fetch"}, "url": {"/kargl/"}}
+    ign = {"dienst": ["claude-code"], "url": ["/api/", "/acme/*"]}
+    r = cw.abgleich(ist, bekannt, ign)
+    pruefe(sorted(r) == ["neu:dienst neue-app", "neu:timer neu-fetch", "neu:url /neu/"],
+           "nur Neues, Bekanntes und Ignoriertes (auch per Muster) bleiben still", sorted(r))
+    pruefe(all(b["status"] == cw.NICHT_UEBERWACHT and "Punkt 12" in b["grund"] for b in r.values()), "Hinweis auf BKM im Text")
+    pruefe("unter „timer“" in r["neu:timer neu-fetch"]["grund"], "Hinweis nennt den passenden Registry-Abschnitt")
+    pruefe(cw.abgleich(ist, ist, {}) == {}, "alles eingetragen → nichts")
+    m, z = cw.entscheide(r, {"alarme": {}}, jetzt)
+    pruefe(len(m) == 3 and any(x.startswith("🆕 Neu „dienst neue-app“ ist nicht überwacht") for x in m), "Alarmtext", m)
+    m2, _ = cw.entscheide(r, z, jetzt + timedelta(hours=2))
+    pruefe(m2 == [], "keine Wiederholung innerhalb von 24 h")
+    m3, z3 = cw.entscheide({}, z, jetzt + timedelta(hours=3))
+    pruefe(m3 == [] and z3["alarme"] == {}, "nach Eintragen still abgeräumt (kein falsches „läuft wieder“)", (m3, z3))
+    lz = cw.lebenszeichen({"j": {"status": cw.OK, "grund": ""}, **r}, jetzt)
+    pruefe("Nicht überwacht: dienst neue-app, timer neu-fetch, url /neu/" in lz and "Neu ok" not in lz, "Lebenszeichen listet Neues", lz)
+    reg = ROOT / "cron_registry.json"
+    ig = cw.lade_ignoriert(reg)
+    pruefe("claude-code" in ig.get("dienst", []) and "/api/" in ig.get("url", []) and "_hinweis" not in ig, "Registry: ignoriert geladen", ig)
+
+
 if __name__ == "__main__":
     test_soll()
     test_bewertung()
@@ -350,5 +376,6 @@ if __name__ == "__main__":
     test_monatstag()
     test_dienste()
     test_timer_urls_system()
+    test_abgleich()
     print("\n%s" % ("ALLE PRÜFUNGEN BESTANDEN" if not _fehler else "%d FEHLGESCHLAGEN: %s" % (len(_fehler), "; ".join(_fehler))))
     sys.exit(1 if _fehler else 0)

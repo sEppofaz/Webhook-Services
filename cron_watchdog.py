@@ -13,12 +13,14 @@ unter /etc/letsencrypt/live (nur cert.pem) und Plattenplatz (`grenzwerte`). Ein 
 
 Logik und Tests: `shared/cronwatch.py`, `tests/test_cronwatch.py`. ADR-015.
 """
+import re
 import shutil
 import ssl
 import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime
 from pathlib import Path
@@ -119,6 +121,43 @@ def url_bewertungen(urls: dict) -> dict:
     return out
 
 
+def _eigene_units(typ: str) -> set[str]:
+    """Selbst angelegte Units (Unit-Datei unter /etc/systemd/system) – Distributions-Units bleiben aussen vor.
+    Services nur, wenn sie laufen (Oneshots hinter Timern laufen meist nicht); Timer alle."""
+    args = ["systemctl", "list-units", "--type=" + typ, "--no-legend", "--plain"]
+    args += ["--state=running"] if typ == "service" else ["--all"]
+    units = [z.split()[0] for z in subprocess.run(args, capture_output=True, text=True, timeout=15).stdout.splitlines() if z.strip()]
+    if not units:
+        return set()
+    r = subprocess.run(["systemctl", "show", "-p", "Id", "-p", "FragmentPath", *units], capture_output=True, text=True, timeout=15)
+    eigen = set()
+    for block in r.stdout.strip().split("\n\n"):
+        d = dict(z.split("=", 1) for z in block.splitlines() if "=" in z)
+        if d.get("FragmentPath", "").startswith("/etc/systemd/system/"):
+            eigen.add(d["Id"].rsplit(".", 1)[0])
+    return eigen
+
+
+def _nginx_pfade() -> set[str]:
+    """Prefix-Locations mit „/“ am Ende aus `nginx -T` (exakte und Regex-Locations zählen nicht)."""
+    r = subprocess.run(["nginx", "-T"], capture_output=True, text=True, timeout=20)
+    return set(re.findall(r"^\s*location\s+(/\S*/)\s*\{", r.stdout, re.M))
+
+
+def abgleich_bewertungen() -> dict:
+    """Läuft etwas, das weder in der Registry steht noch ignoriert ist? → einmal melden (24 h Erinnerung)."""
+    try:
+        dienste, timer = cw.lade_dienste(REGISTRY), cw.lade_dienste(REGISTRY, "timer")
+        url_pfade = [urllib.parse.urlsplit(u["url"]).path for u in cw.lade_dienste(REGISTRY, "urls").values()]
+        nginx = _nginx_pfade()
+        ist = {"dienst": _eigene_units("service"), "timer": _eigene_units("timer"), "url": nginx}
+        bekannt = {"dienst": set(dienste), "timer": set(timer),
+                   "url": {p for p in nginx if any(u.startswith(p) for u in url_pfade)}}
+        return cw.abgleich(ist, bekannt, cw.lade_ignoriert(REGISTRY))
+    except Exception as e:
+        return {cw.NEU_PREFIX + "abgleich": {"status": cw.NICHT_UEBERWACHT, "grund": "Abgleich fehlgeschlagen: %s" % type(e).__name__}}
+
+
 def system_bewertungen(grenz: dict, jetzt) -> dict:
     out = {}
     for cert in sorted(Path("/etc/letsencrypt/live").glob("*/cert.pem")):  # nur das öffentliche Zertifikat
@@ -142,6 +181,7 @@ def main(argv: list[str]) -> int:
     bew.update(timer_bewertungen(cw.lade_dienste(REGISTRY, "timer"), jetzt))
     bew.update(url_bewertungen(cw.lade_dienste(REGISTRY, "urls")))
     bew.update(system_bewertungen(cw.lade_grenzwerte(REGISTRY), jetzt))
+    bew.update(abgleich_bewertungen())
     meldungen, neuer_zustand = cw.entscheide(bew, cw.lade_zustand(), jetzt)
     if "--lebenszeichen" in argv:
         meldungen.append(cw.lebenszeichen(bew, jetzt))

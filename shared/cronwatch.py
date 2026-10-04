@@ -13,6 +13,7 @@ Zeiten sind Ortszeit `Europe/Berlin` (Server-Timezone, CLAUDE.md „Cron-Jobs").
 """
 from __future__ import annotations
 
+import fnmatch
 import json
 import os
 import tempfile
@@ -36,9 +37,16 @@ DIENST_PREFIX = "dienst:"          # Schlüssel-Präfix in den Bewertungen, dami
 NICHT_ERREICHBAR = "nicht_erreichbar"  # öffentliche URL liefert unerwarteten Status
 LAEUFT_AB = "laeuft_ab"            # TLS-Zertifikat läuft bald ab
 FAST_VOLL = "fast_voll"            # Platte über Grenzwert
+NICHT_UEBERWACHT = "nicht_ueberwacht"  # läuft auf dem Server, steht aber nicht in der Registry
+NEU_PREFIX = "neu:"
 # Präfix → Bezeichnung in Meldungen und Lebenszeichen (Jobs ohne Präfix heissen „Cron“)
 KATEGORIEN = {"dienst:": ("Dienst", "Dienste"), "timer:": ("Timer", "Timer"), "url:": ("Seite", "Seiten"),
-              "zert:": ("Zertifikat", "Zertifikate"), "system:": ("System", "System")}
+              "zert:": ("Zertifikat", "Zertifikate"), "system:": ("System", "System"), NEU_PREFIX: ("Neu", "Neu")}
+_ABGLEICH_HINWEIS = {
+    "dienst": "läuft auf dem Server – in cron_registry.json unter „dienste“ eintragen",
+    "timer": "ist aktiv – in cron_registry.json unter „timer“ eintragen (max_alter_min ≈ Takt + Puffer)",
+    "url": "nginx-Pfad ohne Prüfung – in cron_registry.json unter „urls“ eintragen",
+}
 LAEUFT = ("active", "activating", "reloading")  # Neustart gerade im Gange zählt nicht als Ausfall
 
 
@@ -217,6 +225,20 @@ def bewerte_platte(pfad: str, prozent: float, grenze: int = 85) -> dict:
     return {"status": OK, "grund": ""}
 
 
+def abgleich(ist: dict, bekannt: dict, ignoriert: dict) -> dict:
+    """Was läuft, aber weder überwacht noch bewusst ignoriert ist. `ist`/`bekannt`: {art: set}, `ignoriert`: {art: [Muster]}.
+    Ergebnis wie die anderen Bewertungen, Schlüssel `neu:<art> <name>` → ein Alarm, Erinnerung nach 24 h, bis eingetragen."""
+    out = {}
+    for art, namen in ist.items():
+        for n in sorted(set(namen) - set(bekannt.get(art, ()))):
+            if any(fnmatch.fnmatch(n, m) for m in ignoriert.get(art, [])):
+                continue
+            out["%s%s %s" % (NEU_PREFIX, art, n)] = {
+                "status": NICHT_UEBERWACHT,
+                "grund": "%s (oder unter „ignoriert“, wenn bewusst nicht). BKM: PKA/BKM/Neuer-Server-Service.md Punkt 12" % _ABGLEICH_HINWEIS.get(art, "in die Registry eintragen")}
+    return out
+
+
 def alarm_schwelle(job: dict) -> int:
     """Fehlschläge in Folge bis zum Alarm: je Job `alarm_ab_fehlern`; sonst 2 bei Intervallen ≤ 30 Min, 1 bei Festzeiten."""
     if job.get("alarm_ab_fehlern"):
@@ -263,10 +285,11 @@ def entscheide(bewertungen: dict, state: dict, jetzt: datetime,
 
 
 _SYMBOL = {UEBERFAELLIG: "⏰", FEHLGESCHLAGEN: "❌", HAENGT: "🧱", DIENST_AUS: "🛑", SELBSTTEST: "🧪",
-           NICHT_ERREICHBAR: "🌐", LAEUFT_AB: "🔒", FAST_VOLL: "💾"}
+           NICHT_ERREICHBAR: "🌐", LAEUFT_AB: "🔒", FAST_VOLL: "💾", NICHT_UEBERWACHT: "🆕"}
 _TITEL = {UEBERFAELLIG: "überfällig", FEHLGESCHLAGEN: "fehlgeschlagen", HAENGT: "hängt",
           DIENST_AUS: "läuft nicht", SELBSTTEST: "Selbsttest fehlgeschlagen",
-          NICHT_ERREICHBAR: "nicht erreichbar", LAEUFT_AB: "läuft bald ab", FAST_VOLL: "fast voll"}
+          NICHT_ERREICHBAR: "nicht erreichbar", LAEUFT_AB: "läuft bald ab", FAST_VOLL: "fast voll",
+          NICHT_UEBERWACHT: "ist nicht überwacht"}
 
 
 def kategorie(name: str) -> str | None:
@@ -296,6 +319,8 @@ def lebenszeichen(bewertungen: dict, jetzt: datetime) -> str:
     offen = len(jobs) - len(beob)
     zeile = "🫀 Cron-Wächter %s: %d/%d Jobs ok" % (jetzt.astimezone(TZ).strftime("%d.%m. %H:%M"), len(ok), len(beob))
     for k, (_, mehrzahl) in KATEGORIEN.items():
+        if k == NEU_PREFIX:
+            continue
         teil = {n: b for n, b in bewertungen.items() if n.startswith(k)}
         if teil:
             zeile += ", %d/%d %s ok" % (sum(b["status"] == OK for b in teil.values()), len(teil), mehrzahl)
@@ -304,6 +329,9 @@ def lebenszeichen(bewertungen: dict, jetzt: datetime) -> str:
         zeile += " – Problem: %s" % ", ".join(sorted(schlecht))
     if offen:
         zeile += "\n%d weitere noch nicht unter Aufsicht" % offen
+    neu = sorted(n[len(NEU_PREFIX):] for n in bewertungen if n.startswith(NEU_PREFIX))
+    if neu:
+        zeile += "\nNicht überwacht: %s" % ", ".join(neu)
     return zeile
 
 
@@ -323,6 +351,11 @@ def lade_dienste(pfad: Path, abschnitt: str = "dienste") -> dict:
     """Abschnitt `dienste`/`timer`/`urls` der Registry als {name: eintrag}; fehlt er, wird nichts überwacht."""
     roh = json.loads(Path(pfad).read_text(encoding="utf-8"))
     return {d["name"]: d for d in roh.get(abschnitt, []) if d.get("name")}
+
+
+def lade_ignoriert(pfad: Path) -> dict:
+    roh = json.loads(Path(pfad).read_text(encoding="utf-8"))
+    return {k: list(v) for k, v in roh.get("ignoriert", {}).items() if not k.startswith("_")}
 
 
 def lade_grenzwerte(pfad: Path) -> dict:
