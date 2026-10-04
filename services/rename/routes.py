@@ -27,11 +27,28 @@ _RECHNUNGEN_API = "http://127.0.0.1:5003/api/rechnungen"
 _RECHNUNGEN_API_TOKEN = os.environ.get("RECHNUNGEN_API_TOKEN", "")
 
 
-def _notify_rechnungen_api(new_name: str, steuer_kategorie: str | None) -> None:
-    """Neuen Rechnungseintrag per API an den Rechnungen-Service senden (fire-and-forget)."""
+# Dokumente, die NICHT in die Rechnungen-App gehören (Josef 2026-10-04).
+# Bewusst am fertigen Dateinamen festgemacht statt an einem Modellfeld: Die
+# Namensschemata für Pfarrbrief, Kontoauszug und Jahreskalender sind im Prompt
+# fest vorgegeben, die Prüfung bleibt damit deterministisch.
+_NICHT_FUER_RECHNUNGEN = re.compile(r"Pfarrbrief|Jahreskalender|Kontoauszug|_Konto_\d+", re.IGNORECASE)
+
+_RECHNUNGEN_FELDER = ("datum", "firma", "kategorie_rename", "schlagwort", "betrag_raw", "roga_kuerzel")
+
+
+def _notify_rechnungen_api(new_name: str, steuer_kategorie: str | None, felder: dict | None = None) -> None:
+    """Neuen Rechnungseintrag samt ausgelesener Felder an den Rechnungen-Service senden (fire-and-forget)."""
+    if _NICHT_FUER_RECHNUNGEN.search(new_name):
+        log(f"ℹ️  Kein Beleg, nicht an Rechnungen-App gemeldet: {new_name}")
+        return
     try:
         import urllib.request
-        payload = json.dumps({"dateiname": new_name, "steuer_kategorie": steuer_kategorie or "Allgemeines"}).encode()
+        body = {"dateiname": new_name, "steuer_kategorie": steuer_kategorie or "Allgemeines"}
+        for key in _RECHNUNGEN_FELDER:
+            val = (felder or {}).get(key)
+            if isinstance(val, str) and val.strip():
+                body[key] = val.strip()[:200]
+        payload = json.dumps(body).encode()
         req = urllib.request.Request(
             _RECHNUNGEN_API,
             data=payload,
@@ -117,7 +134,12 @@ def rename_via_claude(dbx: dropbox.Dropbox, dropbox_path: str) -> None:
         media_type = MEDIA_TYPES.get(suffix, "application/octet-stream")
 
         prompt = f"""Analysiere dieses Dokument und antworte ausschließlich mit einem JSON-Objekt (kein Markdown, keine Erklärung):
-{{"dateiname": "<neuer Dateiname>", "steuer_kategorie": "<Kategorie>"}}
+{{"dateiname": "<neuer Dateiname>", "steuer_kategorie": "<Kategorie>", "datum": "YYYY-MM-DD", "firma": "<Firma>", "kategorie_rename": "<Kategorie>", "schlagwort": "<Schlagwort>", "betrag_raw": "<Betrag>", "roga_kuerzel": "<Kürzel>"}}
+
+Die Felder datum, firma, kategorie_rename, schlagwort, betrag_raw und roga_kuerzel enthalten
+exakt dieselben Werte, die du für den Dateinamen verwendest (ohne Unterstriche zu ändern).
+Nicht vorhandene Werte (kein Betrag, kein Rosengasse-Kürzel) als leeren String "" angeben.
+betrag_raw mit Vorzeichen und Währung wie im Dateinamen, z.B. "-70.00€".
 
 Wähle steuer_kategorie aus dieser Liste (exakt so schreiben):
 Allgemeines, Forst- und Landwirtschaft, Gehaltsabrechnungen, Haus und Hof,
@@ -190,11 +212,12 @@ Regeln:
         client  = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
         new_name = None
         steuer_kategorie = None
+        felder = {}
         for attempt in range(1, 4):
             try:
                 message = client.messages.create(
                     model=MODEL,
-                    max_tokens=256,
+                    max_tokens=512,
                     messages=[{"role": "user", "content": content}]
                 )
                 raw = message.content[0].text.strip()
@@ -204,6 +227,7 @@ Regeln:
                     parsed = json.loads(raw)
                     new_name = parsed["dateiname"].strip().strip('"').strip("'")
                     steuer_kategorie = parsed.get("steuer_kategorie")
+                    felder = {k: parsed.get(k) for k in _RECHNUNGEN_FELDER}
                 except (json.JSONDecodeError, KeyError):
                     new_name = raw.strip('"').strip("'")
                 break
@@ -237,7 +261,7 @@ Regeln:
         dbx.files_move_v2(dropbox_path, new_path, autorename=False)
         log(f"✅  {filename}  →  {new_name}")
 
-        _notify_rechnungen_api(new_name, steuer_kategorie)
+        _notify_rechnungen_api(new_name, steuer_kategorie, felder)
 
     finally:
         Path(tmp_path).unlink(missing_ok=True)

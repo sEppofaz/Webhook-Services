@@ -598,6 +598,10 @@ Endpunkt `/telegram` – nur Josefs Chat-ID. Token = `TOKEN` aus `/etc/pka/secre
 
 ## Rename-Service (services/rename/routes.py)
 
+- **Metadaten an die Rechnungen-App (seit 2026-10-04):** Derselbe Haiku-Aufruf liefert neben `dateiname`/`steuer_kategorie` auch `datum`, `firma`, `kategorie_rename`, `schlagwort`, `betrag_raw`, `roga_kuerzel` (`max_tokens` 256 → 512). `_notify_rechnungen_api(new_name, steuer_kategorie, felder)` reicht sie per `POST /api/rechnungen` weiter; die Rechnungen-App muss das Dokument dadurch beim „Erfassen & Archivieren“ nicht mehr ein zweites Mal auslesen. Fehlt `felder` (JSON-Parse-Fallback), geht wie vorher nur Name + Kategorie raus.
+- **Kein Beleg → keine Meldung:** Namen mit `Pfarrbrief|Jahreskalender|Kontoauszug|_Konto_<Nr>` (Regex `_NICHT_FUER_RECHNUNGEN`) werden **nicht** an die Rechnungen-App gemeldet. Die Prüfung hängt bewusst am fertigen Dateinamen, nicht an einem Modellfeld – die Schemata dieser Dokumenttypen sind im Prompt fest vorgegeben. **Wird dort ein neues Namensschema eingeführt, das nicht in die Rechnungen-App gehört, die Regex ergänzen.**
+- **Prompt-Pflege:** Der Extract-Prompt in `rechnungen-app/app.py` (`_EXTRACT_PROMPT`) und dieser Prompt müssen bei Regeländerungen (z. B. Vorzeichen-Pitfall) weiterhin gemeinsam gepflegt werden.
+
 - **529-Retry:** `rename_via_claude()` hat 3-Versuche-Retry (15s / 30s Backoff). Ohne Retry: Overload-Fehler wird geloggt, Cursor trotzdem gesetzt → Datei wird nie erneut versucht.
 - **Cursor-Fix nach Stuck:** Datei manuell umbenennen; Cursor lebt weiter.
 
