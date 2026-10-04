@@ -29,6 +29,7 @@ KALENDER_HTML_FILE  = Path("/opt/rename-webhook/kalender.html")
 ICON_192_FILE       = Path("/opt/rename-webhook/icon-192.png")
 ICON_512_FILE       = Path("/opt/rename-webhook/icon-512.png")
 SW_FILE             = Path("/opt/rename-webhook/sw.js")
+LAST_IMPORT_FILE    = Path("/opt/rename-webhook/last_import.json")
 
 MEDIA_TYPES = {
     ".pdf":  "application/pdf",
@@ -360,6 +361,10 @@ def _do_save_import(alle: list, auto_plz: str, form_plz: str,
                     key = key_remappings[key]  # merge into existing verein
             if key not in labels:
                 labels[key] = verein_name
+            # Vergangene Termine bleiben erhalten (Vereins-Dashboard, gelöschte als Duplikatsperre);
+            # vorher löschte jeder Import sie (Review 2026-10-04). Neue Termine in der
+            # Vergangenheit werden wie bisher nicht übernommen.
+            vergangen  = [t for t in d.get(key, []) if t.get("datum", "") < heute]
             bestehende = [t for t in d.get(key, []) if t.get("datum", "") >= heute]
             ex_bez = {(t["datum"], t.get("bezeichnung", "")) for t in bestehende}
             ex_dzo = {(t["datum"], t.get("uhrzeit", ""), t.get("ort", ""))
@@ -379,7 +384,7 @@ def _do_save_import(alle: list, auto_plz: str, form_plz: str,
                 [t for t in bestehende if t.get("datum", "") >= heute],
                 key=lambda t: (t["datum"], t.get("uhrzeit", ""))
             )
-            d[key] = bestehende
+            d[key] = vergangen + bestehende
             result_vereine.append({"name": verein_name, "key": key, "count": len(termine)})
 
         if meta_info:
@@ -399,7 +404,7 @@ def _do_save_import(alle: list, auto_plz: str, form_plz: str,
 
     total = sum(v["count"] for v in result_vereine)
     log(f"📥  Import: {total} Termine, {len(result_vereine)} Vereine gespeichert")
-    Path("/opt/rename-webhook/last_import.json").write_text(
+    LAST_IMPORT_FILE.write_text(
         json.dumps({
             "datum":   datetime.now().strftime("%Y-%m-%d %H:%M"),
             "termine": total,

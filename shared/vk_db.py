@@ -197,7 +197,11 @@ def init_db():
 
 def create_session(user_id: int) -> str:
     token = secrets.token_hex(32)
+    cutoff = (datetime.utcnow() - timedelta(hours=SESSION_TIMEOUT_HOURS)).strftime("%Y-%m-%d %H:%M:%S")
     with db_conn() as conn:
+        # Aufräumen: abgelaufene Sessions sind nutzlos und blockieren sonst das Löschen
+        # von Benutzern (Fremdschlüssel vk_sessions.user_id)
+        conn.execute("DELETE FROM vk_sessions WHERE created_at < ?", (cutoff,))
         conn.execute(
             "INSERT INTO vk_sessions (id, user_id) VALUES (?, ?)",
             (token, user_id),
@@ -208,6 +212,8 @@ def create_session(user_id: int) -> str:
 def get_session_user(token: str) -> dict | None:
     if not token:
         return None
+    # Absolute Laufzeit ab Login (wie das Cookie, max_age = SESSION_TIMEOUT_HOURS) – Aktivität
+    # verlängert nicht mehr unbegrenzt. Deaktivierte Benutzer (aktiv=0) haben keine Session.
     cutoff = (datetime.utcnow() - timedelta(hours=SESSION_TIMEOUT_HOURS)).strftime("%Y-%m-%d %H:%M:%S")
     with db_conn() as conn:
         row = conn.execute(
@@ -217,7 +223,7 @@ def get_session_user(token: str) -> dict | None:
                FROM vk_sessions s
                JOIN vk_users u ON u.id = s.user_id
                JOIN vereine_accounts v ON v.id = u.verein_id
-               WHERE s.id = ? AND s.last_active > ?""",
+               WHERE s.id = ? AND s.created_at > ? AND u.aktiv = 1""",
             (token, cutoff),
         ).fetchone()
         if row:
@@ -231,6 +237,18 @@ def get_session_user(token: str) -> dict | None:
 def delete_session(token: str):
     with db_conn() as conn:
         conn.execute("DELETE FROM vk_sessions WHERE id = ?", (token,))
+
+
+def delete_user_sessions(user_id: int, ausser: str = "", conn=None) -> None:
+    """Alle Sessions eines Benutzers beenden (Passwort neu/geändert, Benutzer entfernt).
+    `ausser`: die aktuelle Session behalten (Passwortänderung im eingeloggten Zustand)."""
+    def _del(c):
+        c.execute("DELETE FROM vk_sessions WHERE user_id = ? AND id != ?", (user_id, ausser))
+    if conn is not None:
+        _del(conn)
+    else:
+        with db_conn() as c:
+            _del(c)
 
 
 def log_audit(aktion: str, termin_id: str, verein_key: str, user_id: int, anzahl: int = 1):

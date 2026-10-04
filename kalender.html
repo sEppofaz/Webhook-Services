@@ -327,7 +327,7 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
   </div>
   <div class="hdr-right" style="display:flex;align-items:center;gap:6px">
     <div class="hdr-ver" style="display:flex;flex-direction:column;align-items:flex-end;gap:1px">
-      <span class="ver-lbl" style="margin-right:0">v1.43</span>
+      <span class="ver-lbl" style="margin-right:0">v1.44</span>
       <span style="font-size:9px;color:rgba(255,255,255,.28);letter-spacing:.2px;line-height:1">a sEpp-App</span>
     </div>
     <a class="refresh-btn" id="verein-login-btn" href="/verein/login" title="Vereins-Login oder Registrierung" style="width:auto;padding:0 10px;font-size:13px;font-weight:600;letter-spacing:.3px;text-decoration:none;white-space:nowrap">Login</a>
@@ -456,7 +456,7 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title" style="width:55%"></div><div class="sk-line sk-ort"></div></div>
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title"></div><div class="sk-line sk-ort" style="width:30%"></div></div>
     </div>
-    <p class="version">Vereinskalender &middot; v1.43 &middot; 2026-10-04 &middot; a sEpp-App</p>
+    <p class="version">Vereinskalender &middot; v1.44 &middot; 2026-10-04 &middot; a sEpp-App</p>
     <p style="font-size:11px;color:var(--text3);text-align:center;padding:0 0 24px;line-height:2">&#127807; Hosting in Finnland mit &Ouml;kostrom &middot; Werbefrei &middot; DSGVO-konform</p>
   </div>
 
@@ -1651,7 +1651,7 @@ function onSearchInput(val){
     return `<button class="srch-item" onclick="addSearchChip(${i})">
       <span>${r.icon}</span>
       <div class="srch-item-main">
-        <div class="srch-item-name">${r.label}</div>
+        <div class="srch-item-name">${escHtml(r.label)}</div>
       </div>
       <span class="srch-type">${typeLabel[r.type]}</span>
       <span onclick="toggleFavorite(${i},event)" style="display:flex;padding:2px 4px;cursor:pointer;opacity:${fav?1:.35};color:${fav?"#ff3b30":"currentColor"}">${icon("heart",16,fav)}</span>
@@ -1689,7 +1689,7 @@ function renderSearchChips(){
   const el=document.getElementById("srch-chips");
   if(!searchChips.length){el.style.display="none";el.innerHTML="";return;}
   el.style.display="flex";
-  el.innerHTML=searchChips.map((c,i)=>`<span class="srch-chip">${c.icon} ${c.label}<span class="srch-chip-x" onclick="removeSearchChip(${i})">&#10005;</span></span>`).join("");
+  el.innerHTML=searchChips.map((c,i)=>`<span class="srch-chip">${c.icon} ${escHtml(c.label)}<span class="srch-chip-x" onclick="removeSearchChip(${i})">&#10005;</span></span>`).join("");
 }
 
 /* ── Favorit-Match (zentrale Hilfsfunktion) ── */
@@ -2020,7 +2020,7 @@ async function startUpload(file){
       iconEl.innerHTML=icon("calendarCheck",32);
       result.style.display="";
       result.innerHTML="<h3>Importierte Vereine</h3>"+
-        data.vereine.map(v=>`<div class="imp-row"><span>${v.name}</span><span class="imp-cnt">${v.count}</span></div>`).join("");
+        data.vereine.map(v=>`<div class="imp-row"><span>${escHtml(v.name)}</span><span class="imp-cnt">${v.count}</span></div>`).join("");
       await doRefresh();
     }
   }catch(e){
@@ -2604,7 +2604,7 @@ async function rejectVereinAccount(id,btn){
 }
 
 /* ── Accounts-Tab: Alle Accounts ── */
-function escHtml(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+function escHtml(s){return String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");}
 
 function _toggleMiniClear(inputId){
   const inp=document.getElementById(inputId),btn=document.getElementById(inputId+"-clear");
@@ -2676,7 +2676,7 @@ function renderAllAccounts(list){
           ${(v.users||[]).map(userLines).join("")}
         </div>
         <button class="ver-del-btn" style="border-color:var(--border2);color:var(--text2);flex-shrink:0"
-          onclick="openVereinEditModal(${v.id},'${escHtml(v.verein_name).replace(/'/g,"\\'")}',_vereinMap[${v.id}])">${icon("pen",14)}</button>
+          onclick="openVereinEditModal(${v.id},_vereinMap[${v.id}].verein_name,_vereinMap[${v.id}])">${icon("pen",14)}</button>
       </div>`).join("");
     return `<div class="ver-section-hdr" id="acc-letter-${l}">${l}</div><div class="filter-card" style="padding:0;margin-bottom:6px">${items}</div>`;
   }).join("");
@@ -2756,7 +2756,7 @@ function openVereinEditModal(verein_id,verein_name,vData){
         <div id="ve-transfer-msg" style="font-size:12px;margin-top:4px;color:var(--text3)"></div>
       </div>
       <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
-        <button onclick="deleteVereinAdmin(${verein_id},'${escHtml(vData.verein_name).replace(/'/g,"\\'")}','${escHtml(vData.verein_key||"")}')"
+        <button onclick="deleteVereinAdmin(${verein_id},_vereinMap[${verein_id}].verein_name,_vereinMap[${verein_id}].verein_key||'')"
           style="width:100%;padding:9px;border:1.5px solid #ff3b30;border-radius:10px;background:none;color:#ff3b30;font-size:14px;cursor:pointer">
           <span style="display:inline-flex;align-items:center;gap:5px">${icon("trash",15)} Verein-Account l&ouml;schen</span>
         </button>
@@ -3837,7 +3837,7 @@ async function doConfirmImport(){
       const result=document.getElementById("imp-result");
       result.style.display="";
       result.innerHTML="<h3>Importierte Vereine</h3>"+
-        d.vereine.map(v=>`<div class="imp-row"><span>${v.name}</span><span class="imp-cnt">${v.count}</span></div>`).join("");
+        d.vereine.map(v=>`<div class="imp-row"><span>${escHtml(v.name)}</span><span class="imp-cnt">${v.count}</span></div>`).join("");
     }else{
       lbl.textContent="Fehler: "+(d.error||"Unbekannt");
       iconEl.innerHTML=icon("alertTriangle",32);

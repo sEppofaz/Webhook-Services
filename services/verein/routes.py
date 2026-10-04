@@ -12,13 +12,13 @@ from flask import Blueprint, make_response, redirect, request
 from shared.kalender_store import KalenderStore
 from shared.kalender_core import (
     VEREINSTERMINE_FILE, _HEIC_SUPPORTED, _do_save_import,
-    cleanup_stale_pending, import_pdf_bytes, parse_excel_bytes,
+    import_pdf_bytes, parse_excel_bytes,
 )
 from shared.flyer_store import upload_flyer, delete_flyer, pruefe_flyer
 from shared.rubriken import RUBRIKEN
 from shared.csrf import csrf_field, get_csrf_token, validate_csrf
 from shared.vk_db import (
-    db_conn, get_session_user, log_audit,
+    db_conn, delete_user_sessions, get_session_user, log_audit,
     get_upload_count, increment_upload_quota,
 )
 from services.auth.routes import (
@@ -155,8 +155,8 @@ def dashboard(user):
     body = f"""
 {upload_banner}<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
   <div>
-    <div style="font-weight:600">{verein_name}</div>
-    <div style="color:#aeaeb2;font-size:.85rem">{user['email']} · {user['role']}</div>
+    <div style="font-weight:600">{html.escape(verein_name)}</div>
+    <div style="color:#aeaeb2;font-size:.85rem">{html.escape(user['email'])} · {html.escape(user['role'])}</div>
   </div>
   <form method="post" action="/verein/logout">
     <button class="btn btn-sec" style="width:auto;padding:.5rem .875rem;font-size:.85rem">Logout</button>
@@ -508,14 +508,22 @@ def termin_edit(user, termin_id):
             return _page("Fehler", '<p class="err">Ungültige Anfrage. Bitte Seite neu laden.</p>'), 403
         aktion = request.form.get("aktion", "")
         if aktion == "loeschen":
+            flyer_pfade = []
+
             def del_updater(d):
                 for t in d.get(verein_key, []):
                     if t.get("id") == termin_id:
                         t["geloescht"] = True
                         t["geloescht_von"] = user["email"]
                         t["geloescht_am"] = datetime.utcnow().isoformat()[:19]
+                        # Flyer ist per Dropbox-Link öffentlich – mit dem Termin entfernen
+                        if t.get("flyer_path"):
+                            flyer_pfade.append(t.pop("flyer_path"))
+                        t.pop("flyer_url", None)
                 return d
             KalenderStore.update(del_updater)
+            for pfad in flyer_pfade:
+                delete_flyer(pfad)
             log_audit("geloescht", termin_id, verein_key, user["id"])
             return redirect("/verein/dashboard")
         elif aktion == "flyer_entfernen":
@@ -664,7 +672,8 @@ def change_password(user):
                     "UPDATE vk_users SET password_hash=? WHERE id=?",
                     (_hash_pw(neu), user["id"]),
                 )
-                success = "Passwort erfolgreich geändert."
+                delete_user_sessions(user["id"], ausser=_session_token(), conn=conn)
+                success = "Passwort erfolgreich geändert. Andere Geräte sind abgemeldet."
 
     tok = get_csrf_token()
     form = f"""
@@ -702,7 +711,11 @@ def mitglieder(user):
             return _page("Fehler", '<p class="err">Ungültige Anfrage. Bitte Seite neu laden.</p>'), 403
         aktion = request.form.get("aktion", "")
         if aktion == "einladen":
+            from services.auth.routes import _valid_email
             email = request.form.get("email", "").strip().lower()
+            if not _valid_email(email):
+                error = "Bitte eine gültige E-Mail-Adresse eingeben."
+        if aktion == "einladen" and not error:
             with db_conn() as conn:
                 count = conn.execute(
                     "SELECT COUNT(*) FROM vk_users WHERE verein_id=?", (user["verein_id"],)
@@ -710,11 +723,13 @@ def mitglieder(user):
                 if count >= 3:
                     error = "Maximal 3 Accounts pro Verein (Admin + 2 Mitglieder)."
                 else:
+                    # Eine E-Mail darf mehrere Vereine haben (Login bietet dann die Auswahl) –
+                    # gesperrt ist nur ein zweiter Account im selben Verein
                     ex = conn.execute(
-                        "SELECT id FROM vk_users WHERE email=?", (email,)
+                        "SELECT id FROM vk_users WHERE email=? AND verein_id=?", (email, user["verein_id"])
                     ).fetchone()
                     if ex:
-                        error = "Diese E-Mail ist bereits registriert."
+                        error = "Diese E-Mail ist in eurem Verein bereits registriert."
                     else:
                         import bcrypt as _bc
                         token = _sec.token_urlsafe(32)
@@ -728,18 +743,24 @@ def mitglieder(user):
                             (email, tmp_hash, user["verein_id"], token, expires),
                         )
                         send_invite_email(email, token, user["verein_name"])
-                        success = f"Einladung an {email} verschickt."
+                        success = f"Einladung an {html.escape(email)} verschickt."
         elif aktion == "entfernen":
             try:
                 member_id = int(request.form.get("member_id", 0))
             except ValueError:
                 member_id = 0
             with db_conn() as conn:
-                conn.execute(
-                    "DELETE FROM vk_users WHERE id=? AND verein_id=? AND role='member'",
+                ist_mitglied = conn.execute(
+                    "SELECT 1 FROM vk_users WHERE id=? AND verein_id=? AND role='member'",
                     (member_id, user["verein_id"]),
-                )
-                success = "Mitglied entfernt."
+                ).fetchone()
+                if ist_mitglied:
+                    # Fremdschlüssel: erst Sessions löschen, Audit behalten (ohne Benutzerbezug),
+                    # sonst IntegrityError (Review 2026-10-04, Punkt 5)
+                    delete_user_sessions(member_id, conn=conn)
+                    conn.execute("UPDATE vk_audit SET user_id=NULL WHERE user_id=?", (member_id,))
+                    conn.execute("DELETE FROM vk_users WHERE id=?", (member_id,))
+                    success = "Mitglied entfernt."
 
     with db_conn() as conn:
         members = conn.execute(
@@ -754,7 +775,7 @@ def mitglieder(user):
         remove_btn = ""
         if m["role"] == "member":
             remove_btn = f'<form method="post" style="display:inline">{csrf_field(tok)}<input type="hidden" name="aktion" value="entfernen"><input type="hidden" name="member_id" value="{m["id"]}"><button style="background:none;border:none;color:#ff453a;cursor:pointer;font-size:.9rem" type="submit">Entfernen</button></form>'
-        rows += f'<div class="card"><div style="display:flex;justify-content:space-between"><div><div>{m["email"]}</div><div style="color:#aeaeb2;font-size:.82rem">{m["role"]} · {status}</div></div><div>{remove_btn}</div></div></div>'
+        rows += f'<div class="card"><div style="display:flex;justify-content:space-between"><div><div>{html.escape(m["email"])}</div><div style="color:#aeaeb2;font-size:.82rem">{m["role"]} · {status}</div></div><div>{remove_btn}</div></div></div>'
 
     invite_form = ""
     if len(members) < 3:
@@ -825,7 +846,7 @@ def einladung():
 {'<p class="err">'+error+'</p>' if error else ''}
 <form method="post">
   {csrf_field(tok)}
-  <input type="hidden" name="token" value="{token}">
+  <input type="hidden" name="token" value="{html.escape(token)}">
   <label>Passwort <span class="hint">(mind. 8 Zeichen)</span></label>
   <input name="password" type="password" required autocomplete="new-password">
   <label>Passwort wiederholen</label>
@@ -1015,38 +1036,9 @@ def upload_process(user):
     return redirect(f"/verein/dashboard?upload_ok={total}")
 
 
-# ── Upload bestätigen (POST) ──────────────────────────────────────────────────
-
-@verein_bp.route("/verein/confirm-upload", methods=["POST"])
-@require_verein_login
-def confirm_upload(user):
-    if user["role"] != "admin":
-        return redirect("/verein/dashboard")
-
-    import_id    = request.form.get("import_id", "")
-    cleanup_stale_pending()
-    pending_path = Path(f"/tmp/vk_pending_{import_id}.json")
-
-    if not pending_path.exists():
-        body = (
-            '<p class="err">Import nicht gefunden oder abgelaufen. '
-            'Bitte Datei erneut hochladen.</p>' + _BACK_DASH
-        )
-        return _page("Fehler", body), 404
-
-    pending = json.loads(pending_path.read_text())
-
-    if pending.get("verein_id") != user["verein_id"]:
-        body = '<p class="err">Nicht autorisiert.</p>' + _BACK_DASH
-        return _page("Fehler", body), 403
-
-    vk = user["verein_key"]
-    _, total = _do_save_import(pending["alle"], pending.get("auto_plz", ""), "", verein_key=vk)
-    pending_path.unlink(missing_ok=True)
-    def _sv_cf(d): d.setdefault("_meta", {}).setdefault(vk, {})["selbstverwaltung"] = True; return d
-    KalenderStore.update(_sv_cf)
-    log_audit("upload_confirmed", f"bulk_{total}", vk, user["id"], anzahl=total)
-    return redirect(f"/verein/dashboard?upload_ok={total}")
+# /verein/confirm-upload entfernt (Review 2026-10-04): Vereins-Uploads speichern direkt,
+# Pending-Dateien entstehen nur beim Admin-/upload (ohne verein_id) – die Route war tot
+# und ohne CSRF-Prüfung. Audit-Aktion `upload_confirmed` bleibt in kalender_report gezählt.
 
 
 # ── Datenschutz / Nutzungsbedingungen ────────────────────────────────────────

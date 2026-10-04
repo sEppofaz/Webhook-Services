@@ -302,12 +302,19 @@ def _stats_read_lines(path: Path) -> list[str]:
 
 
 def _stats_parse_dt(line: str) -> datetime | None:
-    m = re.search(r'\[(\d{2})/(\w{3})/(\d{4}):(\d{2}):(\d{2}):(\d{2})', line)
+    """Zeitstempel einer nginx-Zeile als zeitzonenbewusstes datetime (Offset aus dem Log,
+    sonst Europe/Berlin). Vorher naiv + später als UTC gedeutet → „heute“ um 2 h verschoben."""
+    m = re.search(r'\[(\d{2})/(\w{3})/(\d{4}):(\d{2}):(\d{2}):(\d{2})(?: ([+-])(\d{2})(\d{2}))?', line)
     if not m:
         return None
-    d, mo, y, h, mi, s = m.groups()
+    d, mo, y, h, mi, s, vz, oh, om = m.groups()
     try:
-        return datetime(int(y), _MONTHS_MAP[mo], int(d), int(h), int(mi), int(s))
+        if vz:
+            tz = _tz((1 if vz == "+" else -1) * timedelta(hours=int(oh), minutes=int(om)))
+        else:
+            from zoneinfo import ZoneInfo
+            tz = ZoneInfo("Europe/Berlin")
+        return datetime(int(y), _MONTHS_MAP[mo], int(d), int(h), int(mi), int(s), tzinfo=tz)
     except (KeyError, ValueError):
         return None
 
@@ -323,7 +330,8 @@ def _stats_anon_ip(raw: str) -> str:
 
 
 def _count_page_views() -> tuple[int, int, int, int]:
-    now    = datetime.now(_tz.utc).replace(tzinfo=None)
+    from zoneinfo import ZoneInfo
+    now    = datetime.now(ZoneInfo("Europe/Berlin"))
     heute  = now.replace(hour=0, minute=0, second=0, microsecond=0)
     cutoff = now - timedelta(days=7)
     h_cnt = w_cnt = 0
@@ -361,7 +369,7 @@ def _count_today_live() -> tuple[int, int]:
             dt = _stats_parse_dt(line)
             if dt is None:
                 continue
-            if dt.replace(tzinfo=_tz.utc).astimezone(berlin).date() != today:
+            if dt.astimezone(berlin).date() != today:
                 continue
             m = ip_pat.match(line)
             ips.add(_stats_anon_ip(m.group(1)) if m else "unknown")
@@ -562,7 +570,7 @@ def api_admin_stats():
         pass
 
     letzter_import = "–"
-    last_import_file = Path("/opt/rename-webhook/last_import.json")
+    from shared.kalender_core import LAST_IMPORT_FILE as last_import_file
     try:
         if last_import_file.exists():
             li = json.loads(last_import_file.read_text())
@@ -757,58 +765,46 @@ def api_vereine_post():
     key  = body.get("key", "").strip()
     if not key:
         return json.dumps({"error": "key fehlt"}), 400, {"Content-Type": "application/json"}
-    try:
-        raw = json.loads(VEREINSTERMINE_FILE.read_text()) if VEREINSTERMINE_FILE.exists() else {}
-    except Exception:
-        raw = {}
-    labels = raw.get("_labels", {})
-    if key not in labels:
-        return json.dumps({"error": "Verein nicht gefunden"}), 404, {"Content-Type": "application/json"}
-    if body.get("name", "").strip():
-        labels[key]   = body["name"].strip()
-        raw["_labels"] = labels
-    raw.setdefault("_meta", {}).setdefault(key, {})
-    m = raw["_meta"][key]
-    if "rubrik" in body:
-        rubrik = body["rubrik"].strip()
-        if rubrik:
-            m["rubrik"] = rubrik
-        else:
-            m.pop("rubrik", None)
-    if "heimatort" in body:
-        ort = body["heimatort"].strip()
-        if ort:
-            m["heimatort"] = ort
-        else:
-            m.pop("heimatort", None)
-    if "gemeinde" in body:
-        val = body["gemeinde"].strip()
-        if val:
-            m["gemeinde"] = val
-        else:
-            m.pop("gemeinde", None)
-    if "landkreis" in body:
-        val = body["landkreis"].strip()
-        if val:
-            m["landkreis"] = val
-        else:
-            m.pop("landkreis", None)
-    if "selbstverwaltung" in body:
-        if body["selbstverwaltung"]:
-            m["selbstverwaltung"] = True
-        else:
-            m.pop("selbstverwaltung", None)
-    plz = body.get("plz", "").strip()
-    if plz and re.match(r"^\d{5}$", plz):
-        saved_heimatort = m.get("heimatort")
-        new_meta        = lookup_plz(plz)
-        m.update(new_meta)
-        if saved_heimatort:
-            m["heimatort"] = saved_heimatort
+    # PLZ-Lookup (Netzwerk, ≥1 s) vor dem Lock; Lesen + Ändern + Schreiben komplett im
+    # Mutator auf dem aktuellen Stand – nie einen vorher gelesenen Snapshot zurückschreiben
+    # (Pitfall 2026-07-05, Review 2026-10-04 Punkt 3).
+    plz = str(body.get("plz") or "").strip()
+    new_meta = lookup_plz(plz) if plz and re.match(r"^\d{5}$", plz) else None
+    stand: dict = {}
+
+    def _mut(d):
+        labels = d.get("_labels", {})
+        if key not in labels:
+            return
+        if str(body.get("name") or "").strip():
+            labels[key] = body["name"].strip()
+        m = d.setdefault("_meta", {}).setdefault(key, {})
+        for feld in ("rubrik", "heimatort", "gemeinde", "landkreis"):
+            if feld in body:
+                val = str(body[feld] or "").strip()
+                if val:
+                    m[feld] = val
+                else:
+                    m.pop(feld, None)
+        if "selbstverwaltung" in body:
+            if body["selbstverwaltung"]:
+                m["selbstverwaltung"] = True
+            else:
+                m.pop("selbstverwaltung", None)
+        if new_meta:
+            saved_heimatort = m.get("heimatort")
+            m.update(new_meta)
+            if saved_heimatort:
+                m["heimatort"] = saved_heimatort
+        stand["labels"], stand["meta"] = dict(labels), dict(m)
+
     from shared.kalender_store import KalenderStore
-    KalenderStore.update(lambda d: d.clear() or d.update(raw))
+    KalenderStore.update(_mut)
+    if not stand:
+        return json.dumps({"error": "Verein nicht gefunden"}), 404, {"Content-Type": "application/json"}
+    labels = stand["labels"]
     log(f"✏️  Verein {key} ({labels.get(key)}) aktualisiert")
-    m2    = raw["_meta"].get(key, {})
+    m2    = stand["meta"]
     parts = labels.get(key, "").strip().split()
     lw    = parts[-1].split("/")[0] if parts else ""
     return json.dumps({
@@ -840,18 +836,20 @@ def api_vereine_delete(key):
     token = request.headers.get("X-Upload-Token", "")
     if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
         return json.dumps({"error": "Nicht autorisiert"}), 401, {"Content-Type": "application/json"}
-    try:
-        raw = json.loads(VEREINSTERMINE_FILE.read_text()) if VEREINSTERMINE_FILE.exists() else {}
-    except Exception:
-        raw = {}
-    if key not in raw.get("_labels", {}):
-        return json.dumps({"error": "Verein nicht gefunden"}), 404, {"Content-Type": "application/json"}
-    name = raw["_labels"].pop(key, key)
-    raw.get("_meta", {}).pop(key, None)
-    vorher = len(raw.pop(key, []))
-    geloescht = vorher
+    stand: dict = {}
+
+    def _mut(d):
+        if key not in d.get("_labels", {}):
+            return
+        stand["name"] = d["_labels"].pop(key, key)
+        d.get("_meta", {}).pop(key, None)
+        stand["n"] = len(d.pop(key, []))
+
     from shared.kalender_store import KalenderStore
-    KalenderStore.update(lambda d: d.clear() or d.update(raw))
+    KalenderStore.update(_mut)
+    if not stand:
+        return json.dumps({"error": "Verein nicht gefunden"}), 404, {"Content-Type": "application/json"}
+    name, geloescht = stand["name"], stand["n"]
     log("Verein geloescht: " + key + " (" + name + "), " + str(geloescht) + " Termine entfernt")
     return json.dumps({"ok": True, "geloescht": geloescht}, ensure_ascii=False), 200, {"Content-Type": "application/json"}
 
@@ -1063,20 +1061,29 @@ def api_termine_delete():
     if not verein_key or not old_datum or not old_bezeichnung:
         return json.dumps({"error": "verein_key, datum und bezeichnung erforderlich"}), 400, {"Content-Type": "application/json"}
     found = [False]
+    flyer = {"pfad": ""}
+
+    # Soft-Delete wie im Vereinsformular: der Termin bleibt als `geloescht` in der Datei,
+    # damit ihn der wöchentliche Gemeinde-Import als Duplikat erkennt und nicht wieder
+    # anlegt (Review 2026-10-04, Punkt 7). Öffentliche API/Feed filtern `geloescht`.
     def mutator(data):
-        liste = data.get(verein_key, [])
-        for i, t in enumerate(liste):
+        for t in data.get(verein_key, []):
             if t.get("geloescht") or t.get("deleted"):
                 continue
             if _termin_passt(t, termin_id, old_datum, old_bezeichnung):
-                liste.pop(i)
+                t["geloescht"] = True
+                t["geloescht_von"] = "admin"
+                t["geloescht_am"] = datetime.utcnow().isoformat()[:19]
+                flyer["pfad"] = t.pop("flyer_path", "") or ""
+                t.pop("flyer_url", None)
                 found[0] = True
                 break
-        data[verein_key] = liste
     from shared.kalender_store import KalenderStore
     KalenderStore.update(mutator)
     if not found[0]:
         return json.dumps({"error": "Termin nicht gefunden"}), 404, {"Content-Type": "application/json"}
+    if flyer["pfad"]:
+        delete_flyer(flyer["pfad"])
     log(f"Termin geloescht: {verein_key} / {old_datum} / {old_bezeichnung}")
     return json.dumps({"ok": True}, ensure_ascii=False), 200, {"Content-Type": "application/json; charset=utf-8"}
 
@@ -1249,6 +1256,7 @@ def api_ical_feed():
 
     now_stamp    = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
     vevent_lines = []
+    uids_vergeben: set = set()
 
     for t in kuenftige:
         try:
@@ -1271,6 +1279,17 @@ def api_ical_feed():
                 dtstart, dtend = _ics_zeiten(date(y, mo, d), "00:00", "")
 
         uid_raw = f"{t['datum']}-{re.sub(r'[^a-z0-9]', '', bezeichnung.lower()[:20])}-{vkey}@vereinskalender"
+        if uid_raw in uids_vergeben:
+            # Kollision (z. B. zwei „Hl. Messe“ am selben Tag): Der erste Termin behält seine
+            # bisherige UID (ADR-019: keine Doppelten in Abo-Kalendern), weitere bekommen eine
+            # stabile Endung aus Uhrzeit + Ort – vorher zeigten Kalender-Apps nur einen davon.
+            import hashlib
+            zusatz = hashlib.sha1(f"{uhrzeit}|{ort}|{bezeichnung}".encode()).hexdigest()[:8]
+            basis = uid_raw.replace("@vereinskalender", f"-{zusatz}")
+            uid_raw, n = f"{basis}@vereinskalender", 2
+            while uid_raw in uids_vergeben:
+                uid_raw, n = f"{basis}-{n}@vereinskalender", n + 1
+        uids_vergeben.add(uid_raw)
         beschr  = t.get("beschreibung", "")
         desc    = vereinname + (f"\n{ort}" if ort else "") + (f"\n\n{beschr}" if beschr else "")  # echte Zeilenumbrüche – _ics_escape() macht daraus "\n"
 

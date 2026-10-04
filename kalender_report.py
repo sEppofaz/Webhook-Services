@@ -140,7 +140,7 @@ def verein_stats() -> tuple[int, int]:
         if key.startswith("_") or not isinstance(items, list):
             continue
         gesamt += 1
-        if any(t.get("datum", "") >= heute for t in items):
+        if any(t.get("datum", "") >= heute and not t.get("geloescht") and not t.get("deleted") for t in items):
             aktiv += 1
     return gesamt, aktiv
 

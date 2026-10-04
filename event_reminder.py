@@ -61,7 +61,7 @@ def main():
             morgen_verein = []
             for key, label in verein_labels.items():
                 for t in data.get(key, []):
-                    if t.get("datum") == morgen:
+                    if t.get("datum") == morgen and not t.get("geloescht") and not t.get("deleted"):
                         morgen_verein.append((label, t))
             if morgen_verein:
                 zeilen.append("🏘️ Vereinstermin morgen!\n")

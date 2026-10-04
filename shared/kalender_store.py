@@ -1,5 +1,6 @@
 import fcntl
 import json
+import os
 import threading
 import uuid
 from pathlib import Path
@@ -68,8 +69,17 @@ class KalenderStore:
     def update(mutator: Callable[[dict], None]) -> dict:
         global _cache_data, _cache_mtime
         with _lock:
-            with open(VEREINSTERMINE_FILE, "r+") as fh:
+            while True:
+                fh = open(VEREINSTERMINE_FILE, "r+")
                 fcntl.flock(fh, fcntl.LOCK_EX)
+                # Ein anderer Prozess kann die Datei per replace() ausgetauscht haben, während
+                # wir auf den Lock warteten – dann hielten wir den Lock der alten Inode und
+                # läsen einen veralteten Stand. Also neu öffnen, bis Inode = aktuelle Datei.
+                if os.fstat(fh.fileno()).st_ino == os.stat(VEREINSTERMINE_FILE).st_ino:
+                    break
+                fcntl.flock(fh, fcntl.LOCK_UN)
+                fh.close()
+            with fh:
                 try:
                     data = json.load(fh)
                     mutator(data)
@@ -132,3 +142,56 @@ def register_verein(verein_key: str, verein_name: str, row=None) -> None:
             meta.setdefault(feld, wert)
 
     KalenderStore.update(_mutate)
+
+
+def uebertrage_key(source_key: str, target_key: str) -> int:
+    """Termine + `_meta` eines (Import-)Keys auf den Key eines Vereinsaccounts übertragen.
+
+    Eine Schreibstelle für Admin-Transfer und Telegram-„Verknüpfen“ (vorher zwei Kopien,
+    die Telegram-Variante setzte keinen Alias – Review 2026-10-04, Punkt 9). Der Alias
+    in `_heimat_aliases` sorgt dafür, dass der Gemeinde-Import künftige Termine gleich
+    unter dem Ziel-Key ablegt, statt den alten Key wieder anzulegen.
+    Gibt die Zahl übertragener Termine zurück. ValueError bei ungültigen Keys."""
+    if not source_key or not target_key or source_key.startswith("_") or target_key.startswith("_"):
+        raise ValueError("Ungültiger Key")
+    if source_key == target_key:
+        raise ValueError("source_key und target_key sind identisch")
+    stand = {"n": 0}
+
+    def _merge(data: dict) -> None:
+        src = data.pop(source_key, [])
+        if not isinstance(src, list):
+            src = []
+        stand["n"] = len(src)
+        merged = sorted(data.get(target_key, []) + src,
+                        key=lambda t: (t.get("datum", ""), t.get("bezeichnung", "")))
+        if merged:
+            data[target_key] = merged
+        meta = data.setdefault("_meta", {})
+        if source_key in meta:
+            if target_key not in meta:
+                meta[target_key] = meta.pop(source_key)
+            else:
+                for k, v in meta[source_key].items():
+                    if k not in meta[target_key] or not meta[target_key][k]:
+                        meta[target_key][k] = v
+                del meta[source_key]
+        data.setdefault("_labels", {}).pop(source_key, None)
+        aliase = data.setdefault("_heimat_aliases", {})
+        aliase[source_key] = target_key
+        for k, v in list(aliase.items()):   # Ketten A→source auf das neue Ziel umbiegen
+            if v == source_key:
+                aliase[k] = target_key
+
+    KalenderStore.update(_merge)
+    from shared.vk_db import db_conn
+    with db_conn() as conn:
+        # Abos: Duplikate (chat_id, target) vermeiden, sonst PRIMARY-KEY-Fehler
+        conn.execute(
+            "DELETE FROM tg_subscriptions WHERE verein_key = ? AND chat_id IN "
+            "(SELECT chat_id FROM tg_subscriptions WHERE verein_key = ?)",
+            (source_key, target_key),
+        )
+        conn.execute("UPDATE tg_subscriptions SET verein_key = ? WHERE verein_key = ?",
+                     (target_key, source_key))
+    return stand["n"]

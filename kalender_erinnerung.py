@@ -4,6 +4,7 @@ kalender_erinnerung.py
 Täglich 18:00: Sendet Telegram-Erinnerungen für morgige Termine an alle Abonnenten.
 """
 
+import html
 import json
 import sys
 import urllib.request
@@ -12,18 +13,16 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 sys.path.insert(0, "/opt/rename-webhook")
+from shared.secrets import load_secrets
 from shared.vk_db import tg_get_all_subscriptions
 
 VEREINSTERMINE_FILE = Path("/opt/rename-webhook/vereinstermine.json")
-BOT_TOKEN_FILE      = Path("/etc/pka/secrets.env")
 
 
 def load_kalender_bot_token() -> str:
-    for line in BOT_TOKEN_FILE.read_text().splitlines():
-        line = line.strip().lstrip("export").strip()
-        if line.startswith("KALENDER_BOT_TOKEN="):
-            return line.split("=", 1)[1].strip().strip('"').strip("'")
-    return ""
+    # Gemeinsamer Parser statt eigener Zeilenlogik (vorher lstrip("export") – Zeichen- statt
+    # Präfix-Entfernung, Review 2026-10-04)
+    return load_secrets().get("KALENDER_BOT_TOKEN", "")
 
 
 def split_telegram_message(text: str, limit: int = 4096) -> list[str]:
@@ -80,7 +79,9 @@ def main():
     for key, termine in data.items():
         if key.startswith("_") or not isinstance(termine, list):
             continue
-        treffer = [t for t in termine if t.get("datum") == morgen]
+        # Gelöschte (auch verworfene heimat-Importe, die als geloescht gespeichert sind) nie erinnern
+        treffer = [t for t in termine if isinstance(t, dict) and t.get("datum") == morgen
+                   and not t.get("geloescht") and not t.get("deleted")]
         if treffer:
             morgen_termine[key] = treffer
 
@@ -101,12 +102,14 @@ def main():
 
         zeilen = [f"🔔 <b>Morgen, {morgen_wt} {morgen_de}:</b>\n"]
         for key in relevante:
+            # parse_mode HTML: alle Inhalte escapen, sonst lehnt Telegram die ganze Nachricht ab
+            e = html.escape
             verein_name = labels.get(key, key)
-            zeilen.append(f"🏘️ <b>{verein_name}</b>")
+            zeilen.append(f"🏘️ <b>{e(verein_name)}</b>")
             for t in morgen_termine[key]:
-                uhrzeit = f"⏰ {t['uhrzeit']} Uhr\n" if t.get("uhrzeit") else ""
-                ort     = f"📍 {t['ort']}\n"         if t.get("ort")     else ""
-                zeilen.append(f"📋 {t.get('bezeichnung','')}\n{uhrzeit}{ort}")
+                uhrzeit = f"⏰ {e(t['uhrzeit'])} Uhr\n" if t.get("uhrzeit") else ""
+                ort     = f"📍 {e(t['ort'])}\n"         if t.get("ort")     else ""
+                zeilen.append(f"📋 {e(t.get('bezeichnung',''))}\n{uhrzeit}{ort}")
 
         zeilen.append("─────────────────")
         zeilen.append("Abos ändern: /abo · Abmelden: /stop")

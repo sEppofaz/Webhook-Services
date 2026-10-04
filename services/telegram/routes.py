@@ -29,7 +29,12 @@ from shared.kalender_core import (
 
 telegram_bp = Blueprint("telegram", __name__)
 
-TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "")
+from shared.telegram import cb_name, secret_ok, webhook_secret
+
+# Fail closed: ohne gültigen Secret-Header kein Update (sonst ließen sich /reboot,
+# Vereinsfreigaben usw. mit einem gefälschten Body auslösen – Review 2026-10-04)
+TELEGRAM_WEBHOOK_SECRET = webhook_secret(os.environ.get("TOKEN", ""),
+                                         os.environ.get("TELEGRAM_WEBHOOK_SECRET", ""))
 
 _DROPBOX_INVOICE_REFRESH_TOKEN = os.environ.get("DROPBOX_INVOICE_REFRESH_TOKEN", "")
 _DROPBOX_INVOICE_APP_KEY       = os.environ.get("DROPBOX_INVOICE_APP_KEY", "")
@@ -188,7 +193,7 @@ def _collect_verein_termine(bereich: str = "alle") -> str:
         label   = verein_labels.get(bereich, bereich.upper())
 
     kuenftige = sorted(
-        [t for t in termine if t.get("datum", "") >= heute],
+        [t for t in termine if t.get("datum", "") >= heute and not t.get("geloescht") and not t.get("deleted")],
         key=lambda t: (t["datum"], t.get("uhrzeit", ""))
     )
 
@@ -304,7 +309,7 @@ def webhook_todo():
 
 @telegram_bp.route("/telegram", methods=["POST"])
 def telegram_webhook():
-    if TELEGRAM_WEBHOOK_SECRET and request.headers.get("X-Telegram-Bot-Api-Secret-Token") != TELEGRAM_WEBHOOK_SECRET:
+    if not secret_ok(request.headers.get("X-Telegram-Bot-Api-Secret-Token"), TELEGRAM_WEBHOOK_SECRET):
         return "", 403
 
     data    = request.get_json(silent=True) or {}
@@ -550,7 +555,6 @@ def telegram_webhook():
             else:
                 try:
                     from shared.vk_db import db_conn as _db_conn
-                    from shared.kalender_store import KalenderStore
                     verein_id  = int(parts[1])
                     source_key = parts[2]
                     with _db_conn() as conn:
@@ -561,34 +565,9 @@ def telegram_webhook():
                     if not row:
                         answer_telegram_callback(cb_id, "❌ Verein nicht gefunden")
                     else:
-                        target_key  = row["verein_key"]
+                        from shared.kalender_store import uebertrage_key
                         verein_name = row["verein_name"]
-                        transferred = 0
-                        def _merge(data, sk=source_key, tk=target_key):
-                            nonlocal transferred
-                            src      = data.pop(sk, [])
-                            transferred = len(src)
-                            existing = data.get(tk, [])
-                            merged   = sorted(existing + src,
-                                              key=lambda t: (t.get("datum", ""), t.get("bezeichnung", "")))
-                            if merged:
-                                data[tk] = merged
-                            meta = data.setdefault("_meta", {})
-                            if sk in meta:
-                                if tk not in meta:
-                                    meta[tk] = meta.pop(sk)
-                                else:
-                                    for k, v in meta[sk].items():
-                                        if k not in meta[tk] or not meta[tk][k]:
-                                            meta[tk][k] = v
-                                    del meta[sk]
-                            data.setdefault("_labels", {}).pop(sk, None)
-                        KalenderStore.update(_merge)
-                        with _db_conn() as conn:
-                            conn.execute(
-                                "UPDATE tg_subscriptions SET verein_key=? WHERE verein_key=?",
-                                (target_key, source_key),
-                            )
+                        transferred = uebertrage_key(source_key, row["verein_key"])
                         answer_telegram_callback(cb_id, f"✅ {transferred} Termine übertragen")
                         send_telegram(TELEGRAM_CHAT_ID,
                             f"✅ Verknüpft: {source_key} → {verein_name}\n"
@@ -616,7 +595,9 @@ def telegram_webhook():
                     ).fetchone()
                     if not row:
                         answer_telegram_callback(cb_id, "⚠️ Bereits bearbeitet")
-                    elif expected_name and row["verein_name"][:30].replace(":", "_") != expected_name:
+                    elif expected_name and expected_name not in (
+                            cb_name(row["verein_name"]),                   # seit v1.44 (Byte-Grenze)
+                            row["verein_name"][:30].replace(":", "_")):    # ältere Nachrichten
                         answer_telegram_callback(cb_id, "⚠️ ID-Kollision – Verein nicht mehr identisch. Bitte neu prüfen.")
                     else:
                         if approve:

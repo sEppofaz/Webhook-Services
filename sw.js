@@ -1,4 +1,4 @@
-const CACHE = 'vko-v3';
+const CACHE = 'vko-v4';
 
 self.addEventListener('install', e => {
   e.waitUntil(
@@ -23,12 +23,17 @@ self.addEventListener('fetch', e => {
   // Icons + Manifest immer live – nie cachen
   if (/\.(png|ico|svg)$/.test(url.pathname) || url.pathname.includes('manifest')) return;
 
-  // App-Shell (Navigation): Network-first, Cache-Fallback
-  if (e.request.mode === 'navigate' || url.pathname === '/') {
+  // Nur die öffentliche App-Shell "/" cachen (Network-first, Cache-Fallback offline).
+  // Vereinsbereich und /admin nie: deren Seiten enthalten E-Mail-Adressen und blieben
+  // sonst nach dem Logout im Gerät liegen. Fehlerseiten (Wartung 503 usw.) nicht cachen.
+  if (e.request.method === 'GET' && url.pathname === '/') {
     e.respondWith(
       fetch(e.request)
         .then(res => {
-          caches.open(CACHE).then(c => c.put(e.request, res.clone()));
+          if (res.ok) {
+            const kopie = res.clone();
+            caches.open(CACHE).then(c => c.put('/', kopie));
+          }
           return res;
         })
         .catch(() => caches.match('/'))

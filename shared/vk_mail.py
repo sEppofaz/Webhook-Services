@@ -50,6 +50,10 @@ def _send(to_email: str, subject: str, html_body: str) -> bool:
     smtp_key  = os.environ.get("BREVO_SMTP_KEY", "")
     if not smtp_user or not smtp_key:
         return False
+    # Betreff enthält teils den Vereinsnamen (Formulareingabe) – keine Zeilenumbrüche in Header
+    subject = " ".join(str(subject).split())
+    if any(c in to_email for c in "\r\n"):
+        return False
     msg = MIMEMultipart("alternative")
     msg["Subject"]      = subject
     msg["From"]         = f"{FROM_NAME} <{FROM_EMAIL}>"
@@ -127,7 +131,7 @@ Falls du keine Zurücksetzung angefordert hast, ignoriere diese E-Mail.</p>"""
 def send_invite_email(to_email: str, token: str, verein_name: str) -> bool:
     link = f"{BASE_URL}/verein/einladung?token={token}"
     body = f"""<h2>Einladung zur Mitarbeit</h2>
-<p>Du wurdest eingeladen, den Vereinskalender für <strong>{verein_name}</strong> mitzuverwalten.</p>
+<p>Du wurdest eingeladen, den Vereinskalender für <strong>{html.escape(verein_name)}</strong> mitzuverwalten.</p>
 <a class="btn" href="{link}">Einladung annehmen</a>
 <p class="hint">Der Link ist <strong>48 Stunden</strong> gültig.</p>"""
     return _send(to_email, f"Einladung: {verein_name} – Vereinskalender", _html_wrap("Einladung", body))
@@ -138,7 +142,7 @@ def send_welcome_email(to_email: str, verein_name: str, gruss: str = "") -> bool
     upload_link = f"{BASE_URL}/verein/upload"
     profil_link = f"{BASE_URL}/verein/profil"
     body = f"""<h2>Willkommen beim Vereinskalender!</h2>
-<p>Das Konto für <strong>{verein_name}</strong> ist freigeschaltet. In drei Schritten seid ihr dabei:</p>
+<p>Das Konto für <strong>{html.escape(verein_name)}</strong> ist freigeschaltet. In drei Schritten seid ihr dabei:</p>
 <ol style="margin:12px 0 16px;padding-left:20px;color:#3c3c43;line-height:2;font-size:14px">
   <li><strong>Profil prüfen</strong> – PLZ, Ortschaft, Rubrik und Ansprechpartner kontrollieren:<br>
       <a href="{profil_link}" style="color:#6D28D9">{profil_link}</a></li>
@@ -155,7 +159,7 @@ def send_welcome_email(to_email: str, verein_name: str, gruss: str = "") -> bool
 
 def send_rejected_email(to_email: str, verein_name: str, gruss: str = "") -> bool:
     body = f"""<h2>Registrierung nicht angenommen</h2>
-<p>Die Registrierungsanfrage für <strong>{verein_name}</strong> konnte leider nicht bestätigt werden.</p>
+<p>Die Registrierungsanfrage für <strong>{html.escape(verein_name)}</strong> konnte leider nicht bestätigt werden.</p>
 <p>Bei Fragen wende dich direkt an den Kalender-Administrator.</p>"""
     return _send(to_email, f"Registrierungsanfrage – Vereinskalender", _html_wrap("Registrierung", _mit_gruss(body, gruss)))
 

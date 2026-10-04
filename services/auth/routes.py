@@ -11,7 +11,10 @@ from functools import wraps
 import bcrypt
 from flask import Blueprint, jsonify, make_response, redirect, request
 
-from shared.vk_db import SESSION_TIMEOUT_HOURS, create_session, db_conn, delete_session, get_session_user, init_db
+from shared.vk_db import (
+    SESSION_TIMEOUT_HOURS, create_session, db_conn, delete_session, delete_user_sessions,
+    get_session_user, init_db,
+)
 from shared.kalender_core import lookup_plz, _make_verein_key
 from shared.rubriken import RUBRIKEN
 from shared.csrf import csrf_field, get_csrf_token, validate_csrf
@@ -30,6 +33,8 @@ auth_bp = Blueprint("auth", __name__)
 
 UPLOAD_TOKEN = os.environ.get("UPLOAD_TOKEN", "")
 MAX_LOGIN_ATTEMPTS = 5
+# Cookies nur über HTTPS (Seite läuft ausschließlich per HTTPS/HSTS); Tests setzen False
+_COOKIE_SECURE = os.environ.get("VKO_COOKIE_INSECURE", "") != "1"
 LOCKOUT_MINUTES = 15
 
 # Kurzlebiger Pre-Auth-Store für Vereinsauswahl bei mehreren Accounts pro E-Mail
@@ -130,6 +135,8 @@ _PW_TOGGLE_JS = """<script>
 </script>"""
 
 def _page(title: str, body: str) -> str:
+    """Titel wird hier escapt (enthält teils den frei wählbaren Vereinsnamen), `body` ist fertiges HTML."""
+    title = html.escape(title)
     return f"""<!doctype html><html lang="de"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{title} – Vereinskalender</title>{_CSS}</head>
@@ -155,10 +162,19 @@ def require_verein_login(f):
 
 
 def _unique_verein_key(conn, verein_name: str) -> str:
+    """Key, der weder in der DB noch im Kalender (Termin-Keys, Labels, Aliase) vergeben ist.
+    Sonst übernähme ein neuer Account ohne Rückfrage fremde, importierte Termine – die
+    Zuordnung läuft bewusst über den „Verknüpfen“-Vorschlag an Josef (Review 2026-10-04)."""
+    from shared.kalender_store import KalenderStore
+    try:
+        data = KalenderStore.read()
+    except Exception:
+        data = {}
+    belegt = set(data) | set(data.get("_labels", {})) | set(data.get("_heimat_aliases", {}))
     base = _make_verein_key(verein_name)
     key = base
     for i in range(1, 20):
-        exists = conn.execute(
+        exists = key in belegt or conn.execute(
             "SELECT 1 FROM vereine_accounts WHERE verein_key = ?", (key,)
         ).fetchone()
         if not exists:
@@ -176,36 +192,40 @@ def _check_pw(pw: str, hashed: str) -> bool:
 
 
 def _valid_email(email: str) -> bool:
-    return bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email))
+    # Keine HTML-/Header-Sonderzeichen: Adresse landet in Seiten, Mail-Headern und Admin-Listen
+    return bool(re.match(r"^[^@\s<>\"'(),;:\\\[\]]+@[^@\s<>\"'(),;:\\\[\]]+\.[^@\s<>\"'(),;:\\\[\]]+$", email))
 
 
 def _telegram_approve_msg(verein_id: int, verein_name: str, email: str,
                            rubrik: str = "", heimatort: str = "", telefon: str = "",
                            plz: str = "", gemeinde: str = "", landkreis: str = "",
                            hinweise: list[str] | None = None, ansprechpartner: str = "") -> None:
-    lines = [f"🏛 Neuer Verein wartet auf Freigabe:\n<b>{verein_name}</b>"]
+    from shared.telegram import cb_name
+    e = html.escape   # parse_mode HTML: alle Formularwerte escapen
+    lines = [f"🏛 Neuer Verein wartet auf Freigabe:\n<b>{e(verein_name)}</b>"]
     if rubrik:
-        lines.append(f"Rubrik: {rubrik}")
+        lines.append(f"Rubrik: {e(rubrik)}")
     if heimatort:
-        lines.append(f"Ort: {plz} {heimatort}".replace("  ", " ").strip()
-                     + (f" ({gemeinde}, {landkreis})" if gemeinde else ""))
+        lines.append(e(f"Ort: {plz} {heimatort}".replace("  ", " ").strip()
+                       + (f" ({gemeinde}, {landkreis})" if gemeinde else "")))
     for h in hinweise or []:
-        lines.append(f"⚠️ {h}")
+        lines.append(f"⚠️ {e(h)}")
     if ansprechpartner:
-        lines.append(f"Ansprechpartner: {ansprechpartner}")
-    lines.append(f"E-Mail: {email}")
+        lines.append(f"Ansprechpartner: {e(ansprechpartner)}")
+    lines.append(f"E-Mail: {e(email)}")
     if telefon:
-        lines.append(f"Telefon: {telefon}")
+        lines.append(f"Telefon: {e(telefon)}")
     try:
         send_telegram_inline(
             os.environ.get("CHAT_ID", ""),
             "\n".join(lines),
             [
                 [
-                    {"text": "✅ Freigeben", "callback_data": f"verein_approve:{verein_id}:{verein_name[:30].replace(':', '_')}"},
-                    {"text": "❌ Ablehnen", "callback_data": f"verein_reject:{verein_id}:{verein_name[:30].replace(':', '_')}"},
+                    {"text": "✅ Freigeben", "callback_data": f"verein_approve:{verein_id}:{cb_name(verein_name)}"},
+                    {"text": "❌ Ablehnen", "callback_data": f"verein_reject:{verein_id}:{cb_name(verein_name)}"},
                 ]
             ],
+            parse_mode="HTML",
         )
     except Exception:
         pass
@@ -468,7 +488,7 @@ def register():
     <span style="background:#636366;color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0;margin-top:.1rem">2</span>
     <div>
       <div style="font-weight:600;font-size:.9rem">Administrator prüft die Anfrage</div>
-      <div style="color:#aeaeb2;font-size:.85rem">In der Regel innerhalb eines Tages. Du erhältst danach eine Bestätigungsmail. Falls dein Verein bereits Termine im Kalender hat, werden diese automatisch deinem Account zugeordnet.</div>
+      <div style="color:#aeaeb2;font-size:.85rem">In der Regel innerhalb eines Tages. Du erhältst danach eine Bestätigungsmail. Falls dein Verein bereits Termine im Kalender hat, ordnen wir sie bei der Prüfung deinem Account zu.</div>
     </div>
   </div>
   <div style="display:flex;gap:.75rem;align-items:flex-start">
@@ -539,8 +559,8 @@ document.querySelector('form').addEventListener('submit',function(e){{
   const btn=document.getElementById('reg-btn');
   this.querySelectorAll('input[required]:not([type=checkbox]),select[required]').forEach(f=>{{
     let bad=!f.value.trim();
-    if(!bad&&f.name==='plz')bad=!/^\d{{5}}$/.test(f.value.trim());
-    if(!bad&&f.name==='email')bad=!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.value.trim());
+    if(!bad&&f.name==='plz')bad=!/^\\d{{5}}$/.test(f.value.trim());
+    if(!bad&&f.name==='email')bad=!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(f.value.trim());
     if(!bad&&f.name==='password2'){{const p=this.querySelector('[name=password]');if(p)bad=f.value!==p.value;}}
     if(bad){{f.classList.add('field-err');if(!first)first=f;}}
   }});
@@ -697,13 +717,13 @@ def login():
                             choices = [(r["id"], r["verein_name"]) for r in usable]
                             preauth_token = _make_preauth(choices)
                             resp = make_response(redirect("/verein/login/verein-waehlen"))
-                            resp.set_cookie("vk_preauth", preauth_token, httponly=True, samesite="Lax", max_age=300)
+                            resp.set_cookie("vk_preauth", preauth_token, httponly=True, secure=_COOKIE_SECURE, samesite="Lax", max_age=300)
                             return resp
 
         if login_user_id is not None:
             session_token = create_session(login_user_id)
             resp = make_response(redirect("/verein/dashboard"))
-            resp.set_cookie("vk_session", session_token, httponly=True, samesite="Lax", max_age=SESSION_TIMEOUT_HOURS * 3600)
+            resp.set_cookie("vk_session", session_token, httponly=True, secure=_COOKIE_SECURE, samesite="Lax", max_age=SESSION_TIMEOUT_HOURS * 3600)
             return resp
 
     tok = get_csrf_token()
@@ -745,7 +765,7 @@ def login_verein_waehlen():
             return redirect("/verein/login")
         session_token = create_session(chosen_id)
         resp = make_response(redirect("/verein/dashboard"))
-        resp.set_cookie("vk_session", session_token, httponly=True, samesite="Lax", max_age=SESSION_TIMEOUT_HOURS * 3600)
+        resp.set_cookie("vk_session", session_token, httponly=True, secure=_COOKIE_SECURE, samesite="Lax", max_age=SESSION_TIMEOUT_HOURS * 3600)
         resp.delete_cookie("vk_preauth")
         return resp
 
@@ -842,6 +862,7 @@ def reset_password():
                     "UPDATE vk_users SET password_hash=?, reset_token=NULL, reset_token_expires=NULL, login_attempts=0, locked_until=NULL WHERE id=?",
                     (_hash_pw(pw), row["id"]),
                 )
+                delete_user_sessions(row["id"], conn=conn)  # ggf. gekaperte Sessions beenden
                 return redirect("/verein/login?hint=reset")
 
     tok = get_csrf_token()
@@ -981,31 +1002,53 @@ def admin_update_verein(verein_id: int):
     body = request.get_json(silent=True) or {}
     with db_conn() as conn:
         row = conn.execute(
-            "SELECT id, verein_key FROM vereine_accounts WHERE id = ?", (verein_id,)
+            "SELECT id, verein_key, verein_name, heimatort, plz FROM vereine_accounts WHERE id = ?", (verein_id,)
         ).fetchone()
-        if not row:
-            return {"error": "Nicht gefunden"}, 404
-        verein_key = row["verein_key"]
-        fields = {}
-        for f in ("verein_name", "rubrik", "heimatort", "plz", "gemeinde", "landkreis"):
-            if f in body:
-                fields[f] = (body[f] or "").strip() or None
-        if "plz" in fields and fields["plz"]:
-            import re as _re
-            if not _re.match(r"^\d{5}$", fields["plz"]):
-                fields.pop("plz")
-        if fields:
-            set_clause = ", ".join(f"{k} = ?" for k in fields)
+    if not row:
+        return {"error": "Nicht gefunden"}, 404
+    verein_key = row["verein_key"]
+    fields = {}
+    for f in ("verein_name", "rubrik", "heimatort", "plz", "gemeinde", "landkreis"):
+        if f in body:
+            fields[f] = (body[f] or "").strip() or None
+    if fields.get("plz") and not re.match(r"^\d{5}$", fields["plz"]):
+        fields.pop("plz")
+    if "verein_name" in fields and not fields["verein_name"]:
+        fields.pop("verein_name")  # Name nie leeren
+    # Ort geändert → Gemeinde/Landkreis neu bestimmen (wie im Vereinsprofil), außer der
+    # Admin gibt sie selbst mit (Netzwerk-Fallback vor allen Schreibzugriffen)
+    neuer_ort = fields.get("heimatort", row["heimatort"])
+    neue_plz = fields.get("plz", row["plz"])
+    if (("heimatort" in fields and fields["heimatort"] != row["heimatort"])
+            or ("plz" in fields and fields["plz"] != row["plz"])) and neuer_ort and neue_plz \
+            and "gemeinde" not in fields and "landkreis" not in fields:
+        gem, lk, _ = ortschaft_geo(neuer_ort, neue_plz)
+        fields["gemeinde"], fields["landkreis"] = gem or None, lk or None
+    if fields:
+        set_clause = ", ".join(f"{k} = ?" for k in fields)
+        with db_conn() as conn:
             conn.execute(
                 f"UPDATE vereine_accounts SET {set_clause} WHERE id = ?",
                 list(fields.values()) + [verein_id],
             )
-    if fields.get("verein_name") and verein_key:
-        new_name = fields["verein_name"]
+    if fields and verein_key:
+        # Kalender liest `_labels`/`_meta` aus vereinstermine.json, und `_meta` hat dort Vorrang
+        # vor der DB – ohne diesen Abgleich wirkte die Änderung nicht (Review 2026-10-04, Punkt 8)
         from shared.kalender_store import KalenderStore
-        def _rename_label(d, vk=verein_key, new_name=new_name):
-            d.setdefault("_labels", {})[vk] = new_name
-        KalenderStore.update(_rename_label)
+
+        def _sync(d, vk=verein_key, felder=dict(fields)):
+            if felder.get("verein_name"):
+                d.setdefault("_labels", {})[vk] = felder["verein_name"]
+            if vk not in d.get("_labels", {}):
+                return  # (noch) nicht im Kalender – register_verein übernimmt bei Freigabe
+            m = d.setdefault("_meta", {}).setdefault(vk, {})
+            for k in ("rubrik", "heimatort", "plz", "gemeinde", "landkreis"):
+                if k in felder:
+                    if felder[k]:
+                        m[k] = felder[k]
+                    else:
+                        m.pop(k, None)
+        KalenderStore.update(_sync)
     return {"ok": True}
 
 
@@ -1098,36 +1141,11 @@ def admin_transfer_key(verein_id: int):
         target_key = row["verein_key"]
         if not target_key:
             return {"error": "Account hat noch keinen verein_key"}, 400
-    if source_key == target_key:
-        return {"error": "source_key und target_key sind identisch"}, 400
-    transferred = 0
-    from shared.kalender_store import KalenderStore
-    def _merge(data):
-        nonlocal transferred
-        source_termine = data.pop(source_key, [])
-        transferred = len(source_termine)
-        existing = data.get(target_key, [])
-        merged = sorted(existing + source_termine,
-                        key=lambda t: (t.get("datum", ""), t.get("bezeichnung", "")))
-        if merged:
-            data[target_key] = merged
-        meta = data.setdefault("_meta", {})
-        if source_key in meta:
-            if target_key not in meta:
-                meta[target_key] = meta.pop(source_key)
-            else:
-                for k, v in meta[source_key].items():
-                    if k not in meta[target_key] or not meta[target_key][k]:
-                        meta[target_key][k] = v
-                del meta[source_key]
-        data.setdefault("_labels", {}).pop(source_key, None)
-        data.setdefault("_heimat_aliases", {})[source_key] = target_key
-    KalenderStore.update(_merge)
-    with db_conn() as conn:
-        conn.execute(
-            "UPDATE tg_subscriptions SET verein_key = ? WHERE verein_key = ?",
-            (target_key, source_key),
-        )
+    from shared.kalender_store import uebertrage_key
+    try:
+        transferred = uebertrage_key(source_key, target_key)
+    except ValueError as e:
+        return {"error": str(e)}, 400
     return {"ok": True, "transferred": transferred}
 
 

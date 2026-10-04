@@ -151,8 +151,11 @@ def _log(msg: str) -> None:
     ts   = datetime.now().isoformat(timespec="seconds")
     line = f"{ts} {msg}"
     print(line)
-    with open(LOG_FILE, "a") as f:
-        f.write(line + "\n")
+    try:   # Log-Datei fehlt/gehört root (Aufruf aus dem Dienst) → nur stdout, nie abbrechen
+        with open(LOG_FILE, "a") as f:
+            f.write(line + "\n")
+    except OSError:
+        pass
 
 
 def _fetch_org_name(org_id: str) -> str:
@@ -454,13 +457,13 @@ def do_import(uid: str, verein_keys: list | None = None,
             remaining = [e for e in events if e["_verein_key"] not in filter_keys]
             if any(e.get("_neu") for e in remaining):   # nur Duplikate übrig → erledigt
                 pending["events"] = remaining
-                pending_file.write_text(json.dumps(pending, ensure_ascii=False))
+                _schreibe_pending(pending_file, pending)
             else:
                 pending_file.unlink(missing_ok=True)
         else:
             pending_file.unlink(missing_ok=True)
-    except OSError:
-        pass
+    except OSError as ex:
+        _log(f"⚠️  Pending-Datei {pending_file.name} nicht aktualisiert: {ex}")
     return f"✅ {neu} neue Termine importiert, {duplikat} Duplikate übersprungen"
 
 
@@ -512,11 +515,11 @@ def do_reject(uid: str, verein_keys: list | None = None) -> str:
     try:
         if any(e.get("_neu") for e in remaining):   # nur Duplikate übrig → erledigt
             pending["events"] = remaining
-            pending_file.write_text(json.dumps(pending, ensure_ascii=False))
+            _schreibe_pending(pending_file, pending)
         else:
             pending_file.unlink()
-    except OSError:
-        pass
+    except OSError as ex:
+        _log(f"⚠️  Pending-Datei {pending_file.name} nicht aktualisiert: {ex}")
     return f"🗑 {len(verein_keys)} Verein(e) verworfen"
 
 
@@ -528,6 +531,23 @@ def _cfg() -> dict:
         return load_secrets()
     except Exception:
         return dict(os.environ)
+
+
+def _schreibe_pending(pfad: Path, inhalt: dict) -> None:
+    """Pending-Datei atomar schreiben, Besitzer = Besitzer von imports/.
+
+    Der Wochenlauf läuft als root, Bestätigen/Verwerfen im Dienst (webhook). Ein direktes
+    write_text auf eine root-Datei scheiterte dort still – schon übernommene Vereine
+    erschienen dann wieder als „neu“ (Review 2026-10-04, Punkt 13). rename() braucht nur
+    Schreibrecht im Verzeichnis, das webhook gehört."""
+    tmp = pfad.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(inhalt, ensure_ascii=False))
+    try:
+        st = pfad.parent.stat()
+        os.chown(tmp, st.st_uid, st.st_gid)
+    except OSError:
+        pass
+    tmp.replace(pfad)
 
 
 def _lade_gemeinden() -> list:
@@ -680,12 +700,12 @@ def fetch_and_save_pending(gemeinden_filter: list | None = None,
     alle_events.sort(key=lambda x: (x["datum"], x.get("uhrzeit", "")))
     uid = str(uuid.uuid4())[:8]
     quellen = list(dict.fromkeys(e["quelle"] for e in alle_events))
-    (PENDING_DIR / f"heimat_pending_{uid}.json").write_text(json.dumps({
+    _schreibe_pending(PENDING_DIR / f"heimat_pending_{uid}.json", {
         "uid":     uid,
         "quelle":  ", ".join(quellen),
         "erzeugt": datetime.now().isoformat(timespec="seconds"),
         "events":  alle_events,
-    }, ensure_ascii=False))
+    })
 
     neu = sum(1 for e in alle_events if e["_neu"])
     dup = sum(1 for e in alle_events if not e["_neu"])

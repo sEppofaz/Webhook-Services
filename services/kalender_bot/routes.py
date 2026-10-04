@@ -1,9 +1,11 @@
+import html
 import json
 import os
 
 from flask import Blueprint, request
 
 from shared.kalender_core import VEREINSTERMINE_FILE, log
+from shared.telegram import secret_ok, webhook_secret
 from shared.vk_db import (
     tg_get_subscriptions, tg_subscribe, tg_unsubscribe, tg_unsubscribe_all
 )
@@ -11,6 +13,7 @@ from shared.vk_db import (
 kalender_bot_bp = Blueprint("kalender_bot", __name__)
 
 KALENDER_BOT_TOKEN = os.environ.get("KALENDER_BOT_TOKEN", "")
+KALENDER_BOT_SECRET = webhook_secret(KALENDER_BOT_TOKEN)
 
 
 def _split_telegram_message(text, limit=4096):
@@ -111,6 +114,8 @@ def _verein_auswahl_keyboard(chat_id: str, labels: dict) -> list:
 
 @kalender_bot_bp.route("/kalender-bot", methods=["POST"])
 def kalender_bot_webhook():
+    if not secret_ok(request.headers.get("X-Telegram-Bot-Api-Secret-Token"), KALENDER_BOT_SECRET):
+        return "", 403
     data = request.get_json(silent=True) or {}
 
     # ── Text-Nachrichten ─────────────────────────────────────────────────────
@@ -154,7 +159,7 @@ def kalender_bot_webhook():
                 )
             else:
                 namen = [labels.get(k, k) for k in abos]
-                liste = "\n".join(f"• {n}" for n in namen)
+                liste = "\n".join(f"• {html.escape(n)}" for n in namen)
                 _bot_send(chat_id,
                     f"📋 <b>Deine Abonnements ({len(abos)}):</b>\n\n{liste}\n\n"
                     "Mit /abo kannst du Vereine hinzufügen oder entfernen.\n"
@@ -210,7 +215,7 @@ def kalender_bot_webhook():
                 )
             else:
                 namen = [labels.get(k, k) for k in abos]
-                liste = "\n".join(f"• {n}" for n in namen)
+                liste = "\n".join(f"• {html.escape(n)}" for n in namen)
                 _bot_send(cb_chat,
                     f"📋 <b>Deine Abonnements ({len(abos)}):</b>\n\n{liste}\n\n"
                     "Abos ändern: /abo · Alle löschen: /stop"
@@ -237,7 +242,7 @@ def kalender_bot_webhook():
                 _bot_send(cb_chat, "Du hast noch keine Vereine ausgewählt.\nTippe /abo um die Auswahl erneut zu öffnen.")
             else:
                 namen = [labels.get(k, k) for k in abos]
-                liste = "\n".join(f"• {n}" for n in namen)
+                liste = "\n".join(f"• {html.escape(n)}" for n in namen)
                 _bot_answer_callback(cb_id, "Gespeichert!")
                 _bot_send(cb_chat,
                     f"✅ <b>Gespeichert!</b>\n\n"

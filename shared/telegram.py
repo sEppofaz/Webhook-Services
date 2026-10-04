@@ -41,3 +41,31 @@ def send_telegram_inline(token: str, chat_id: str | int, text: str, keyboard: li
         if i == len(parts) - 1:
             payload["reply_markup"] = {"inline_keyboard": keyboard}
         _post(token, payload)
+
+
+def webhook_secret(bot_token: str, explizit: str = "") -> str:
+    """Secret für `X-Telegram-Bot-Api-Secret-Token` (Review 2026-10-04, Punkt 2).
+
+    Ohne eigenes Secret in secrets.env aus dem Bot-Token abgeleitet – so kennen
+    Flask (Token aus EnvironmentFile) und telegram_webhook_guard.py (setzt es per
+    setWebhook) denselben Wert, ohne dass ein weiteres Secret gepflegt werden muss.
+    Leerer Token → leeres Secret (Endpunkt lehnt dann alles ab)."""
+    if explizit:
+        return explizit
+    if not bot_token:
+        return ""
+    import hashlib
+    import hmac
+    return hmac.new(bot_token.encode(), b"vko-telegram-webhook", hashlib.sha256).hexdigest()
+
+
+def secret_ok(header_wert: str | None, erwartet: str) -> bool:
+    import hmac
+    return bool(erwartet) and hmac.compare_digest((header_wert or "").encode(), erwartet.encode())
+
+
+def cb_name(name: str, max_bytes: int = 30) -> str:
+    """Vereinsname für callback_data (Telegram-Limit 64 Byte gesamt): ohne ':' und auf
+    max_bytes UTF-8-Bytes gekürzt, ohne ein Zeichen zu zerschneiden."""
+    roh = (name or "").replace(":", "_").encode("utf-8")[:max_bytes]
+    return roh.decode("utf-8", errors="ignore")
