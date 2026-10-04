@@ -1674,6 +1674,8 @@ function _renderFavHint(){
   el.innerHTML=`<div class="fav-hint"><strong>${icon("heart",13,true)} Favoriten-Ansicht</strong>Es werden nur deine aktiven Favoriten gezeigt. Region, Gemeinde, Ortschaft, Verein und Rubrik sind pausiert &ndash; Zeitraum und Suche gelten weiter.<button class="fav-hint-btn" onclick="favModeOff()">Favoriten ausschalten</button></div>`;
 }
 
+// Icon immer aus dem Typ – ältere Favoriten haben im localStorage noch Emojis als „icon“ (BKM: nur Lucide), v1.47
+const FAV_ICON={verein:"house",ortschaft:"mapPin",region:"map",gemeinde:"landmark"};
 function renderFavBar(){
   _renderFavHint();
   const el=document.getElementById("fav-bar");
@@ -1686,7 +1688,7 @@ function renderFavBar(){
     const on=activeFavs.has(id);
     const key=String(f.key).replace(/"/g,"&quot;").replace(/'/g,"&#39;");
     const rmBtn=`<span onclick="event.stopPropagation();removeFavorite('${f.type}','${key}')" style="margin-left:4px;opacity:.55;display:inline-flex;align-items:center;vertical-align:middle">${icon("x",11)}</span>`;
-    return `<span class="chip${on?" on":""}" data-ftype="${f.type}" data-fkey="${key}">${f.icon||""} ${escHtml(f.label)}${rmBtn}</span>`;
+    return `<span class="chip${on?" on":""}" data-ftype="${f.type}" data-fkey="${key}">${icon(FAV_ICON[f.type]||"heart",14)} ${escHtml(f.label)}${rmBtn}</span>`;
   }).join("");
 }
 
@@ -1735,7 +1737,7 @@ function toggleFavGemeinde(g){
   const gLabel=_gemLabel(g);
   const fi=favorites.findIndex(f=>f.type==="gemeinde"&&f.key===g);
   if(fi>=0){favorites.splice(fi,1);activeFavs.delete("gemeinde:"+g);}
-  else{favorites.push({type:"gemeinde",key:g,label:gLabel,icon:icon("mapPin")});activeFavs.add("gemeinde:"+g);}
+  else{favorites.push({type:"gemeinde",key:g,label:gLabel,icon:icon("landmark")});activeFavs.add("gemeinde:"+g);}
   saveFavorites();saveActiveFavs();
   renderFavBar();updateAllBadges();render();
   buildGemeindeFilter();applyStateToUI();
@@ -3987,7 +3989,7 @@ function showInfoModal(){
         <span class="help-icon">${icon("scale",20)}</span>
         <div><strong>Impressum</strong><span>Josef Fischer &middot; H&ouml;lskofen 13 &middot; 84092 Bayerbach b. Ergoldsbach<br><a href="mailto:Vereinskalender@icloud.com" style="color:var(--accent);text-decoration:none">Vereinskalender@icloud.com</a></span></div>
       </div>
-      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.46 &middot; 2026-10-04 &middot; a sEpp-App</p>
+      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.47 &middot; 2026-10-04 &middot; a sEpp-App</p>
       <button onclick="document.getElementById('info-modal').remove()" style="width:100%;margin-top:16px;padding:12px;background:none;border:1.5px solid var(--border2);border-radius:12px;font-size:14px;color:var(--text2);cursor:pointer">Schlie&szlig;en</button>
     </div>`;
   document.body.appendChild(m);
