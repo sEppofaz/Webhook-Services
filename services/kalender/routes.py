@@ -1611,7 +1611,7 @@ def api_admin_orte():
                 if not g["orte"]:
                     ohne_ortsangabe += 1
                 continue
-            if g.get("quelle") in ("ort", "zuordnung"):
+            if g.get("quelle") in ("ort", "zuordnung", "ausflug"):
                 continue
             gk = (_ort_norm(ort), _gem_norm(m.get("gemeinde", "")).casefold())
             grp = gruppen.setdefault(gk, {
@@ -1664,23 +1664,28 @@ def api_admin_orte_zuordnung():
         log(f"🗺  Ort-Zuordnung gelöscht: {ort!r} ({verein or gemeinde}) – {weg['n']}")
         return _json_antwort({"ok": True, "geloescht": weg["n"]})
 
-    ziel = eintrag_fuer(str(body.get("ortschaft") or ""))
-    if not ziel:
+    ausflug = bool(body.get("ausflug"))
+    ziel = None if ausflug else eintrag_fuer(str(body.get("ortschaft") or ""))
+    if not ausflug and not ziel:
         return _json_antwort({"error": "Unbekannte Ortschaft"}, 400)
 
     def _setzen(d):
         if verein and verein not in d.get("_labels", {}):
             raise ValueError("Unbekannter Verein")
         liste = [z for z in d.get("_orte_zuordnung", []) if not gleich(z)]
-        liste.append({"ort": ort, "gemeinde": gemeinde, "verein": verein, "ortschaft": ziel["ort"],
-                      "am": datetime.now().isoformat(timespec="seconds")})
+        eintrag = {"ort": ort, "gemeinde": gemeinde, "verein": verein,
+                   "ortschaft": "" if ausflug else ziel["ort"], "am": datetime.now().isoformat(timespec="seconds")}
+        if ausflug:
+            eintrag["ausflug"] = True
+        liste.append(eintrag)
         d["_orte_zuordnung"] = liste
     try:
         KalenderStore.update(_setzen)
     except ValueError as e:
         return _json_antwort({"error": str(e)}, 400)
-    log(f"🗺  Ort-Zuordnung: {ort!r} → {ziel['ort']} ({verein or gemeinde})")
-    return _json_antwort({"ok": True, "ortschaft": ziel["ort"]})
+    ziel_text = "Ausflugsziel" if ausflug else ziel["ort"]
+    log(f"🗺  Ort-Zuordnung: {ort!r} → {ziel_text} ({verein or gemeinde})")
+    return _json_antwort({"ok": True, "ortschaft": "" if ausflug else ziel["ort"], "ausflug": ausflug})
 
 
 @kalender_bp.route("/api/admin/importe/status", methods=["GET"])

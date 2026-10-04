@@ -210,6 +210,13 @@ def test_landkreis_abgleich():
            "nur exakter Text, kein Teiltreffer")
     pruefe(geo_fuer_termin({"ort": "Haus der Generationen"}, srm, "", zu)["quelle"] == "ort",
            "Namen im Text gehen vor (quelle=ort)")
+    zu2 = zu + [{"ort": "Christkindlmarkt Kufstein", "gemeinde": "Ergoldsbach", "verein": "", "ortschaft": "", "ausflug": True}]
+    lhe = {**lh, "gemeinde": "Markt Ergoldsbach"}
+    ga = geo_fuer_termin({"ort": "Christkindlmarkt Kufstein", "ortschaft": "Ergoldsbach", "verein": "ksk"}, lhe, "", zu2)
+    pruefe(ga["orte"] == ["Ergoldsbach"] and ga["quelle"] == "ausflug",
+           "Ausflugsziel bleibt bei der bisherigen Ortschaft, quelle=ausflug", ga)
+    pruefe(geo_fuer_termin({"ort": "Christkindlmarkt Kufstein", "ortschaft": "Ergoldsbach"}, lh, "", zu2)["quelle"] == "ortschaft",
+           "Ausflugs-Markierung nur in ihrer Gemeinde")
     from shared.geo import ortschaft_aus_name as oan
     faelle = [("Freiwillige Feuerwehr Oberlindhart", "Mallersdorf-Pfaffenberg", "Oberlindhart"),
               ("Oberlindharther Theaterbrettl", "Mallersdorf-Pfaffenberg", "Oberlindhart"),

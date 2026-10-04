@@ -166,11 +166,12 @@ def _ort_norm(text: str) -> str:
     return re.sub(r"\s+", " ", str(text or "")).strip().casefold()
 
 
-def zuordnung_fuer(ort: str, verein: str, gemeinde: str, zuordnung: list | None) -> dict | None:
-    """Register-Eintrag aus einer Admin-Zuordnung (`_orte_zuordnung` in vereinstermine.json, v1.42).
+def zuordnung_treffer(ort: str, verein: str, gemeinde: str, zuordnung: list | None) -> dict | None:
+    """Passende Admin-Zuordnung (`_orte_zuordnung` in vereinstermine.json, v1.42) oder None.
 
     Gilt für den exakten Ortstext (Groß/Klein und Leerzeichen egal). Eine Zuordnung nur für
-    einen Verein schlägt die für die ganze Gemeinde.
+    einen Verein schlägt die für die ganze Gemeinde. `ausflug: true` (v1.43) markiert ein
+    Ausflugsziel ohne eigene Ortschaft.
     """
     n = _ort_norm(ort)
     if not n or not zuordnung:
@@ -178,12 +179,18 @@ def zuordnung_fuer(ort: str, verein: str, gemeinde: str, zuordnung: list | None)
     passend = [z for z in zuordnung if isinstance(z, dict) and _ort_norm(z.get("ort")) == n]
     for z in passend:
         if z.get("verein") and z["verein"] == verein:
-            return eintrag_fuer(z.get("ortschaft", ""))
+            return z
     gem = _gem_norm(gemeinde).casefold()
     for z in passend:
         if not z.get("verein") and gem and _gem_norm(z.get("gemeinde", "")).casefold() == gem:
-            return eintrag_fuer(z.get("ortschaft", ""))
+            return z
     return None
+
+
+def zuordnung_fuer(ort: str, verein: str, gemeinde: str, zuordnung: list | None) -> dict | None:
+    """Register-Eintrag der passenden Admin-Zuordnung (None auch bei Ausflugszielen)."""
+    z = zuordnung_treffer(ort, verein, gemeinde, zuordnung)
+    return eintrag_fuer(z.get("ortschaft", "")) if z and not z.get("ausflug") else None
 
 
 def geo_fuer_termin(termin: dict, meta_eintrag: dict | None = None,
@@ -213,11 +220,14 @@ def geo_fuer_termin(termin: dict, meta_eintrag: dict | None = None,
     eintraege = treffer_im_text(termin.get("ort", ""))
     quelle = "ort" if eintraege else ""
 
+    ausflug = False
     if not eintraege:
-        z = zuordnung_fuer(termin.get("ort", ""), termin.get("verein") or termin.get("_vkey") or "",
-                           (meta_eintrag or {}).get("gemeinde", ""), zuordnung)
-        if z:
-            eintraege, quelle = [z], "zuordnung"
+        z = zuordnung_treffer(termin.get("ort", ""), termin.get("verein") or termin.get("_vkey") or "",
+                              (meta_eintrag or {}).get("gemeinde", ""), zuordnung)
+        if z and z.get("ausflug"):
+            ausflug = True      # Ausflugsziel: Ortschaft wie bisher aus Feld/Heimatort (Treffpunkt)
+        elif z and eintrag_fuer(z.get("ortschaft", "")):
+            eintraege, quelle = [eintrag_fuer(z["ortschaft"])], "zuordnung"
 
     if not eintraege:
         # Keine Ortschaft vor der PLZ: den Ort hinter der PLZ prüfen
@@ -256,9 +266,11 @@ def geo_fuer_termin(termin: dict, meta_eintrag: dict | None = None,
         elif heimat:
             eintraege, quelle = [heimat], "heimat"
 
+    if ausflug and quelle != "ort":
+        quelle = "ausflug"
     if not eintraege:
         return {"orte": [], "ortschaften": [], "plz": [], "gemeinden": [], "landkreise": [],
-                "bundeslaender": [], "quelle": ""}
+                "bundeslaender": [], "quelle": quelle if ausflug else ""}
 
     def sammeln(feld):
         gesehen, out = set(), []
@@ -280,7 +292,8 @@ def geo_fuer_termin(termin: dict, meta_eintrag: dict | None = None,
         "landkreise":    sammeln("landkreis"),
         "bundeslaender": sammeln("bundesland"),
         # Herkunft: "ort" (Name im Ortstext), "zuordnung" (Admin-Tab „Orte“),
-        # "ortschaft" (Feld ortschaft) oder "heimat" (Heimatort des Vereins – nur geraten)
+        # "ortschaft" (Feld ortschaft), "heimat" (Heimatort des Vereins – nur geraten) oder
+        # "ausflug" (Admin: Ausflugsziel, Ortschaft bleibt die aus Feld/Heimatort)
         "quelle":        quelle,
     }
 
