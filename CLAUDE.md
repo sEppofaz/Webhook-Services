@@ -166,6 +166,9 @@ Gottesdienste aus `gottesdienste.json` erreichen die Abonnenten also **nicht**. 
 | `/api/admin/importe` | GET – Pending-Liste |
 | `/api/admin/importe/<uid>` | GET/confirm/reject – Import-Detail |
 | `/api/admin/importe/trigger` | POST – Import-Trigger (SSRF-Schutz: nur HTTPS, keine privaten IPs) |
+| `/api/admin/importe/status` | GET – Ergebnis des letzten Admin-Triggers (`imports/letzter_lauf.json`) |
+| `/api/admin/orte` | GET – Admin-Tab „Orte“: offene Veranstaltungsorte, Zuordnungen, feste Orte, Ortschaften |
+| `/api/admin/orte/zuordnung` | POST/DELETE – Ort → Ortschaft zuordnen bzw. löschen (`{ort, gemeinde, verein?, ortschaft}`) |
 | `/api/vereine` | GET/POST – Vereine + Meta |
 | `/api/vereine/<key>` | DELETE – Verein löschen |
 | `/api/admin/stats` | GET – Statistiken (Auth) |
@@ -175,7 +178,7 @@ Gottesdienste aus `gottesdienste.json` erreichen die Abonnenten also **nicht**. 
 | `/api/admin/unregistered-keys` | GET – Keys in vereinstermine.json ohne Account (für Transfer-Dropdown) |
 | `/api/admin/verein/<id>/transfer-key` | POST `{source_key}` – Termine + _meta + _labels + tg_subscriptions übertragen |
 | `/upload` | Superadmin-Upload (PDF/JPG/PNG/HEIC/Excel) |
-| `/#admin` | Admin-PWA (Tabs: Import/Importe/Vereine/Accounts/Termine/Stats) |
+| `/#admin` | Admin-PWA (Tabs: Import/Importe/Vereine/Accounts/Termine/Stats/Verknüpfen/Orte) |
 | `/verein/register` | Selbstregistrierung (PLZ → Ortschaft, Ansprechpartner, ADR-016) |
 | `/verein/profil` | Vereinsprofil: alle Registrierungsdaten, E-Mail-Wechsel mit Bestätigung |
 | `/verein/email-bestaetigen` | GET `?token=` – Link aus der Mail an die neue Adresse (24 h, einmalig) |
@@ -363,6 +366,7 @@ python3 tests/test_geo.py --register  # Register mit Herkunft und Nutzung je Ort
      sie gleichnamige Orte in ganz Bayern. Kleine Ortsteile fehlen dort ganz.
 - **Register ist global, ohne Regionsbezug:** ein Ortsname trifft als Wort in *jedem* Veranstaltungsort, egal welcher Landkreis. Mit Mallersdorf-Pfaffenberg kamen Allerweltsnamen dazu (Klause, Westen, Weinberg, Waldhof, Neuburg, Ried, Holzen, Winkl …): „Gasthaus zur Klause, Ergoldsbach" würde zusätzlich der Mallersdorfer Einöde Klause zugeordnet. Am 2026-10-04 gegen alle 519 Live-Termine geprüft: kein Fehltreffer. Vor dem Eintragen einer weiteren Gemeinde dieselbe Prüfung machen (Namen gegen `/api/termine`-Orte). **Seit v1.40 abgefedert:** `geo_fuer_termin()` behält bei Treffern aus mehreren Landkreisen nur die im Landkreis des Vereins (`_meta.landkreis`). Ein *einzelner* fremder Treffer bleibt (Vereinsausflug) – „Gasthaus zur Klause“ ohne Ortsnamen landete also weiter in Mallersdorf.
 - **Gebäude ohne Ortsnamen:** in `orte_frei.json` nur eindeutige Namen (Haus der Generationen/HDG, Gasthaus Ganser, Sportzentrum Igeltal → Mallersdorf). **Nie Allerweltswörter wie „Rathaus“** – das träfe jedes Rathaus. Stattdessen den Heimatort des Vereins setzen: `markt_mallersdorf_pfaffenberg` hat `_meta.heimatort = "Mallersdorf"` (Rathaus liegt dort, Josef 2026-10-04), seine Termine ohne Ortsnamen fallen darauf zurück.
+- **Admin-Tab „Orte“ (seit v1.42, ADR-021):** Zuordnungen stehen in `vereinstermine.json` unter `_orte_zuordnung` – Liste `{ort, gemeinde, verein, ortschaft, am}`, `verein` leer = gilt für alle Vereine der Gemeinde (`gemeinde` per `_gem_norm`, ohne „Markt“/„Gemeinde“). Treffer nur bei **exaktem** Ortstext (Groß/Klein, Leerzeichen egal, kein Teiltreffer); Vereins-Zuordnung schlägt Gemeinde-Zuordnung. Reihenfolge in `geo_fuer_termin()`: Ortsname im Text → Admin-Zuordnung → PLZ-Schwanz → Feld `ortschaft` → Heimatort. Neues Feld `_geo.quelle` (`ort`/`zuordnung`/`ortschaft`/`heimat`/leer) – der Tab listet alles außer `ort`/`zuordnung`, also auch nur *geratene* Ortschaften. **Jeder Aufrufer muss `raw.get("_orte_zuordnung")` mitgeben** (heute `/api/termine` und iCal `?ort=`), sonst greifen die Zuordnungen dort nicht. `orte_frei.json` bleibt für fest kuratierte, eindeutige Namen (Wortsuche, überall).
 - Bestätigte Einträge tragen `geprueft: "<Datum>"`; `--register` weist sie aus, damit sie
   nicht erneut geprüft werden.
 - **`t.ortschaft` ist als Ortsangabe unzuverlässig:** `heimat_import.py:398` schreibt dort
