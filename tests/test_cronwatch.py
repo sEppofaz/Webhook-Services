@@ -239,6 +239,22 @@ def test_registry():
         pruefe(True, "Lieferzustand: alle Jobs unbeobachtet (kein Alarmsturm beim ersten Lauf)")
 
 
+def test_monatstag():
+    print("\nTakt Monatstag")
+    job = {"name": "geo", "at": ["04:00"], "monatstage": [1], "grace_min": 30, "aktiv_seit": "2026-09-01T00:00:00+02:00"}
+    pruefe(cw.letzter_soll(job, t("2026-10-04 09:00")) == t("2026-10-01 04:00"), "am 4.10. ist der Soll-Zeitpunkt der 1.10. 04:00")
+    pruefe(cw.letzter_soll(job, t("2026-10-01 03:59")) == t("2026-09-01 04:00"), "kurz vor 04:00 am 1. → Vormonat")
+    pruefe(cw.letzter_soll(job, t("2026-03-31 12:00")) == t("2026-03-01 04:00"), "Ende eines 31-Tage-Monats findet den 1.")
+    gelaufen = hb(start="2026-10-01T04:00:01+02:00", ende="2026-10-01T04:00:05+02:00", erfolg="2026-10-01T04:00:05+02:00")
+    pruefe(cw.bewerte(job, gelaufen, t("2026-10-20 12:00"))["status"] == cw.OK, "Lauf am 1. vorhanden → ok bis zum nächsten 1.")
+    vormonat = hb(start="2026-09-01T04:00:01+02:00", ende="2026-09-01T04:00:05+02:00", erfolg="2026-09-01T04:00:05+02:00")
+    b = cw.bewerte(job, vormonat, t("2026-10-01 05:00"))
+    pruefe(b["status"] == cw.UEBERFAELLIG and "01.10. 04:00" in b["grund"], "Lauf am 1.10. fehlt → überfällig", b)
+    pruefe(cw.bewerte(job, vormonat, t("2026-10-01 04:20"))["status"] == cw.OK, "innerhalb der Karenz noch ok")
+    beide = {**job, "monatstage": [1, 15]}
+    pruefe(cw.letzter_soll(beide, t("2026-10-20 09:00")) == t("2026-10-15 04:00"), "mehrere Monatstage")
+
+
 def test_dienste():
     print("\nDienste (systemd + Selbsttest)")
     jetzt = t("2026-10-04 09:00")
@@ -331,6 +347,7 @@ if __name__ == "__main__":
     test_dateien()
     test_cronwrap()
     test_registry()
+    test_monatstag()
     test_dienste()
     test_timer_urls_system()
     print("\n%s" % ("ALLE PRÜFUNGEN BESTANDEN" if not _fehler else "%d FEHLGESCHLAGEN: %s" % (len(_fehler), "; ".join(_fehler))))

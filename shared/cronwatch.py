@@ -82,9 +82,13 @@ def letzter_soll(job: dict, jetzt: datetime) -> datetime | None:
     if not zeiten:
         return None
     tage = _tage(job)
-    for rueck in range(0, 9):  # selbst ein wöchentlicher Job hat in 8 Tagen einen Soll-Zeitpunkt
+    monatstage = {int(x) for x in job.get("monatstage") or []}
+    # wöchentlich: 8 Tage zurück reichen; monatlich (`monatstage`, z. B. [1]): bis 32 Tage
+    for rueck in range(0, 33 if monatstage else 9):
         tag = (jetzt - timedelta(days=rueck)).date()
         if tage is not None and tag.weekday() not in tage:
+            continue
+        if monatstage and tag.day not in monatstage:
             continue
         kandidaten = [dt for dt in (_am(tag, z) for z in zeiten) if dt <= jetzt]
         if kandidaten:
