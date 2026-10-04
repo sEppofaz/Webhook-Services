@@ -592,11 +592,36 @@ def test_store_mehrprozess():
     pruefe(n == 80 and all(p.returncode == 0 for p in procs), "80 von 80 Einträgen, kein Lost Update", n)
 
 
+# ── Rest: Kalender-Bot-Tastatur seitenweise ─────────────────────────────────
+def test_bot_tastatur():
+    print("\nR6 · Kalender-Bot /abo seitenweise")
+    import services.kalender_bot.routes as kb
+    labels = {f"v{i:03d}": f"Verein {i:03d}" for i in range(138)}
+    alt = kb.tg_get_subscriptions
+    kb.tg_get_subscriptions = lambda c: ["v000"]
+    try:
+        s0 = kb._verein_auswahl_keyboard("1", labels)
+        s3 = kb._verein_auswahl_keyboard("1", labels, 3)
+    finally:
+        kb.tg_get_subscriptions = alt
+    knoepfe = lambda kbd: sum(len(r) for r in kbd)
+    pruefe(knoepfe(s0) <= 45 and knoepfe(s3) <= 45, "höchstens 45 Knöpfe je Nachricht", (knoepfe(s0), knoepfe(s3)))
+    vereine = lambda kbd: [b["callback_data"] for r in kbd for b in r if b["callback_data"].startswith("vk_abo:")]
+    alle = set()
+    for n in range(4):
+        kb.tg_get_subscriptions = lambda c: []
+        alle |= set(vereine(kb._verein_auswahl_keyboard("1", labels, n)))
+    kb.tg_get_subscriptions = alt
+    pruefe(len(alle) == 138, "alle 138 Vereine über 4 Seiten erreichbar", len(alle))
+    pruefe(s0[0][0]["text"].startswith("✅") and any(b["callback_data"] == "vk_seite:1" for r in s0 for b in r),
+           "Abo markiert, Weiter-Knopf vorhanden")
+
+
 TESTS = [test_xss, test_telegram_secret, test_vereine_api_lock, test_erinnerung, test_sessions,
          test_admin_loeschen, test_admin_verein_meta, test_verknuepfen,
          test_ical_uids, test_registrierung_key, test_fremde_endpunkte,
          test_pending_atomar, test_import_vergangenheit, test_stats_zeit, test_cookies,
-         test_freigabe_nachricht, test_store_mehrprozess]
+         test_freigabe_nachricht, test_store_mehrprozess, test_bot_tastatur]
 
 if __name__ == "__main__":
     for t in TESTS:

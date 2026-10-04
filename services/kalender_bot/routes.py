@@ -95,11 +95,19 @@ def _load_verein_labels() -> dict:
         return {}
 
 
-def _verein_auswahl_keyboard(chat_id: str, labels: dict) -> list:
+_PRO_SEITE = 40   # Vereine je Auswahl-Nachricht – Telegram begrenzt die Knöpfe einer Tastatur
+
+
+def _verein_auswahl_keyboard(chat_id: str, labels: dict, seite: int = 0) -> list:
+    """Abo-Auswahl seitenweise (Review 2026-10-04: 138 Vereine = 139 Knöpfe in einer
+    Nachricht – zu viel für Telegram, /abo kam dann gar nicht mehr an)."""
     abos = set(tg_get_subscriptions(chat_id))
+    alle = sorted(labels.items(), key=lambda x: x[1].lower())
+    seiten = max(1, -(-len(alle) // _PRO_SEITE))
+    seite = min(max(seite, 0), seiten - 1)
     buttons = []
     row = []
-    for key, name in sorted(labels.items(), key=lambda x: x[1]):
+    for key, name in alle[seite * _PRO_SEITE:(seite + 1) * _PRO_SEITE]:
         mark = "✅ " if key in abos else ""
         btn = {"text": f"{mark}{name}", "callback_data": f"vk_abo:{key}"}
         row.append(btn)
@@ -108,8 +116,21 @@ def _verein_auswahl_keyboard(chat_id: str, labels: dict) -> list:
             row = []
     if row:
         buttons.append(row)
+    if seiten > 1:
+        nav = []
+        if seite > 0:
+            nav.append({"text": "‹ Zurück", "callback_data": f"vk_seite:{seite - 1}"})
+        nav.append({"text": f"Seite {seite + 1}/{seiten}", "callback_data": f"vk_seite:{seite}"})
+        if seite < seiten - 1:
+            nav.append({"text": "Weiter ›", "callback_data": f"vk_seite:{seite + 1}"})
+        buttons.append(nav)
     buttons.append([{"text": "✅ Fertig", "callback_data": "vk_fertig"}])
     return buttons
+
+
+_AUSWAHL_TEXT = ("🏘️ <b>Welche Vereine möchtest du abonnieren?</b>\n"
+                 "Tippe auf einen Verein um ihn ab-/anzumelden.\n"
+                 "✅ = bereits abonniert")
 
 
 @kalender_bot_bp.route("/kalender-bot", methods=["POST"])
@@ -220,6 +241,14 @@ def kalender_bot_webhook():
                     f"📋 <b>Deine Abonnements ({len(abos)}):</b>\n\n{liste}\n\n"
                     "Abos ändern: /abo · Alle löschen: /stop"
                 )
+
+        elif cb_data.startswith("vk_seite:"):
+            try:
+                seite = int(cb_data.split(":", 1)[1])
+            except ValueError:
+                seite = 0
+            _bot_answer_callback(cb_id)
+            _bot_send_inline(cb_chat, _AUSWAHL_TEXT, _verein_auswahl_keyboard(cb_chat, _load_verein_labels(), seite))
 
         elif cb_data.startswith("vk_abo:"):
             verein_key = cb_data.split(":", 1)[1]
