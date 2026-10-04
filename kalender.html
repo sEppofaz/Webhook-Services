@@ -224,7 +224,6 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
 .fav-hint-btn{width:fit-content;margin-top:8px;background:none;border:1.5px solid var(--accent);color:var(--text);border-radius:20px;padding:7px 14px;font-size:13px;font-weight:500;line-height:normal;cursor:pointer}
 .fav-hint-btn:active{opacity:.7}
 .fav-hint .fav-hint-btn{display:flex;width:fit-content}  /* eigene Zeile unter dem Text (gewinnt gegen die inline-flex-Chip-Gruppenregel) */
-.fav-mode #rubrik-bar,.fav-mode #lk-section,.fav-mode #gem-section,.fav-mode #ort-section,.fav-mode #ver-section{opacity:.45}
 
 /* ── Skeleton Loader ── */
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
@@ -1560,8 +1559,7 @@ function toggleFavVerein(k,l){
     favorites.splice(fi,1);
     activeFavs.delete("verein:"+k);
   } else {
-    favorites.push(r);
-    activeFavs.add("verein:"+k);
+    favorites.push(r);  // Herz = nur merken; aktiv erst per Tipp auf den Favoriten-Chip (v1.48)
   }
   saveFavorites();
   const isFav=favorites.some(f=>f.type==="verein"&&f.key===k);
@@ -1671,7 +1669,7 @@ function _renderFavHint(){
   if(!el)return;
   if(!on){el.style.display="none";el.innerHTML="";return;}
   el.style.display="";
-  el.innerHTML=`<div class="fav-hint"><strong>${icon("heart",13,true)} Favoriten-Ansicht</strong>Es werden nur deine aktiven Favoriten gezeigt. Region, Gemeinde, Ortschaft, Verein und Rubrik sind pausiert &ndash; Zeitraum und Suche gelten weiter.<button class="fav-hint-btn" onclick="favModeOff()">Favoriten ausschalten</button></div>`;
+  el.innerHTML=`<div class="fav-hint"><strong>${icon("heart",13,true)} Favoriten-Ansicht</strong>Es werden nur deine aktiven Favoriten gezeigt. Region, Gemeinde, Ortschaft, Verein und Rubrik sind pausiert &ndash; Zeitraum und Suche gelten weiter. Tippe einen Filter an, um die Favoriten-Ansicht zu verlassen.<button class="fav-hint-btn" onclick="favModeOff()">Favoriten ausschalten</button></div>`;
 }
 
 // Icon immer aus dem Typ – ältere Favoriten haben im localStorage noch Emojis als „icon“ (BKM: nur Lucide), v1.47
@@ -1717,7 +1715,7 @@ function toggleFavChip(type,key){
 function toggleFavOrtschaft(o){
   const fi=favorites.findIndex(f=>f.type==="ortschaft"&&f.key===o);
   if(fi>=0){favorites.splice(fi,1);activeFavs.delete("ortschaft:"+o);}
-  else{favorites.push({type:"ortschaft",key:o,label:o,icon:icon("mapPin")});activeFavs.add("ortschaft:"+o);}
+  else{favorites.push({type:"ortschaft",key:o,label:o,icon:icon("mapPin")});}
   saveFavorites();saveActiveFavs();
   renderFavBar();updateAllBadges();render();
   buildOrtFilter();applyStateToUI();
@@ -1727,7 +1725,7 @@ function toggleFavRegion(lk){
   const lkLabel=lk.replace(/^Landkreis\s+/,"");
   const fi=favorites.findIndex(f=>f.type==="region"&&f.key===lk);
   if(fi>=0){favorites.splice(fi,1);activeFavs.delete("region:"+lk);}
-  else{favorites.push({type:"region",key:lk,label:lkLabel,icon:icon("map")});activeFavs.add("region:"+lk);}
+  else{favorites.push({type:"region",key:lk,label:lkLabel,icon:icon("map")});}
   saveFavorites();saveActiveFavs();
   renderFavBar();updateAllBadges();render();
   buildLandkreisFilter();applyStateToUI();
@@ -1737,7 +1735,7 @@ function toggleFavGemeinde(g){
   const gLabel=_gemLabel(g);
   const fi=favorites.findIndex(f=>f.type==="gemeinde"&&f.key===g);
   if(fi>=0){favorites.splice(fi,1);activeFavs.delete("gemeinde:"+g);}
-  else{favorites.push({type:"gemeinde",key:g,label:gLabel,icon:icon("landmark")});activeFavs.add("gemeinde:"+g);}
+  else{favorites.push({type:"gemeinde",key:g,label:gLabel,icon:icon("landmark")});}
   saveFavorites();saveActiveFavs();
   renderFavBar();updateAllBadges();render();
   buildGemeindeFilter();applyStateToUI();
@@ -1770,7 +1768,6 @@ function toggleFavorite(idx,ev){
     activeFavs.delete(r.type+":"+String(r.key));
   } else {
     favorites.push(r);
-    activeFavs.add(r.type+":"+String(r.key));
   }
   saveFavorites();
   saveActiveFavs();
@@ -3979,7 +3976,7 @@ function showInfoModal(){
       </div>
       <div class="help-row" style="padding:8px 0;border-bottom:none">
         <span class="help-icon">${icon("heart",20)}</span>
-        <div><strong>Favoriten</strong><span>Das Herz an Verein, Gemeinde oder Ortschaft speichert einen Favoriten. Aktive Favoriten zeigen nur ihre Termine &ndash; Region, Gemeinde, Ortschaft, Verein und Rubrik sind dann pausiert, Zeitraum und Suche gelten weiter. Favoriten-Chip antippen = ein/aus, Kreuz = entfernen. Tippst du einen Filter an, endet die Favoriten-Ansicht automatisch.</span></div>
+        <div><strong>Favoriten</strong><span>Das Herz an Verein, Gemeinde oder Ortschaft merkt einen Favoriten vor &ndash; die Ansicht bleibt, wie sie ist. Erst wer den Favoriten-Chip antippt, sieht nur dessen Termine. Aktive Favoriten zeigen nur ihre Termine &ndash; Region, Gemeinde, Ortschaft, Verein und Rubrik sind dann pausiert, Zeitraum und Suche gelten weiter. Favoriten-Chip antippen = ein/aus, Kreuz = entfernen. Tippst du einen Filter an, endet die Favoriten-Ansicht automatisch.</span></div>
       </div>
       <div class="help-row" style="padding:12px 0 8px;border-top:1.5px solid var(--border);margin-top:4px;border-bottom:none">
         <span class="help-icon">${icon("alertTriangle",20)}</span>
@@ -3989,7 +3986,7 @@ function showInfoModal(){
         <span class="help-icon">${icon("scale",20)}</span>
         <div><strong>Impressum</strong><span>Josef Fischer &middot; H&ouml;lskofen 13 &middot; 84092 Bayerbach b. Ergoldsbach<br><a href="mailto:Vereinskalender@icloud.com" style="color:var(--accent);text-decoration:none">Vereinskalender@icloud.com</a></span></div>
       </div>
-      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.47 &middot; 2026-10-04 &middot; a sEpp-App</p>
+      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.48 &middot; 2026-10-04 &middot; a sEpp-App</p>
       <button onclick="document.getElementById('info-modal').remove()" style="width:100%;margin-top:16px;padding:12px;background:none;border:1.5px solid var(--border2);border-radius:12px;font-size:14px;color:var(--text2);cursor:pointer">Schlie&szlig;en</button>
     </div>`;
   document.body.appendChild(m);
