@@ -343,7 +343,8 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
 .kal-sel select option{color:#1c1c1e;background:#fff}
 
 /* ── Handy (v1.56): unter Bild + Suchleiste direkt die Termine; Filter als Panel, das beim Hochwischen
-   oder per Filter-Knopf unter der Suchleiste hereingleitet (.kal-side.zeigen, Position --panel-top aus _panelPos) ── */
+   oder per Filter-Knopf unter der Suchleiste aufklappt (.kal-side.zeigen). Seit v1.58 hängt .kal-side am Handy IM Suchstreifen
+   (_panelOrt verschiebt es) und liegt absolut darunter – kein position:fixed im scrollenden .content (iOS: Hänger/Flackern). ── */
 .srch-filter-btn{display:none;position:relative;flex-shrink:0;width:40px;height:40px;margin-right:2px;border:none;border-radius:999px;background:var(--bg2);color:var(--text);align-items:center;justify-content:center;cursor:pointer}
 .srch-filter-btn span{display:flex}
 .srch-filter-btn svg{width:18px;height:18px}
@@ -354,10 +355,10 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
   #s-kal>.disclaimer{order:9;margin-top:14px}
   #s-kal>p:last-child{order:10}
   .srch-filter-btn{display:flex}
-  .kal-side{position:fixed;left:10px;right:10px;top:var(--panel-top,120px);z-index:55;max-height:calc(100dvh - var(--panel-top,120px) - 12px);overflow-y:auto;
-    border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.2);opacity:0;transform:translateY(-8px);visibility:hidden;pointer-events:none;
+  .kal-search-band>.kal-side{position:absolute;left:10px;right:10px;top:100%;margin-top:2px;z-index:1;max-height:55dvh;overflow-y:auto;overscroll-behavior:contain;
+    border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.2);opacity:0;transform:translateY(-6px);visibility:hidden;pointer-events:none;
     transition:opacity .18s,transform .18s,visibility 0s .18s}
-  .kal-side.zeigen{opacity:1;transform:none;visibility:visible;pointer-events:auto;transition:opacity .18s,transform .18s}
+  .kal-search-band>.kal-side.zeigen{opacity:1;transform:none;visibility:visible;pointer-events:auto;transition:opacity .18s,transform .18s}
   .kal-side .filter-card{margin-bottom:0}
 }
 
@@ -1240,7 +1241,7 @@ function _applyFilterOpen(){
   document.getElementById("fc-arrow").style.transform=filterOpen?"rotate(90deg)":"";
 }
 function _onDeskWechsel(){
-  if(typeof _panelSetzen==="function")_panelSetzen(false);
+  if(typeof _panelSetzen==="function"){_panelSetzen(false);_panelOrt();}
   const t=filterOpen;filterOpen=_filterOpenAndere;_filterOpenAndere=t;
   _applyFilterOpen();
 }
@@ -1808,31 +1809,40 @@ document.querySelector(".content").addEventListener("scroll",()=>{
   _bandFest();
   _panelBeimScrollen();
 },{passive:true});
-/* ── Handy: Filter-Panel (v1.56) – Hochwischen blendet ein, Runterwischen aus; Knopf in der Suchleiste schaltet um ── */
-let _panelZeigen=false,_panelLastY=0;
-function _panelPos(){
-  const b=document.querySelector(".kal-search-band"),side=document.querySelector(".kal-side");
-  if(b&&side)side.style.setProperty("--panel-top",Math.round(b.getBoundingClientRect().bottom+2)+"px");
+/* ── Handy: Filter-Panel (v1.56, robuster seit v1.58) ──
+   Wischen Richtung Anfang (≥ 60 px am Stück, Leiste angedockt) blendet ein, ≥ 30 px in die Liste blendet aus;
+   iOS-Gummiband oben/unten wird ignoriert. Knopf in der Suchleiste schaltet um (bleibt dann auch oben offen). */
+let _panelZeigen=false,_panelAuto=false,_panelLastY=0,_panelAcc=0;
+// Am Handy hängt die Filter-Karte im Suchstreifen (klappt darunter auf), am Desktop ist sie die Seitenleiste im Raster
+function _panelOrt(){
+  const side=document.querySelector(".kal-side"),band=document.querySelector(".kal-search-band");
+  if(!side||!band||VORSCHAU)return;
+  if(_isDesk()){if(side.parentElement===band)band.after(side);}
+  else if(side.parentElement!==band)band.appendChild(side);
 }
-function _panelSetzen(an){
+function _panelSetzen(an,auto){
   const side=document.querySelector(".kal-side");
   if(!side||VORSCHAU)return;
   _panelZeigen=!!an&&!_isDesk();
-  if(_panelZeigen)_panelPos();
+  _panelAuto=_panelZeigen&&!!auto;
   side.classList.toggle("zeigen",_panelZeigen);
   const btn=document.getElementById("srch-filter-btn");if(btn)btn.classList.toggle("on",_panelZeigen);
 }
-function toggleFilterPanel(){_panelSetzen(!_panelZeigen);}
+function toggleFilterPanel(){_panelSetzen(!_panelZeigen,false);_panelAcc=0;}
 function _panelBeimScrollen(){
   if(_isDesk())return;
-  const y=document.querySelector(".content").scrollTop,d=y-_panelLastY;
-  if(Math.abs(d)>8){
-    if(d<0&&y>40)_panelSetzen(true);   // Richtung Anfang gewischt
-    else if(d>0)_panelSetzen(false);   // weiter in die Liste
-    _panelLastY=y;
-  }
-  if(_panelZeigen)_panelPos();
+  const c=document.querySelector(".content"),y=c.scrollTop,max=c.scrollHeight-c.clientHeight;
+  const d=y-_panelLastY;_panelLastY=y;
+  const angedockt=parseFloat(document.querySelector(".kal-search-band").style.getPropertyValue("--band-a")||"0")>=1;
+  if(!angedockt){if(_panelAuto)_panelSetzen(false);_panelAcc=0;return;}  // zurück beim Titelbild: automatisch Eingeblendetes schließen
+  if(y<=0||y>=max-1)return;              // Nachfedern oben/unten ignorieren
+  if(d===0)return;
+  if((d<0)!==(_panelAcc<0))_panelAcc=0;  // Richtungswechsel: neu zählen
+  _panelAcc+=d;
+  if(_panelAcc<=-60&&!_panelZeigen){_panelSetzen(true,true);_panelAcc=0;}
+  else if(_panelAcc>=30&&_panelZeigen){_panelSetzen(false);_panelAcc=0;}
 }
+_panelOrt();
 // Streifen-Hintergrund an den Scroll koppeln: 0, solange das Titelbild unter der angedockten Leiste noch sichtbar ist,
 // 1, sobald es ganz darunter verschwunden ist – kein hartes Umschalten (v1.55)
 function _bandFest(){
@@ -4030,7 +4040,7 @@ function showInfoModal(){
         <span class="help-icon">${icon("scale",20)}</span>
         <div><strong>Impressum</strong><span>Josef Fischer &middot; H&ouml;lskofen 13 &middot; 84092 Bayerbach b. Ergoldsbach<br><a href="mailto:Vereinskalender@icloud.com" style="color:var(--accent);text-decoration:none">Vereinskalender@icloud.com</a></span></div>
       </div>
-      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.57 &middot; 2026-10-04 &middot; a sEpp-App</p>
+      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.58 &middot; 2026-10-04 &middot; a sEpp-App</p>
       <button onclick="document.getElementById('info-modal').remove()" style="width:100%;margin-top:16px;padding:12px;background:none;border:1.5px solid var(--border2);border-radius:12px;font-size:14px;color:var(--text2);cursor:pointer">Schlie&szlig;en</button>
     </div>`;
   document.body.appendChild(m);
