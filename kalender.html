@@ -327,7 +327,7 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
   </div>
   <div class="hdr-right" style="display:flex;align-items:center;gap:6px">
     <div class="hdr-ver" style="display:flex;flex-direction:column;align-items:flex-end;gap:1px">
-      <span class="ver-lbl" style="margin-right:0">v1.37</span>
+      <span class="ver-lbl" style="margin-right:0">v1.38</span>
       <span style="font-size:9px;color:rgba(255,255,255,.28);letter-spacing:.2px;line-height:1">a sEpp-App</span>
     </div>
     <a class="refresh-btn" id="verein-login-btn" href="/verein/login" title="Vereins-Login oder Registrierung" style="width:auto;padding:0 10px;font-size:13px;font-weight:600;letter-spacing:.3px;text-decoration:none;white-space:nowrap">Login</a>
@@ -456,7 +456,7 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title" style="width:55%"></div><div class="sk-line sk-ort"></div></div>
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title"></div><div class="sk-line sk-ort" style="width:30%"></div></div>
     </div>
-    <p class="version">Vereinskalender &middot; v1.37 &middot; 2026-10-03 &middot; a sEpp-App</p>
+    <p class="version">Vereinskalender &middot; v1.38 &middot; 2026-10-04 &middot; a sEpp-App</p>
     <p style="font-size:11px;color:var(--text3);text-align:center;padding:0 0 24px;line-height:2">&#127807; Hosting in Finnland mit &Ouml;kostrom &middot; Werbefrei &middot; DSGVO-konform</p>
   </div>
 
@@ -644,7 +644,7 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
     </div>
     <label style="font-size:12px;color:var(--text3);display:block">Rubrik
       <select id="vd-rubrik" style="display:block;width:100%;margin-top:4px;padding:8px 11px;border:1.5px solid var(--border2);border-radius:9px;font-size:14px;background:var(--bg);color:var(--text);cursor:pointer;outline:none">
-        <option>Verein</option><option>Pfarrei</option><option>Kunst und Kultur</option><option>Gaststätte/Pub/Bar</option><option>Sonstiges</option>
+        <option>Verein</option><option>Pfarrei</option><option>Kunst und Kultur</option><option>Gaststätte/Pub/Bar</option><option>Gemeinde</option><option>Sonstiges</option>
       </select>
     </label>
     <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border:1.5px solid var(--border2);border-radius:9px">
@@ -674,6 +674,7 @@ const ICON_PATHS={
   eye:`<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>`,
   eyeOff:`<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>`,
   x:`<path d="M18 6 6 18"/><path d="m6 6 12 12"/>`,
+  landmark:`<line x1="3" x2="21" y1="22" y2="22"/><line x1="6" x2="6" y1="18" y2="11"/><line x1="10" x2="10" y1="18" y2="11"/><line x1="14" x2="14" y1="18" y2="11"/><line x1="18" x2="18" y1="18" y2="11"/><polygon points="12 2 20 7 4 7"/>`,
   house:`<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`,
   mail:`<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>`,
   calendarPlus:`<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M12 14v4"/><path d="M10 16h4"/>`,
@@ -1400,10 +1401,10 @@ function renderRubrikBar(){
   if(!bar)return;
   const vorh=new Set(Object.values(rubriken));
   if(vorh.size<=1){bar.style.display="none";return;}
-  const reihenfolge=["Verein","Pfarrei","Kunst und Kultur","Gaststätte/Pub/Bar"];
+  const reihenfolge=["Verein","Pfarrei","Kunst und Kultur","Gaststätte/Pub/Bar","Gemeinde"];
   const extra=[...vorh].filter(r=>!reihenfolge.includes(r)).sort();
   const tabs=[...reihenfolge.filter(r=>vorh.has(r)),...extra];
-  const icons={"Verein":icon("house",14)+" Vereine","Pfarrei":icon("church",14)+" Pfarreien","Kunst und Kultur":icon("palette",14)+" Kunst &amp; Kultur","Gaststätte/Pub/Bar":icon("beer",14)+" Gaststätten &amp; Bars"};
+  const icons={"Verein":icon("house",14)+" Vereine","Pfarrei":icon("church",14)+" Pfarreien","Kunst und Kultur":icon("palette",14)+" Kunst &amp; Kultur","Gaststätte/Pub/Bar":icon("beer",14)+" Gaststätten &amp; Bars","Gemeinde":icon("landmark",14)+" Gemeinde"};
   bar.style.display="flex";
   bar.innerHTML=tabs.map(r=>{
     const on=aktRubrikSet.has(r);
@@ -2772,7 +2773,7 @@ async function transferTermine(verein_id){
 
 /* ── Vereine-Tab (Admin) ── */
 /* Gleiche Liste wie shared/rubriken.py – neue Rubrik dort UND hier eintragen */
-const RUBRIKEN_OPT=["Verein","Pfarrei","Kunst und Kultur","Gaststätte/Pub/Bar","Sonstiges"];
+const RUBRIKEN_OPT=["Verein","Pfarrei","Kunst und Kultur","Gaststätte/Pub/Bar","Gemeinde","Sonstiges"];
 let _lastVereinList=[],_vereinSearch="",_vereinSearchField="name",_drawerKey=null,_drawerSV=false;
 
 async function loadVereine(){
@@ -3076,21 +3077,29 @@ async function loadImporte(){
       return;
     }
     el.innerHTML=list.map(imp=>renderImportCard(imp)).join("");
-    if(!_impGeo[list[0]?.uid])list.forEach(imp=>{
-      _impGeo[imp.uid]={};
-      imp.vereine.forEach(v=>{_impGeo[imp.uid][v.key]={heimatort:v.heimatort_gespeichert||"",gemeinde:v.gemeinde||"",landkreis:"Landkreis Landshut"};});
+    list.forEach(imp=>{
+      if(!_impGeo[imp.uid])_impGeo[imp.uid]={};
+      imp.vereine.forEach(v=>{if(!_impGeo[imp.uid][v.key])_impGeo[imp.uid][v.key]=_impGeoVorschlag(v);});
     });
   }catch(e){el.innerHTML='<div style="color:#ff3b30;padding:16px">Fehler: '+escHtml(String(e))+'</div>';}
+}
+
+function _impGeoVorschlag(v){
+  return{heimatort:v.heimatort_gespeichert||"",gemeinde:v.gemeinde_vorschlag||"",landkreis:v.landkreis_vorschlag||""};
 }
 
 function renderImportCard(imp){
   const d=imp.erzeugt?new Date(imp.erzeugt).toLocaleString("de-DE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}):"";
   const stats=`Gesamt: ${imp.gesamt} | Neu: ${imp.neu} | Duplikate: ${imp.duplikate}`+(imp.sv?` | SV: ${imp.sv}`:"");
-  const vereineHtml=imp.vereine.map(v=>renderVereinRow(imp.uid,v)).join("");
+  const ausgeblendet=imp.ohne_neue?`<div style="font-size:12px;color:var(--text3);margin:-6px 0 10px">${imp.ohne_neue} ${imp.ohne_neue===1?"Verein":"Vereine"} ohne neue Termine ausgeblendet – deren Termine stehen schon im Kalender.</div>`:"";
+  const vereineHtml=imp.vereine.length
+    ?imp.vereine.map(v=>renderVereinRow(imp.uid,v)).join("")
+    :'<div style="padding:12px 14px;font-size:13px;color:var(--text3)">Keine neuen Termine – der Import kann verworfen werden.</div>';
   return `<div class="filter-card" style="margin-bottom:12px" id="imp-card-${imp.uid}">
     <div style="padding:12px 14px 0">
       <div style="font-weight:600;font-size:15px;color:var(--text1);display:flex;align-items:center;gap:5px">${icon("folder",15)} ${escHtml(imp.quelle)} <span style="font-size:12px;font-weight:400;color:var(--text3)">${d}</span></div>
       <div style="font-size:13px;color:var(--text2);margin:4px 0 10px">${stats}</div>
+      ${ausgeblendet}
       <div style="display:flex;gap:8px;margin-bottom:12px">
         <button onclick="confirmAll('${imp.uid}')" style="flex:1;padding:8px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer">&#10003; Alle best&auml;tigen</button>
         <button onclick="rejectAll('${imp.uid}')" style="flex:1;padding:8px;border:1.5px solid #ff3b30;border-radius:8px;background:var(--bg);color:#ff3b30;font-size:13px;cursor:pointer">&#10005; Alle verwerfen</button>
@@ -3102,21 +3111,25 @@ function renderImportCard(imp){
 
 function renderVereinRow(uid,v){
   if(!_impGeo[uid])_impGeo[uid]={};
-  if(!_impGeo[uid][v.key])_impGeo[uid][v.key]={heimatort:v.heimatort_gespeichert||"",gemeinde:v.gemeinde||"",landkreis:"Landkreis Landshut"};
+  if(!_impGeo[uid][v.key])_impGeo[uid][v.key]=_impGeoVorschlag(v);
   const g=_impGeo[uid][v.key];
+  const badge=(txt,bg,fg)=>`<span style="font-size:10px;font-weight:600;padding:1px 6px;border-radius:6px;background:${bg};color:${fg};margin-left:4px;vertical-align:1px">${txt}</span>`;
+  const badges=(v.bekannt?"":badge("neuer Verein","#e8f0fe","#1a56db"))
+    +(v.methode==="ki"?badge("per KI gelesen","#fff3cd","#856404"):"")
+    +(v.rubrik==="Gemeinde"?badge("Rubrik Gemeinde","var(--bg2)","var(--text2)"):"");
   const termineHtml=v.termine&&v.termine.length
     ?v.termine.map((t,i)=>{
         const eid=`imp-chk-${uid}-${escHtml(v.key)}-${i}`;
         const val=JSON.stringify({verein_key:v.key,datum:t.datum,uhrzeit:t.uhrzeit||"",bezeichnung:t.bezeichnung});
         return `<label style="display:flex;gap:6px;align-items:baseline;font-size:12px;color:var(--text2);padding:3px 0;cursor:pointer">
           <input type="checkbox" id="${eid}" data-imp-term='${val.replace(/'/g,"&#39;")}' checked style="margin-top:1px;flex-shrink:0">
-          <span>${escHtml(t.datum)}${t.uhrzeit?" "+escHtml(t.uhrzeit):""} – ${escHtml(t.bezeichnung)}${t.ort?" · <span style='color:var(--text3)'>"+escHtml(t.ort)+"</span>":""}</span>
+          <span>${escHtml(t.datum)}${t.uhrzeit?" "+escHtml(t.uhrzeit)+(t.uhrzeit_bis?"–"+escHtml(t.uhrzeit_bis):""):""} – ${escHtml(t.bezeichnung)}${t.ort?" · <span style='color:var(--text3)'>"+escHtml(t.ort)+"</span>":""}</span>
         </label>`;
       }).join("")
     :'<div style="font-size:12px;color:var(--text3)">Keine neuen Termine.</div>';
   return `<div style="padding:10px 14px;border-bottom:1px solid var(--border)" id="imp-row-${uid}-${v.key}">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-      <div style="font-weight:600;font-size:14px;color:var(--text1)">${escHtml(v.label)} <span style="font-size:12px;font-weight:400;color:var(--text3)">${v.neu} neu</span></div>
+      <div style="font-weight:600;font-size:14px;color:var(--text1)">${escHtml(v.label)} <span style="font-size:12px;font-weight:400;color:var(--text3)">${v.neu} neu</span>${badges}</div>
       <div style="display:flex;gap:6px">
         <button onclick="confirmVerein('${uid}','${v.key}')" style="padding:5px 10px;border:none;border-radius:7px;background:var(--accent);color:#fff;font-size:12px;font-weight:600;cursor:pointer">&#10003;</button>
         <button onclick="rejectVerein('${uid}','${v.key}')" style="padding:5px 10px;border:1.5px solid #ff3b30;border-radius:7px;background:var(--bg);color:#ff3b30;font-size:12px;cursor:pointer">&#10005;</button>
@@ -3190,9 +3203,13 @@ async function confirmAll(uid){
   const token=localStorage.getItem("ut")||"";
   const geo=_impGeo[uid]||{};
   const card=document.getElementById(`imp-card-${uid}`);
+  const excluded_events=[];
+  if(card)card.querySelectorAll("input[type=checkbox][data-imp-term]").forEach(cb=>{
+    if(!cb.checked)try{excluded_events.push(JSON.parse(cb.dataset.impTerm));}catch(e){}
+  });
   if(card)card.style.opacity="0.5";
   try{
-    const r=await fetch(`/api/admin/importe/${uid}/confirm`,{method:"POST",headers:{"Content-Type":"application/json","X-Upload-Token":token},body:JSON.stringify({alle:true,geo})});
+    const r=await fetch(`/api/admin/importe/${uid}/confirm`,{method:"POST",headers:{"Content-Type":"application/json","X-Upload-Token":token},body:JSON.stringify({alle:true,geo,excluded_events})});
     const d=await r.json();
     if(d.ok){await loadImporte();loadVereine();loadTermine();}
     else{alert("Fehler: "+(d.error||"unbekannt"));if(card)card.style.opacity="";}
@@ -3221,9 +3238,9 @@ async function triggerAllImport(){
     const r=await fetch("/api/admin/importe/trigger",{method:"POST",headers:{"Content-Type":"application/json","X-Upload-Token":token},body:JSON.stringify({alle:true})});
     const d=await r.json();
     msg.style.display="";
-    if(d.ok){msg.style.background="#d4edda";msg.style.color="#155724";msg.textContent=d.message;}
-    else{msg.style.background="#f8d7da";msg.style.color="#721c24";msg.textContent=(d.error||"Fehler");}
-  }catch(e){msg.style.display="";msg.style.background="#f8d7da";msg.style.color="#721c24";msg.textContent="Netzwerkfehler: "+e;}
+    if(d.ok){_impMsg(msg,"info",d.message);_pollImportStatus(d.id,msg);}
+    else{_impMsg(msg,"fehler",d.error||"Fehler");}
+  }catch(e){msg.style.display="";_impMsg(msg,"fehler","Netzwerkfehler: "+e);}
   finally{btn.disabled=false;btn.innerHTML=`<span style="display:inline-flex;align-items:center;gap:4px">${icon("refreshCw",14)} Alle Gemeinden importieren</span>`;}
 }
 
@@ -3236,9 +3253,35 @@ async function triggerUrlImport(){
   try{
     const r=await fetch("/api/admin/importe/trigger",{method:"POST",headers:{"Content-Type":"application/json","X-Upload-Token":token},body:JSON.stringify({url})});
     const d=await r.json();
-    if(d.ok){msg.style.background="#d4edda";msg.style.color="#155724";msg.textContent=d.message;}
-    else{msg.style.background="#f8d7da";msg.style.color="#721c24";msg.textContent=(d.error||"Fehler");}
-  }catch(e){msg.style.background="#f8d7da";msg.style.color="#721c24";msg.textContent="Netzwerkfehler: "+e;}
+    if(d.ok){_impMsg(msg,"info",d.message+" Neue Seiten brauchen bis zu 2 Minuten.");_pollImportStatus(d.id,msg);}
+    else{_impMsg(msg,"fehler",d.error||"Fehler");}
+  }catch(e){_impMsg(msg,"fehler","Netzwerkfehler: "+e);}
+}
+
+function _impMsg(el,art,text){
+  const farben={ok:["#d4edda","#155724"],fehler:["#f8d7da","#721c24"],info:["var(--card)","var(--text2)"]};
+  const [bg,fg]=farben[art]||farben.info;
+  el.style.display="";el.style.background=bg;el.style.color=fg;el.style.whiteSpace="pre-line";el.textContent=text;
+}
+
+async function _pollImportStatus(id,msg){
+  const token=localStorage.getItem("ut")||"";
+  const start=Date.now();
+  while(Date.now()-start<240000){
+    await new Promise(r=>setTimeout(r,4000));
+    let st;
+    try{st=await(await fetch("/api/admin/importe/status",{headers:{"X-Upload-Token":token}})).json();}catch(e){continue;}
+    if(!st||st.id!==id||st.status==="laeuft")continue;
+    const extra=[...(st.hinweise||[]),...(st.ki||[]).map(k=>`KI-Abruf ${k.name}: ~${Number(k.kosten_usd).toFixed(2)} $`)].join("\n");
+    if(st.status==="ok"){
+      _impMsg(msg,"ok",`Import fertig: ${st.neu} neue von ${st.gesamt} Terminen.`+(extra?"\n"+extra:""));
+      loadImporte();
+    }else{
+      _impMsg(msg,"fehler",`Import fehlgeschlagen: ${st.fehler||"unbekannter Fehler"}`+(extra?"\n"+extra:""));
+    }
+    return;
+  }
+  _impMsg(msg,"fehler","Kein Ergebnis nach 4 Minuten – bitte Tab neu laden oder Log prüfen.");
 }
 
 /* ── Termine-Tab (Admin) ── */
@@ -3628,6 +3671,7 @@ function showInfoModal(){
       <div class="help-row" style="padding:8px 0">
         <span class="help-icon">${icon("users",20)}</span>
         <div><strong>Verein</strong><span>Einzelne Vereine gezielt ein- oder ausblenden.</span></div>
+        <div><strong>Rubrik</strong><span>Die Chips &uuml;ber der Terminliste &ndash; Vereine, Pfarreien, Kunst &amp; Kultur, Gastst&auml;tten &amp; Bars und ${icon("landmark",14)} Gemeinde (Sitzungen und Termine der Gemeindeverwaltung). Kein Chip aktiv = alle Rubriken.</span></div>
       </div>
       <div class="help-row" style="padding:8px 0;border-bottom:none">
         <span class="help-icon">${icon("heart",20)}</span>

@@ -5,12 +5,10 @@ import threading
 import traceback
 import urllib.parse
 import urllib.request
-import uuid
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
 
-import dropbox
 from flask import Blueprint, request
 
 from shared.flask_notify import (
@@ -20,6 +18,7 @@ from shared.flask_notify import (
     send_telegram_inline,
 )
 from shared.routing import get_route, traffic_lines
+from shared.pka_todos import todo_anlegen
 from shared.kalender_core import (
     GOTTESDIENSTE_FILE,
     VEREINSTERMINE_FILE,
@@ -35,7 +34,6 @@ TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "")
 _DROPBOX_INVOICE_REFRESH_TOKEN = os.environ.get("DROPBOX_INVOICE_REFRESH_TOKEN", "")
 _DROPBOX_INVOICE_APP_KEY       = os.environ.get("DROPBOX_INVOICE_APP_KEY", "")
 _DROPBOX_INVOICE_APP_SECRET    = os.environ.get("DROPBOX_INVOICE_APP_SECRET", "")
-_TODOS_FILE_PATH               = "/Apps/Claude/Todo-App/Todos.json"
 _VERKEHR_ORIGIN                = "Hölskofen, 84092 Bayerbach"
 _TODO_WEBHOOK_SECRET           = os.environ.get("TODO_WEBHOOK_SECRET", "")
 _QGFB_CALLBACK_TOKEN           = os.environ.get("QGFEEDBACK_CALLBACK_TOKEN", "")
@@ -81,40 +79,8 @@ def _get_verkehr(ziel: str) -> str:
     return "\n".join(zeilen)
 
 
-def _get_pka_dropbox_client() -> dropbox.Dropbox:
-    return dropbox.Dropbox(
-        oauth2_refresh_token=_DROPBOX_INVOICE_REFRESH_TOKEN,
-        app_key=_DROPBOX_INVOICE_APP_KEY,
-        app_secret=_DROPBOX_INVOICE_APP_SECRET,
-    )
-
-
 def _save_todo(text: str, kategorie: str = "pka") -> None:
-    dbx  = _get_pka_dropbox_client()
-    datum = datetime.now().strftime("%Y-%m-%d")
-    try:
-        _, res = dbx.files_download(_TODOS_FILE_PATH)
-        data = json.loads(res.content.decode("utf-8"))
-    except dropbox.exceptions.ApiError:
-        data = {"v": 1, "todos": []}
-    next_nr = max((t.get("nr") or 0 for t in data["todos"]), default=0) + 1
-    data["todos"].append({
-        "id": str(uuid.uuid4()),
-        "nr": next_nr,
-        "datum": datum,
-        "aufgabe": text,
-        "prio": "mittel",
-        "kategorie": kategorie,
-        "erledigt": False,
-        "erledigt_am": None,
-        "faelligkeit": None,
-        "faelligkeit_uhrzeit": None,
-    })
-    dbx.files_upload(
-        json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8"),
-        _TODOS_FILE_PATH,
-        mode=dropbox.files.WriteMode.overwrite,
-    )
+    todo_anlegen(text, os.environ, kategorie)
 
 
 def _run(cmd: list[str], timeout: int = 10) -> str:

@@ -1312,7 +1312,8 @@ HEIMAT_PENDING_DIR = Path("/opt/rename-webhook/imports")
 
 
 def _load_pending_meta(f: Path) -> dict | None:
-    """Lädt Zusammenfassung einer Pending-Datei (ohne vollständige Events)."""
+    """Zusammenfassung einer Pending-Datei für die Admin-Ansicht: pro Verein nur die neuen
+    Termine; Vereine ohne neue Termine zählen nur in `duplikate` mit."""
     try:
         data   = json.loads(f.read_text())
         events = data.get("events", [])
@@ -1326,17 +1327,32 @@ def _load_pending_meta(f: Path) -> dict | None:
         for e in events:
             k = e["_verein_key"]
             if k not in vereine:
+                gespeichert = existing_meta.get(k, {})
                 vereine[k] = {
                     "key":      k,
                     "label":    e.get("_label", k),
                     "gemeinde": e.get("_gemeinde", ""),
-                    "heimatort_gespeichert": existing_meta.get(k, {}).get("heimatort", ""),
+                    "heimatort_gespeichert": gespeichert.get("heimatort", ""),
+                    "gemeinde_vorschlag":    gespeichert.get("gemeinde", "") or e.get("_gemeinde_amtlich", ""),
+                    "landkreis_vorschlag":   gespeichert.get("landkreis", "") or e.get("_landkreis", ""),
+                    "rubrik":   gespeichert.get("rubrik", "") or e.get("_rubrik", ""),
+                    "bekannt":  k in existing_meta,
+                    "methode":  e.get("_methode", "heimat"),
+                    "termine":  [],
                     "neu":      0,
                     "total":    0,
                 }
             vereine[k]["total"] += 1
             if e.get("_neu"):
                 vereine[k]["neu"] += 1
+                vereine[k]["termine"].append({
+                    "datum":       e["datum"],
+                    "uhrzeit":     e.get("uhrzeit", ""),
+                    "uhrzeit_bis": e.get("uhrzeit_bis", ""),
+                    "bezeichnung": e["bezeichnung"],
+                    "ort":         e.get("ort", ""),
+                })
+        mit_neuen = [v for v in vereine.values() if v["neu"]]
         return {
             "uid":        data["uid"],
             "quelle":     data.get("quelle", "heimat-info.de"),
@@ -1345,7 +1361,8 @@ def _load_pending_meta(f: Path) -> dict | None:
             "neu":        sum(1 for e in events if e.get("_neu")),
             "duplikate":  sum(1 for e in events if not e.get("_neu") and not e.get("_sv")),
             "sv":         sum(1 for e in events if e.get("_sv")),
-            "vereine":    sorted(vereine.values(), key=lambda x: x["label"].lower()),
+            "ohne_neue":  len(vereine) - len(mit_neuen),
+            "vereine":    sorted(mit_neuen, key=lambda x: x["label"].lower()),
         }
     except Exception:
         return None
@@ -1426,32 +1443,17 @@ def api_admin_importe_confirm(uid):
     geo              = body.get("geo", {})  # {key: {heimatort, gemeinde, landkreis}}
     excluded_events  = body.get("excluded_events") or None  # [{verein_key, datum, uhrzeit, bezeichnung}]
 
-    # Geo-Overrides vorab in _meta schreiben (Admin-Entscheidung, immer maßgeblich)
-    if geo:
-        try:
-            raw = json.loads(VEREINSTERMINE_FILE.read_text()) if VEREINSTERMINE_FILE.exists() else {}
-            raw.setdefault("_meta", {})
-            for vkey, felder in geo.items():
-                raw["_meta"].setdefault(vkey, {})
-                for f in ("heimatort", "gemeinde", "landkreis"):
-                    val = (felder.get(f) or "").strip()
-                    if val:
-                        raw["_meta"][vkey][f] = val
-                    else:
-                        raw["_meta"][vkey].pop(f, None)
-            from shared.kalender_store import KalenderStore
-            KalenderStore.update(lambda d: d.clear() or d.update(raw))
-        except Exception as e:
-            log(f"⚠️  Geo-Override fehlgeschlagen: {e}")
-
     try:
         import importlib.util as _ilu
         spec = _ilu.spec_from_file_location("heimat_import", "/opt/rename-webhook/heimat_import.py")
         mod  = _ilu.module_from_spec(spec)
         spec.loader.exec_module(mod)
-        result = mod.do_import(uid, verein_keys, excluded_events)
+        result = mod.do_import(uid, verein_keys, excluded_events, geo)
         log(f"✅  Admin-Import uid={uid}: {result}")
         return json.dumps({"ok": True, "message": result}, ensure_ascii=False), 200, {
+            "Content-Type": "application/json; charset=utf-8"}
+    except FileNotFoundError as e:
+        return json.dumps({"error": str(e)}, ensure_ascii=False), 404, {
             "Content-Type": "application/json; charset=utf-8"}
     except Exception as e:
         log(f"❌  Admin-Import uid={uid}: {e}")
@@ -1516,7 +1518,12 @@ def api_admin_importe_trigger():
         return json.dumps({"error": "Import läuft bereits – bitte warten"}), 409, {
             "Content-Type": "application/json"}
 
+    lauf_id = _uuid.uuid4().hex[:8]
+    _schreibe_import_status({"id": lauf_id, "status": "laeuft", "url": url or "",
+                             "start": datetime.now().isoformat(timespec="seconds")})
+
     def _run():
+        status = {"id": lauf_id, "url": url or "", "status": "fehler"}
         try:
             import importlib.util as _ilu
             spec = _ilu.spec_from_file_location(
@@ -1528,11 +1535,48 @@ def api_admin_importe_trigger():
             else:
                 result = mod.fetch_and_save_pending()
             log(f"✅  Admin-Trigger: {result}")
+            status.update(status="fehler" if "error" in result else "ok",
+                          fehler=result.get("error", ""), neu=result.get("neu", 0),
+                          gesamt=result.get("gesamt", 0),
+                          hinweise=result.get("hinweise", []) + [
+                              f"Fehler bei: {f}" for f in result.get("fehler", [])],
+                          ki=[{"name": k["name"], "kosten_usd": k["kosten_usd"]}
+                              for k in result.get("ki", [])])
         except Exception as e:
             log(f"❌  Admin-Trigger fehlgeschlagen: {e}")
+            status["fehler"] = str(e)
         finally:
+            status["ende"] = datetime.now().isoformat(timespec="seconds")
+            _schreibe_import_status(status)
             _import_lock.release()
 
     threading.Thread(target=_run, daemon=True).start()
-    return json.dumps({"ok": True, "message": "Import gestartet – Tab in ca. 30 Sek. neu laden"}),\
+    return json.dumps({"ok": True, "id": lauf_id,
+                       "message": "Import gestartet – das Ergebnis erscheint hier automatisch."}),\
            202, {"Content-Type": "application/json; charset=utf-8"}
+
+
+_IMPORT_STATUS_FILE = HEIMAT_PENDING_DIR / "letzter_lauf.json"
+
+
+def _schreibe_import_status(status: dict) -> None:
+    try:
+        HEIMAT_PENDING_DIR.mkdir(parents=True, exist_ok=True)
+        tmp = _IMPORT_STATUS_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(status, ensure_ascii=False))
+        tmp.replace(_IMPORT_STATUS_FILE)
+    except OSError as e:
+        log(f"⚠️  Import-Status nicht geschrieben: {e}")
+
+
+@kalender_bp.route("/api/admin/importe/status", methods=["GET"])
+def api_admin_importe_status():
+    token = request.headers.get("X-Upload-Token", "")
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
+        return json.dumps({"error": "Nicht autorisiert"}), 401, {"Content-Type": "application/json"}
+    try:
+        status = json.loads(_IMPORT_STATUS_FILE.read_text())
+    except (OSError, ValueError):
+        status = {}
+    return json.dumps(status, ensure_ascii=False), 200, {
+        "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store"}

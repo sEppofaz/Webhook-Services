@@ -1,8 +1,8 @@
 #!/opt/rename-webhook/bin/python3
 """
 heimat_import.py
-Fetcht Events von heimat-info.de für alle konfigurierten Gemeinden
-und sendet Telegram-Vorschau mit ✅/❌ Import-Buttons.
+Fetcht Termine für alle konfigurierten Gemeinden – heimat-info.de oder eigene
+Gemeinde-Webseite (termin_scraper.py) – und sendet Telegram-Vorschau mit ✅/❌ Import-Buttons.
 
 Aufruf:
   python3 heimat_import.py              → Import-Vorschau per Telegram
@@ -10,6 +10,7 @@ Aufruf:
 """
 import html as htmlmod
 import json
+import os
 import re
 import sys
 import urllib.parse
@@ -22,10 +23,13 @@ sys.path.insert(0, "/opt/rename-webhook")
 from shared.secrets import load_secrets
 from shared.telegram import send_telegram, send_telegram_inline
 from shared.kalender_store import KalenderStore
+from shared.termin_felder import UHRZEIT_RE
+import termin_scraper
 
 GEMEINDEN_FILE      = Path("/opt/rename-webhook/heimat_gemeinden.json")
 VEREINSTERMINE_FILE = Path("/opt/rename-webhook/vereinstermine.json")
 PENDING_DIR         = Path("/opt/rename-webhook/imports")
+LAST_IMPORT_FILE    = Path("/opt/rename-webhook/last_import.json")
 LOG_FILE            = "/var/log/pka-heimat.log"
 API_EXPORT          = "https://heimatinfo-api-platform.azurewebsites.net"
 API_EXPORT_HEADERS  = {
@@ -33,6 +37,15 @@ API_EXPORT_HEADERS  = {
     "Referer":    "https://www.heimat-info.de/",
     "User-Agent": "Mozilla/5.0",
 }
+
+MAX_KI_PRO_LAUF     = 5   # Kostenbremse: höchstens so viele KI-Abrufe pro Importlauf
+
+# Veranstalter, die eine Gemeindeverwaltung sind → Rubrik „Gemeinde"
+_GEMEINDE_VERANSTALTER = re.compile(
+    r"^(gemeinde|markt|stadt|vg|verwaltungsgemeinschaft|rathaus|landratsamt)\b", re.I)
+# Titel von Sitzungen ohne Veranstalterangabe → der Gemeinde zuordnen
+_SITZUNG_TITEL = re.compile(
+    r"(gemeinderat|marktgemeinderat|marktrat|stadtrat|ausschuss|bürgerversammlung)", re.I)
 
 _org_cache: dict[str, str] = {}
 
@@ -279,16 +292,12 @@ def discover_c_id(url: str) -> str | None:
     return found[0] if found else None
 
 
-def _existing_events(exclude_keys: set | None = None) -> set[tuple[str, str, str]]:
-    """Gibt alle (datum, uhrzeit, bezeichnung)-Tripel aus vereinstermine.json zurück.
-    exclude_keys: Keys die übersprungen werden (z.B. alte Gemeinde-Keys bei Migration)."""
-    if not VEREINSTERMINE_FILE.exists():
-        return set()
-    data = json.loads(VEREINSTERMINE_FILE.read_text())
+def _existing_from_data(data: dict) -> set[tuple[str, str, str]]:
+    """Alle (datum, uhrzeit, bezeichnung)-Tripel eines Kalenderstands – auch gelöschte,
+    damit verworfene Termine nicht wiederkommen."""
     existing = set()
-    skip = exclude_keys or set()
     for key, items in data.items():
-        if key in skip or not isinstance(items, list):
+        if key.startswith("_") or not isinstance(items, list):
             continue
         for item in items:
             if isinstance(item, dict) and "datum" in item:
@@ -298,6 +307,13 @@ def _existing_events(exclude_keys: set | None = None) -> set[tuple[str, str, str
                     item.get("bezeichnung", "").strip().lower(),
                 ))
     return existing
+
+
+def _existing_events() -> set[tuple[str, str, str]]:
+    """Gibt alle (datum, uhrzeit, bezeichnung)-Tripel aus vereinstermine.json zurück."""
+    if not VEREINSTERMINE_FILE.exists():
+        return set()
+    return _existing_from_data(json.loads(VEREINSTERMINE_FILE.read_text()))
 
 
 def _is_duplicate(datum: str, uhrzeit: str, bezeichnung: str,
@@ -318,12 +334,15 @@ def _is_duplicate(datum: str, uhrzeit: str, bezeichnung: str,
 
 
 def do_import(uid: str, verein_keys: list | None = None,
-              excluded_events: list | None = None) -> str:
+              excluded_events: list | None = None, geo: dict | None = None) -> str:
     """Schreibt bestätigte Events in vereinstermine.json.
     verein_keys=None: alle Events importieren.
     verein_keys=[...]: nur diese Vereine importieren; Pending-Datei bleibt mit Rest.
     excluded_events: Liste von {verein_key, datum, uhrzeit, bezeichnung} – diese Termine überspringen.
-    Löscht zuerst alte Gemeinde-Keys (Migration auf per-Veranstalter-Keys)."""
+    geo: {verein_key: {heimatort, gemeinde, landkreis}} – Admin-Angaben aus der Import-Ansicht,
+         gelten nur für die übernommenen Vereine; leere Felder ändern nichts.
+    Duplikatprüfung und Schreiben laufen gemeinsam im Lock von KalenderStore.update() auf dem
+    dann aktuellen Dateistand – parallele Änderungen gehen nicht verloren."""
     pending_file = PENDING_DIR / f"heimat_pending_{uid}.json"
     if not pending_file.exists():
         # Fallback für ältere Pending-Dateien in /tmp
@@ -331,7 +350,7 @@ def do_import(uid: str, verein_keys: list | None = None,
         if old.exists():
             pending_file = old
         else:
-            return "⚠️ Pending-Datei nicht gefunden (Server-Neustart?)"
+            raise FileNotFoundError("Import nicht mehr vorhanden (schon bestätigt oder verworfen?)")
 
     pending  = json.loads(pending_file.read_text())
     events   = pending["events"]
@@ -345,80 +364,76 @@ def do_import(uid: str, verein_keys: list | None = None,
                 ex.get("uhrzeit", ""),
                 ex.get("bezeichnung", "").strip().lower(),
             ))
-    data     = json.loads(VEREINSTERMINE_FILE.read_text()) if VEREINSTERMINE_FILE.exists() else {}
-    if "_labels" not in data:
-        data["_labels"] = {}
-    if "_meta" not in data:
-        data["_meta"] = {}
-    gemeinde_map: dict = data.setdefault("_ortschaften", {}).setdefault("gemeinde_map", {})
+    kandidaten = [
+        e for e in events
+        if (filter_keys is None or e["_verein_key"] in filter_keys)
+        and (e["_verein_key"], e["datum"], e.get("uhrzeit", ""),
+             e["bezeichnung"].strip().lower()) not in excluded_set
+    ]
+    stand = {"neu": 0, "duplikat": 0, "vereine": set()}
 
-    # Alte Gemeinde-Keys entfernen (werden durch per-Veranstalter-Keys ersetzt)
-    old_keys: set = set()
-    if GEMEINDEN_FILE.exists():
-        gemeinden = json.loads(GEMEINDEN_FILE.read_text())
-        old_keys  = {g["verein_key"] for g in gemeinden}
-        geloescht = [k for k in old_keys if k in data]
-        for k in geloescht:
-            del data[k]
-            data["_labels"].pop(k, None)
-            data["_meta"].pop(k, None)
-        if geloescht:
-            _log(f"🗑 Alte Gemeinde-Keys entfernt: {', '.join(geloescht)}")
-
-    existing = _existing_events(exclude_keys=old_keys)
-    neu = duplikat = 0
-    neu_vereine: set = set()
-
-    for e in events:
-        if filter_keys is not None and e["_verein_key"] not in filter_keys:
-            continue
-        if excluded_set and (
-            e["_verein_key"], e["datum"], e.get("uhrzeit", ""),
-            e["bezeichnung"].strip().lower()
-        ) in excluded_set:
-            continue
-        if not e.get("_neu", True):
-            duplikat += 1
-            continue
-        if _is_duplicate(e["datum"], e["uhrzeit"], e["bezeichnung"], existing):
-            duplikat += 1
-            continue
-        key = e["_verein_key"]
-        if key not in data:
-            data[key] = []
-        data["_labels"].setdefault(key, e["_label"])
-        verein_gemeinde = gemeinde_map.get(e["_gemeinde"], "")
-        # Geo-Felder nur setzen wenn noch kein Eintrag vorhanden (nie überschreiben)
-        if key not in data["_meta"]:
-            data["_meta"][key] = {
-                "heimatort": e["_gemeinde"],
-                "gemeinde":  verein_gemeinde,
-                "landkreis": e.get("_landkreis", "Landkreis Landshut"),
+    def _upd(data: dict) -> None:
+        stand.update(neu=0, duplikat=0, vereine=set())
+        labels_ = data.setdefault("_labels", {})
+        meta_   = data.setdefault("_meta", {})
+        gemeinde_map: dict = data.setdefault("_ortschaften", {}).setdefault("gemeinde_map", {})
+        existing = _existing_from_data(data)
+        for e in kandidaten:
+            if not e.get("_neu", True) or _is_duplicate(
+                    e["datum"], e["uhrzeit"], e["bezeichnung"], existing):
+                stand["duplikat"] += 1
+                continue
+            key = e["_verein_key"]
+            data.setdefault(key, [])
+            labels_.setdefault(key, e["_label"])
+            verein_gemeinde = gemeinde_map.get(e["_gemeinde"], "") or e.get("_gemeinde_amtlich", "")
+            # Geo-Felder nur setzen wenn noch kein Eintrag vorhanden (nie überschreiben)
+            if key not in meta_:
+                meta_[key] = {
+                    "heimatort": e["_gemeinde"],
+                    "gemeinde":  verein_gemeinde,
+                    "landkreis": e.get("_landkreis") or "Landkreis Landshut",
+                }
+            if e.get("_rubrik") and not meta_[key].get("rubrik"):
+                meta_[key]["rubrik"] = e["_rubrik"]
+            ortschaft = e.get("ortschaft", "") or e["_gemeinde"]
+            if ortschaft and ortschaft not in gemeinde_map and verein_gemeinde:
+                gemeinde_map[ortschaft] = verein_gemeinde
+            termin = {
+                "datum":        e["datum"],
+                "uhrzeit":      e["uhrzeit"],
+                "bezeichnung":  e["bezeichnung"],
+                "veranstalter": e.get("_verein_name", ""),
+                "ort":          e["ort"],
+                "ortschaft":    ortschaft,
+                "quelle":       e.get("quelle", ""),
+                "quelle_url":   e.get("quelle_url", ""),
             }
-        ortschaft = e.get("ortschaft", "") or e["_gemeinde"]
-        if ortschaft and ortschaft not in gemeinde_map and verein_gemeinde:
-            gemeinde_map[ortschaft] = verein_gemeinde
-        data[key].append({
-            "datum":        e["datum"],
-            "uhrzeit":      e["uhrzeit"],
-            "bezeichnung":  e["bezeichnung"],
-            "veranstalter": e.get("_verein_name", ""),
-            "ort":          e["ort"],
-            "ortschaft":    ortschaft,
-            "quelle":       e.get("quelle", ""),
-            "quelle_url":   e.get("quelle_url", ""),
-        })
-        existing.add((e["datum"], e["uhrzeit"], e["bezeichnung"].strip().lower()))
-        neu += 1
-        neu_vereine.add(key)
+            bis = e.get("uhrzeit_bis", "")
+            if e["uhrzeit"] and UHRZEIT_RE.match(bis or "") and bis != e["uhrzeit"]:
+                termin["uhrzeit_bis"] = bis
+            data[key].append(termin)
+            existing.add((e["datum"], e["uhrzeit"], e["bezeichnung"].strip().lower()))
+            stand["neu"] += 1
+            stand["vereine"].add(key)
+        # Admin-Geo-Angaben für die übernommenen Vereine (maßgeblich, aber nie leeren)
+        geo_keys = filter_keys if filter_keys is not None else stand["vereine"]
+        for vkey, felder in (geo or {}).items():
+            if vkey not in geo_keys or not isinstance(felder, dict):
+                continue
+            for f in ("heimatort", "gemeinde", "landkreis"):
+                val = str(felder.get(f) or "").strip()
+                if val:
+                    meta_.setdefault(vkey, {})[f] = val
 
-    KalenderStore.update(lambda d: d.clear() or d.update(data))
+    KalenderStore.update(_upd)
+    neu, duplikat = stand["neu"], stand["duplikat"]
     _log(f"✅ Import: {neu} neu, {duplikat} Duplikate übersprungen")
-    Path("/opt/rename-webhook/last_import.json").write_text(
+    LAST_IMPORT_FILE.write_text(
         json.dumps({
             "datum":   datetime.now().strftime("%Y-%m-%d %H:%M"),
             "termine": neu,
-            "vereine": len(neu_vereine),
+            "vereine": len(stand["vereine"]),
         }, ensure_ascii=False)
     )
 
@@ -436,7 +451,7 @@ def do_import(uid: str, verein_keys: list | None = None,
     try:
         if filter_keys is not None:
             remaining = [e for e in events if e["_verein_key"] not in filter_keys]
-            if remaining:
+            if any(e.get("_neu") for e in remaining):   # nur Duplikate übrig → erledigt
                 pending["events"] = remaining
                 pending_file.write_text(json.dumps(pending, ensure_ascii=False))
             else:
@@ -494,7 +509,7 @@ def do_reject(uid: str, verein_keys: list | None = None) -> str:
     remaining = [e for e in pending["events"] if e["_verein_key"] not in filter_keys]
     _save_rejected_as_deleted(rejected_new)
     try:
-        if remaining:
+        if any(e.get("_neu") for e in remaining):   # nur Duplikate übrig → erledigt
             pending["events"] = remaining
             pending_file.write_text(json.dumps(pending, ensure_ascii=False))
         else:
@@ -504,16 +519,106 @@ def do_reject(uid: str, verein_keys: list | None = None) -> str:
     return f"🗑 {len(verein_keys)} Verein(e) verworfen"
 
 
-def fetch_and_save_pending(gemeinden_filter: list | None = None) -> dict:
-    """Fetcht Events für alle (oder gefilterte) Gemeinden und speichert Pending.
-    Gibt Summary-Dict zurück: {uid, neu, duplikate, sv, fehler, gesamt}
+def _cfg() -> dict:
+    """Zugangsdaten: in Flask aus der Umgebung (EnvironmentFile), im Cron aus secrets.env."""
+    if os.environ.get("CLAUDE_API_KEY"):
+        return dict(os.environ)
+    try:
+        return load_secrets()
+    except Exception:
+        return dict(os.environ)
+
+
+def _lade_gemeinden() -> list:
+    return json.loads(GEMEINDEN_FILE.read_text()) if GEMEINDEN_FILE.exists() else []
+
+
+def _speichere_gemeinden(gemeinden: list) -> None:
+    tmp = GEMEINDEN_FILE.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(gemeinden, ensure_ascii=False, indent=2))
+    try:   # Cron läuft als root – Datei muss für den Service-User (webhook) schreibbar bleiben
+        st = GEMEINDEN_FILE.stat()
+        os.chown(tmp, st.st_uid, st.st_gid)
+    except OSError:
+        pass
+    tmp.replace(GEMEINDEN_FILE)
+
+
+def _aktualisiere_gemeinde(url: str, felder: dict) -> None:
+    gemeinden = _lade_gemeinden()
+    for g in gemeinden:
+        if g.get("url") == url:
+            for k in ("parser", "ical_url", "c_id"):
+                g.pop(k, None)
+            g.update(felder)
+    _speichere_gemeinden(gemeinden)
+
+
+def _quelle_von(g: dict) -> str:
+    if (g.get("typ") or "heimat") == "heimat":
+        return "heimat-info.de"
+    host = urllib.parse.urlparse(g.get("url", "")).hostname or ""
+    return host.removeprefix("www.")
+
+
+def _ki_lauf(g: dict, heute: str, lauf: dict) -> list[dict]:
+    """Eintrag mit typ "ki": erst kostenlose Wege erneut prüfen (ein inzwischen gebauter
+    Parser übernimmt automatisch), sonst Claude lesen lassen."""
+    html = termin_scraper.lade(g["url"])
+    statisch = termin_scraper.erkenne_statisch(g["url"], html, heute)
+    if statisch:
+        felder = {k: v for k, v in statisch.items() if k != "termine"}
+        _aktualisiere_gemeinde(g["url"], felder)
+        lauf["hinweise"].append(f"✅ {g['name']}: läuft jetzt ohne KI ({felder['typ']}"
+                                + (f"/{felder['parser']}" if felder.get("parser") else "") + ")")
+        _log(f"  → {g['name']}: Abrufweg {felder} statt KI")
+        return statisch["termine"]
+    if lauf["ki_aufrufe"] >= MAX_KI_PRO_LAUF:
+        raise termin_scraper.ScraperFehler(f"KI-Limit ({MAX_KI_PRO_LAUF} pro Lauf) erreicht")
+    lauf["ki_aufrufe"] += 1
+    termine, info = termin_scraper.ki_extrahieren(html, g["url"], heute, _cfg().get("CLAUDE_API_KEY", ""))
+    _log(f"  → KI {g['name']}: {len(termine)} Termine, {info['eingabe_tokens']}+{info['ausgabe_tokens']} "
+         f"Tokens, ~{info['kosten_usd']:.3f} $" + (" (Text gekürzt)" if info["gekuerzt"] else ""))
+    lauf["ki"].append({"name": g["name"], "termine": len(termine), **info})
+    return termine
+
+
+def _zuordnen(e: dict, g: dict, aliase: dict, sv_meta: dict, existing: set) -> None:
+    """Verein, Gemeinde, Rubrik und Neu-Status eines Rohtermins bestimmen."""
+    veranst = e.get("_verein_name", "")
+    if termin_scraper.ist_namensliste(veranst):
+        veranst = e["_verein_name"] = ""     # Personen-Aufzählung nicht als Verein veröffentlichen
+    if not veranst and g.get("gemeinde") and _SITZUNG_TITEL.search(e["bezeichnung"]):
+        veranst = g["gemeinde"]        # Sitzung ohne Veranstalterangabe → Gemeindeverwaltung
+        e["_verein_name"] = veranst
+    roh_key          = _slugify(veranst) or g["verein_key"]
+    e["_verein_key"] = aliase.get(roh_key, roh_key)
+    e["_label"]      = veranst or g.get("label", g["name"])
+    e["_gemeinde"]   = g["name"]
+    e["_landkreis"]  = g.get("landkreis") or "Landkreis Landshut"
+    if g.get("gemeinde"):
+        e["_gemeinde_amtlich"] = g["gemeinde"]
+    if _GEMEINDE_VERANSTALTER.match(veranst.strip()):
+        e["_rubrik"] = "Gemeinde"
+    e["quelle"]      = _quelle_von(g)
+    e["quelle_url"]  = g.get("url", "")
+    e["_methode"]    = g.get("typ") or "heimat"
+    e["_sv"]         = bool(sv_meta.get(e["_verein_key"], {}).get("selbstverwaltung", False))
+    e["_neu"]        = not _is_duplicate(e["datum"], e["uhrzeit"], e["bezeichnung"], existing)
+
+
+def fetch_and_save_pending(gemeinden_filter: list | None = None,
+                           vorab: dict | None = None) -> dict:
+    """Fetcht Termine für alle (oder gefilterte) Gemeinden und speichert Pending.
+    vorab: {url: [Rohtermine]} – schon geholte Termine (neue URL), werden nicht erneut abgerufen.
+    Gibt Summary-Dict zurück: {uid, neu, duplikate, sv, fehler, gesamt, hinweise, ki}
     Bei Fehler: {"error": "..."} ohne uid."""
     PENDING_DIR.mkdir(parents=True, exist_ok=True)
 
     if not GEMEINDEN_FILE.exists():
         return {"error": "heimat_gemeinden.json nicht gefunden"}
 
-    gemeinden = json.loads(GEMEINDEN_FILE.read_text())
+    gemeinden = _lade_gemeinden()
     if gemeinden_filter:
         gemeinden = [g for g in gemeinden if g.get("url") in gemeinden_filter
                      or g.get("name") in gemeinden_filter]
@@ -521,8 +626,7 @@ def fetch_and_save_pending(gemeinden_filter: list | None = None) -> dict:
         return {"error": "Keine Gemeinden konfiguriert"}
 
     heute    = datetime.now().strftime("%Y-%m-%d")
-    old_keys = {g["verein_key"] for g in gemeinden}
-    existing = _existing_events(exclude_keys=old_keys)
+    existing = _existing_events()
 
     try:
         _vk_data       = json.loads(VEREINSTERMINE_FILE.read_text()) if VEREINSTERMINE_FILE.exists() else {}
@@ -534,38 +638,50 @@ def fetch_and_save_pending(gemeinden_filter: list | None = None) -> dict:
 
     alle_events: list = []
     fehler: list      = []
+    lauf = {"hinweise": [], "ki": [], "ki_aufrufe": 0}
 
     for g in gemeinden:
-        _log(f"Fetche {g['name']} (c={g['c_id'][:8]}…)")
-        api_events = _fetch_all_events(g["c_id"])
-        if not api_events:
-            fehler.append(g["name"])
+        typ = g.get("typ") or "heimat"
+        try:
+            if vorab and g.get("url") in vorab:
+                events = vorab[g["url"]]
+            elif typ == "heimat":
+                _log(f"Fetche {g['name']} (c={g['c_id'][:8]}…)")
+                api_events = _fetch_all_events(g["c_id"])
+                if not api_events:
+                    fehler.append(g["name"])
+                    continue
+                events = _parse_api_events(api_events, heute, g["name"])
+            elif typ == "ki":
+                _log(f"Fetche {g['name']} (KI, {g['url']})")
+                events = _ki_lauf(g, heute, lauf)
+            else:
+                _log(f"Fetche {g['name']} ({typ}, {g['url']})")
+                events = termin_scraper.hole_termine(g, heute)
+        except Exception as ex:
+            _log(f"  ❌ {g['name']}: {ex}")
+            fehler.append(f"{g['name']} ({ex})")
             continue
-        events = _parse_api_events(api_events, heute, g["name"])
+        if typ != "heimat":
+            for e in events:     # heimat-Texte sind in _parse_api_events schon geprüft
+                for feld, name in (("bezeichnung", "titel"), ("ort", "ort"), ("_verein_name", "verein")):
+                    e[feld] = _sanitize_text(e.get(feld, ""), name, g["name"])
         for e in events:
-            veranst          = e.get("_verein_name", "")
-            roh_key          = _slugify(veranst) or g["verein_key"]
-            e["_verein_key"] = _heimat_aliase.get(roh_key, roh_key)
-            e["_label"]      = veranst or g.get("label", g["name"])
-            e["_gemeinde"]   = g["name"]
-            e["_landkreis"]  = g.get("landkreis", "Landkreis Landshut")
-            e["quelle"]      = "heimat-info.de"
-            e["quelle_url"]  = g.get("url", "")
-            e["_sv"]         = bool(_sv_meta.get(e["_verein_key"], {}).get("selbstverwaltung", False))
-            e["_neu"]        = not _is_duplicate(
-                e["datum"], e["uhrzeit"], e["bezeichnung"], existing)
+            _zuordnen(e, g, _heimat_aliase, _sv_meta, existing)
         alle_events.extend(events)
         neu_count = sum(1 for e in events if e["_neu"])
         _log(f"  → {len(events)} Termine ({neu_count} neu)")
 
     if not alle_events:
-        return {"error": "Keine bevorstehenden Termine gefunden", "fehler": fehler}
+        return {"error": "Keine bevorstehenden Termine gefunden", "fehler": fehler,
+                "hinweise": lauf["hinweise"], "ki": lauf["ki"]}
 
     alle_events.sort(key=lambda x: (x["datum"], x.get("uhrzeit", "")))
     uid = str(uuid.uuid4())[:8]
+    quellen = list(dict.fromkeys(e["quelle"] for e in alle_events))
     (PENDING_DIR / f"heimat_pending_{uid}.json").write_text(json.dumps({
         "uid":     uid,
-        "quelle":  "heimat-info.de",
+        "quelle":  ", ".join(quellen),
         "erzeugt": datetime.now().isoformat(timespec="seconds"),
         "events":  alle_events,
     }, ensure_ascii=False))
@@ -575,19 +691,36 @@ def fetch_and_save_pending(gemeinden_filter: list | None = None) -> dict:
     sv  = sum(1 for e in alle_events if e.get("_sv"))
     _log(f"✅ Pending uid={uid}: {neu} neu, {dup} dup, {sv} sv (davon)")
     return {"uid": uid, "neu": neu, "duplikate": dup, "sv": sv,
-            "fehler": fehler, "gesamt": len(alle_events)}
+            "fehler": fehler, "gesamt": len(alle_events),
+            "hinweise": lauf["hinweise"], "ki": lauf["ki"]}
+
+
+def _ki_text(ki: list) -> str:
+    if not ki:
+        return ""
+    zeilen = [f"🤖 KI-Abruf {k['name']}: {k['termine']} Termine, ~{k['kosten_usd']:.2f} $"
+              + (" – Seitentext gekürzt" if k.get("gekuerzt") else "")
+              + (" – Antwort abgeschnitten" if k.get("abgeschnitten") else "") for k in ki]
+    return "\n".join(zeilen)
 
 
 def cmd_import(secrets: dict) -> None:
+    _sende_vorschau(fetch_and_save_pending(), secrets)
+
+
+def _sende_vorschau(result: dict, secrets: dict) -> None:
     token   = secrets["TOKEN"]
     chat_id = secrets["CHAT_ID"]
 
-    result = fetch_and_save_pending()
     if _injection_findings:
         _notify_injection(token, chat_id, _injection_findings)
         _injection_findings.clear()
+    extra = "\n".join(t for t in (_ki_text(result.get("ki", [])), *result.get("hinweise", [])) if t)
     if "error" in result:
-        send_telegram(token, chat_id, f"⚠️ {result['error']}")
+        fehler = result.get("fehler", [])
+        send_telegram(token, chat_id, f"⚠️ {result['error']}"
+                      + (f"\nFehler bei: {', '.join(fehler)}" if fehler else "")
+                      + (f"\n\n{extra}" if extra else ""))
         return
 
     uid        = result["uid"]
@@ -597,7 +730,8 @@ def cmd_import(secrets: dict) -> None:
     fehler     = result.get("fehler", [])
 
     pending_file = PENDING_DIR / f"heimat_pending_{uid}.json"
-    alle_events  = json.loads(pending_file.read_text())["events"]
+    pending      = json.loads(pending_file.read_text())
+    alle_events  = pending["events"]
 
     def _vorschau_zeile(e: dict) -> str:
         veranst = e.get("_verein_name", "")
@@ -619,13 +753,13 @@ def cmd_import(secrets: dict) -> None:
     if sv_gesamt:
         zähler += f" | 🔒 SV: {sv_gesamt}"
 
-    gemeinden     = json.loads(GEMEINDEN_FILE.read_text())
-    gemeinden_str = ", ".join(g["name"] for g in gemeinden)
-    msg = (f"🏡 heimat-info Import\n"
+    gemeinden_str = ", ".join(dict.fromkeys(e["_gemeinde"] for e in alle_events))
+    msg = (f"🏡 Termin-Import ({pending.get('quelle', '')})\n"
            f"Gemeinden: {gemeinden_str}\n"
            f"{zähler}\n\n"
            + (vorschau if neue else "Alle Termine bereits vorhanden.")
            + sv_hinweis
+           + (f"\n\n{extra}" if extra else "")
            + f"\n\n→ Admin-Bereich: vereinskalender.online/#admin → Importe")
 
     send_telegram_inline(token, chat_id, msg, [[
@@ -638,53 +772,7 @@ def cmd_import(secrets: dict) -> None:
 
 
 def cmd_add(url: str, secrets: dict) -> None:
-    token   = secrets["TOKEN"]
-    chat_id = secrets["CHAT_ID"]
-
-    _log(f"Discovery: {url}")
-    c_id = discover_c_id(url)
-
-    if not c_id:
-        send_telegram(token, chat_id,
-                      f"❌ Keine heimat-info ID gefunden auf:\n{url}\n\n"
-                      "Prüfe ob die Seite heimat-info nutzt und ein 'Inhalte entsperren'-Button vorhanden ist.")
-        return
-
-    # Slug aus URL ableiten
-    slug = re.sub(r'https?://(www\.)?', '', url).split('/')[0].replace('gemeinde-', '').replace('.de', '').replace('.', '_')
-    slug = re.sub(r'[^a-z0-9_]', '', slug.lower())[:20]
-    name = slug.replace('_', ' ').title()
-
-    gemeinden = json.loads(GEMEINDEN_FILE.read_text()) if GEMEINDEN_FILE.exists() else []
-
-    # Duplikat prüfen
-    if any(g["c_id"] == c_id for g in gemeinden):
-        send_telegram(token, chat_id, f"ℹ️ Diese Gemeinde ist bereits eingetragen (c={c_id[:8]}…)")
-        return
-
-    eintrag = {"name": name, "label": name, "verein_key": slug,
-                "c_id": c_id, "url": url}
-    gemeinden.append(eintrag)
-    GEMEINDEN_FILE.write_text(json.dumps(gemeinden, ensure_ascii=False, indent=2))
-
-    # Prüfen ob Gemeinde-Name in gemeinde_map bekannt ist
-    try:
-        vt = json.loads(VEREINSTERMINE_FILE.read_text()) if VEREINSTERMINE_FILE.exists() else {}
-        gmap = vt.get("_ortschaften", {}).get("gemeinde_map", {})
-        in_map = name in gmap or any(v == name for v in gmap.values())
-    except Exception:
-        in_map = True  # im Zweifel keine Warnung
-
-    msg = (f"✅ Gemeinde hinzugefügt:\n"
-           f"Name: {name}\nKey: {slug}\nID: {c_id[:8]}…\n\n")
-    if not in_map:
-        msg += (f"⚠️ '{name}' fehlt noch in der Ortschaft→Gemeinde-Map!\n"
-                f"Bitte vor dem ersten /heimat-Import ergänzen:\n"
-                f"  Ortschaft '{name}' → offizielle Gemeinde (z.B. 'Gemeinde {name}')\n"
-                f"Sonst erscheint kein Gemeinde-Filter-Chip für diese Gemeinde.\n\n")
-    msg += "Mit /heimat den ersten Import starten."
-    send_telegram(token, chat_id, msg)
-    _log(f"✅ Gemeinde hinzugefügt: {name} ({c_id})" + ("" if in_map else " ⚠️ nicht in gemeinde_map"))
+    _sende_vorschau(fetch_and_save_pending_for_url(url), secrets)
 
 
 def _get_dropbox_token(secrets: dict) -> str:
@@ -723,37 +811,121 @@ def _download_dropbox(token: str, path: str) -> bytes:
 
 
 
+def _neuer_eintrag(url: str, geo: dict | None) -> dict:
+    if geo:
+        name = geo["name"]
+    else:
+        roh = [t for t in re.split(r"[/\-_.]+", urllib.parse.urlparse(url).path)
+               if t and termin_scraper._norm(t) not in termin_scraper._PFAD_FUELL and not t.isdigit()]
+        host = urllib.parse.urlparse(url).hostname or url
+        name = (roh[-1].replace("-", " ").title() if roh else
+                re.sub(r"^(www\.|vg\.|gemeinde-|markt-|stadt-)", "", host).split(".")[0].replace("-", " ").title())
+    eintrag = {"name": name, "label": f"Veranstaltungen {name}",
+               "verein_key": "veranstaltungen_" + _slugify(name), "url": url}
+    if geo:
+        eintrag.update(landkreis=geo["landkreis"], gemeinde=geo["gemeinde"], plz=geo["plz"])
+    return eintrag
+
+
+def _melde_ki_quelle(eintrag: dict, termine: list, info: dict) -> None:
+    """Neue Seite läuft nur per KI → Josef informieren + Todo für einen festen Parser."""
+    cfg  = _cfg()
+    host = urllib.parse.urlparse(eintrag["url"]).hostname or eintrag["url"]
+    jahr = info["kosten_usd"] * 52
+    todo_nr = 0
+    try:
+        from shared.pka_todos import todo_anlegen
+        todo_nr = todo_anlegen(
+            f"VKO: Parser für Termin-Seite {host} bauen – läuft per KI-Rückfall "
+            f"(~{info['kosten_usd']:.2f} $/Woche). Fixture nach tests/fixtures/scraper/, "
+            f"in termin_scraper.PARSER eintragen; die Gemeinde wechselt dann beim nächsten Lauf "
+            f"automatisch. URL: {eintrag['url']}", cfg)
+    except Exception as ex:
+        _log(f"⚠️  Todo für KI-Quelle nicht angelegt: {ex}")
+    msg = (f"🤖 Neue Termin-Seite nur per KI lesbar\n"
+           f"Seite: {eintrag['url']}\n"
+           f"Gemeinde: {eintrag['name']}" + (f" ({eintrag['landkreis']})" if eintrag.get("landkreis") else
+                                             " – nicht erkannt, Landkreis beim Bestätigen prüfen") + "\n"
+           f"Gefunden: {len(termine)} Termine\n"
+           f"Kosten: ~{info['kosten_usd']:.2f} $ pro Abruf (~{jahr:.0f} $/Jahr bei wöchentlichem Lauf), "
+           f"{info['modell']}\n"
+           + ("⚠️ Seitentext war zu lang und wurde gekürzt – evtl. fehlen Termine.\n" if info["gekuerzt"] else "")
+           + "Kein heimat-info, kein bekannter Seiten-Baukasten, keine strukturierten Daten.\n"
+           + (f"📝 Todo #{todo_nr} angelegt: festen Parser bauen." if todo_nr else
+              "⚠️ Todo konnte nicht angelegt werden – bitte manuell erfassen."))
+    try:
+        send_telegram(cfg["TOKEN"], cfg["CHAT_ID"], msg)
+    except Exception as ex:
+        _log(f"⚠️  Telegram-Hinweis KI-Quelle fehlgeschlagen: {ex}")
+
+
 def fetch_and_save_pending_for_url(url: str) -> dict:
     """Import für eine einzelne URL. Bekannte Gemeinde: direkt importieren.
-    Neue URL: Playwright-Discovery → in heimat_gemeinden.json eintragen → importieren.
+    Neue URL – Abrufweg bestimmen und in heimat_gemeinden.json eintragen:
+      1. bekannter Seiten-Baukasten / JSON-LD / iCal (kostenlos, ohne Browser)
+      2. heimat-info-Einbindung per Playwright
+      3. KI-Rückfall (kostet pro Lauf) → Telegram-Hinweis + Todo für einen festen Parser
     Gibt Summary-Dict zurück (wie fetch_and_save_pending) oder {"error": "..."}."""
-    gemeinden = json.loads(GEMEINDEN_FILE.read_text()) if GEMEINDEN_FILE.exists() else []
-
-    # Bekannte Gemeinde anhand URL suchen
-    treffer = next((g for g in gemeinden if g.get("url") == url), None)
-    if treffer:
+    gemeinden = _lade_gemeinden()
+    if any(g.get("url") == url for g in gemeinden):
         return fetch_and_save_pending(gemeinden_filter=[url])
 
-    # Neue URL: Discovery via Playwright
     _log(f"Discovery für neue URL: {url}")
-    c_id = discover_c_id(url)
-    if not c_id:
-        return {"error": f"Keine heimat-info ID gefunden auf: {url}"}
+    heute = datetime.now().strftime("%Y-%m-%d")
+    try:
+        html = termin_scraper.lade(url)
+    except Exception as ex:
+        return {"error": f"Seite nicht abrufbar: {ex}"}
+    eintrag = _neuer_eintrag(url, termin_scraper.gemeinde_aus_seite(html, url))
+    hinweise = [f"🆕 Neue Gemeinde {eintrag['name']}"
+                + (f" ({eintrag['landkreis']})" if eintrag.get("landkreis") else " – Gemeinde/Landkreis nicht erkannt")
+                + ": Ortschaften in orte.json nachtragen (siehe VKO-CLAUDE.md, Geo-Register)."]
 
-    if any(g["c_id"] == c_id for g in gemeinden):
-        # Bereits vorhanden (andere URL, gleiche c_id)
-        return fetch_and_save_pending(gemeinden_filter=[next(
-            g["url"] for g in gemeinden if g["c_id"] == c_id)])
+    termine = None
+    try:
+        statisch = termin_scraper.erkenne_statisch(url, html, heute)
+    except Exception as ex:
+        _log(f"  Statische Erkennung fehlgeschlagen: {ex}")
+        statisch = None
+    if statisch:
+        termine = statisch.pop("termine")
+        eintrag.update(statisch)
+        _log(f"  → Abrufweg {statisch}: {len(termine)} Termine")
+    else:
+        try:
+            c_id = discover_c_id(url)
+        except Exception as ex:
+            _log(f"  Playwright-Discovery fehlgeschlagen: {ex}")
+            c_id = None
+        if c_id:
+            vorhanden = next((g for g in gemeinden if g.get("c_id") == c_id), None)
+            if vorhanden:
+                return fetch_and_save_pending(gemeinden_filter=[vorhanden["url"]])
+            eintrag.update(typ="heimat", c_id=c_id)
+            _log(f"  → heimat-info c={c_id[:8]}…")
+        else:
+            try:
+                termine, info = termin_scraper.ki_extrahieren(
+                    html, url, heute, _cfg().get("CLAUDE_API_KEY", ""))
+            except Exception as ex:
+                return {"error": f"Kein Abrufweg gefunden, KI-Rückfall fehlgeschlagen: {ex}"}
+            _log(f"  → KI: {len(termine)} Termine, ~{info['kosten_usd']:.3f} $")
+            if not termine:
+                return {"error": f"Auch die KI hat auf {url} keine künftigen Termine gefunden "
+                                 f"(~{info['kosten_usd']:.2f} $) – nichts gespeichert."}
+            eintrag["typ"] = "ki"
+            _melde_ki_quelle(eintrag, termine, info)
+            hinweise.append(_ki_text([{"name": eintrag["name"], "termine": len(termine), **info}]))
 
-    slug  = re.sub(r'https?://(www\.)?', '', url).split('/')[0]
-    slug  = re.sub(r'[^a-z0-9_]', '', slug.lower().replace('-', '_').replace('.', '_'))[:20]
-    name  = slug.replace('_', ' ').title()
-    eintrag = {"name": name, "label": name, "verein_key": slug, "c_id": c_id, "url": url}
+    gemeinden = _lade_gemeinden()
     gemeinden.append(eintrag)
-    GEMEINDEN_FILE.write_text(json.dumps(gemeinden, ensure_ascii=False, indent=2))
-    _log(f"✅ Neue Gemeinde gespeichert: {name} ({c_id[:8]}…)")
+    _speichere_gemeinden(gemeinden)
+    _log(f"✅ Neue Gemeinde gespeichert: {eintrag['name']} ({eintrag.get('typ')})")
 
-    return fetch_and_save_pending(gemeinden_filter=[url])
+    result = fetch_and_save_pending(gemeinden_filter=[url],
+                                    vorab={url: termine} if termine is not None else None)
+    result.setdefault("hinweise", []).extend(hinweise)
+    return result
 
 
 def main() -> None:
