@@ -257,6 +257,9 @@ def test_dienste():
     pruefe(b["status"] == cw.SELBSTTEST and "PostcodeCode" in b["grund"] and "04.10. 08:44" in b["grund"]
            and "journalctl -u kargl" in b["grund"], "Selbsttest-Fehler → Alarm mit Fehlertext, Startzeit, Log-Befehl", b)
     pruefe(cw.bewerte_dienst("kargl", k, "active", None)["status"] == cw.SELBSTTEST, "Selbsttest-Datei fehlt → Alarm")
+    eigen = cw.bewerte_dienst("ld", {"name": "ld", "log": "tail -n 50 /var/log/pka-ld.log"}, "failed", None)
+    pruefe("tail -n 50 /var/log/pka-ld.log" in eigen["grund"] and "journalctl" not in eigen["grund"],
+           "eigener Log-Befehl ersetzt journalctl", eigen)
     pruefe(cw.bewerte_dienst("kargl", k, "inactive", kaputt)["status"] == cw.DIENST_AUS, "Dienst aus hat Vorrang vor Selbsttest")
     bew = {"dienst:kargl": b, "cron_a": {"status": cw.OK, "grund": ""}}
     m, z = cw.entscheide(bew, {"alarme": {}}, jetzt)

@@ -165,7 +165,8 @@
     },
     {
       "name": "life-doku",
-      "selbsttest": "/opt/life-doku/selftest.json"
+      "selbsttest": "/opt/life-doku/selftest.json",
+      "log": "tail -n 50 /var/log/pka-life-doku.log"
     },
     {
       "name": "rechnungen"
@@ -186,7 +187,7 @@
       "name": "qg-feedback-bot"
     }
   ],
-  "_hinweis_dienste": "Dauerhaft laufende systemd-Dienste: Alarm, wenn `systemctl is-active` nicht active/activating/reloading meldet (einmal 20 s nachgefasst, falls gerade ein Neustart läuft). `selbsttest` = JSON-Datei {name, zeit, ok, fehler[]}, die der Dienst beim Start schreibt. claude-code fehlt bewusst (läuft nur auf Abruf, ADR-003). Neuer Dauer-Dienst ⇒ hier eintragen.",
+  "_hinweis_dienste": "Dauerhaft laufende systemd-Dienste: Alarm, wenn `systemctl is-active` nicht active/activating/reloading meldet (einmal 20 s nachgefasst, falls gerade ein Neustart läuft). `selbsttest` = JSON-Datei {name, zeit, ok, fehler[]}, die der Dienst beim Start schreibt. claude-code fehlt bewusst (läuft nur auf Abruf, ADR-003). Neuer Dauer-Dienst ⇒ hier eintragen. Optional `log`: Befehl für die Meldung, falls der Dienst nicht ins Journal schreibt (life-doku → /var/log/pka-life-doku.log).",
   "timer": [
     {
       "name": "newsletter-fetch",

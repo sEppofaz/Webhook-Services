@@ -157,7 +157,7 @@ def bewerte(job: dict, hb: dict | None, jetzt: datetime) -> dict:
 
 def bewerte_dienst(name: str, dienst: dict, aktiv: str, selbsttest: dict | None) -> dict:
     """Status eines systemd-Dienstes aus `systemctl is-active` und (optional) seiner Selbsttest-Datei."""
-    log = "Log: journalctl -u %s -n 50 --no-pager" % name
+    log = "Log: %s" % (dienst.get("log") or "journalctl -u %s -n 50 --no-pager" % name)
     if aktiv not in LAEUFT:
         return {"status": DIENST_AUS, "grund": "systemd meldet „%s“\n%s" % (aktiv or "unbekannt", log)}
     if dienst.get("selbsttest"):
