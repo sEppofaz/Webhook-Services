@@ -81,6 +81,7 @@ Weitere Felder: `name`, `label` (`Veranstaltungen <Name>`), `verein_key` (Sammel
 - **Selbstverwaltende Vereine** werden normal dedupliziert und mit `_sv` markiert (ADR-003).
 - **`heimatort_gespeichert`/`gemeinde_vorschlag`/`landkreis_vorschlag`** in der Pending-Übersicht: aus `_meta`, sonst aus der Gemeinde-Konfiguration – Vorbelegung der Admin-Felder.
 - **Neue Gemeinde ⇒ Ortschaften in `orte.json`** (Geo-Register, siehe unten) – die Import-Meldung erinnert daran.
+- **Heimatort neuer Vereine (seit v1.41):** `shared.geo.ortschaft_aus_name(label, gemeinde)` – Ortschaft aus dem Vereinsnamen, wenn sie zur Gemeinde gehört und eindeutig ist (auch Adjektiv „Oberlindharther“); sonst wie bisher der Gemeindename. Am 2026-10-04 auf 9 Mallersdorfer Vereine angewandt (Backup `/root/vereinstermine.json.bak-2026-10-04-heimatorte`).
 
 ---
 
