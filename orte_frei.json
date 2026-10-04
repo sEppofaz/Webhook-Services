@@ -3,5 +3,26 @@
     "name": "Winklmoos",
     "ortschaft": "Hölskofen",
     "beleg": "BayernAtlas (Josef, 2026-09-30): Gemeinde Bayerbach, Ortschaft Hölskofen. Nicht zu verwechseln mit der Ortschaft Winkelmoos bei Feuchten."
+  },
+  {
+    "name": "Haus der Generationen",
+    "ortschaft": "Mallersdorf",
+    "beleg": "Josef, 2026-10-04: liegt in der Ortschaft Mallersdorf (Markt Mallersdorf-Pfaffenberg).",
+    "alias": [
+      "HDG"
+    ]
+  },
+  {
+    "name": "Gasthaus Ganser",
+    "ortschaft": "Mallersdorf",
+    "beleg": "Josef, 2026-10-04: liegt in der Ortschaft Mallersdorf (Markt Mallersdorf-Pfaffenberg)."
+  },
+  {
+    "name": "Sportzentrum Igeltal",
+    "ortschaft": "Mallersdorf",
+    "beleg": "Josef, 2026-10-04: liegt in der Ortschaft Mallersdorf (Markt Mallersdorf-Pfaffenberg).",
+    "alias": [
+      "Igeltal"
+    ]
   }
 ]

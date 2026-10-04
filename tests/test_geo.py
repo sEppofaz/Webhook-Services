@@ -173,6 +173,27 @@ def test_orte_und_ortschaften():
         g._register, g._muster, g._frei_muster, g.ORTE_FREI_FILE = alt
 
 
+def test_landkreis_abgleich():
+    print("\nLandkreis-Abgleich + Mallersdorf (v1.40)")
+    lh  = {"landkreis": "Landkreis Landshut", "heimatort": "Ergoldsbach"}
+    sr  = {"landkreis": "Landkreis Straubing-Bogen", "heimatort": "Mallersdorf"}
+    pruefe(geo_fuer_termin({"ort": "Gasthaus zur Klause, Ergoldsbach"}, lh)["orte"] == ["Ergoldsbach"],
+           "Landshuter Verein: fremde „Klause“ fällt neben eigenem Treffer weg")
+    pruefe(sorted(geo_fuer_termin({"ort": "Gasthaus zur Klause, Ergoldsbach"})["orte"]) == ["Ergoldsbach", "Klause"],
+           "ohne Vereins-Landkreis bleibt alles wie bisher")
+    pruefe(geo_fuer_termin({"ort": "Feuerwehrgerätehaus Oberhaselbach"}, lh)["orte"] == ["Oberhaselbach"],
+           "einzelner Treffer in anderem Landkreis bleibt (Vereinsausflug)")
+    pruefe(geo_fuer_termin({"ort": "Haus der Generationen (HDG)"}, sr)["orte"] == ["Mallersdorf"],
+           "Haus der Generationen → Mallersdorf")
+    pruefe(geo_fuer_termin({"ort": "Sportzentrum Igeltal"}, sr)["orte"] == ["Mallersdorf"]
+           and geo_fuer_termin({"ort": "Gasthaus Ganser"}, sr)["orte"] == ["Mallersdorf"],
+           "Sportzentrum Igeltal, Gasthaus Ganser → Mallersdorf")
+    pruefe(geo_fuer_termin({"ort": "Rathaus - Großer Sitzungssaal", "ortschaft": "Mallersdorf-Pfaffenberg"}, sr)["orte"]
+           == ["Mallersdorf"], "Rathaus-Sitzung des Marktes → Heimatort Mallersdorf")
+    pruefe(geo_fuer_termin({"ort": "hinter dem Rathaus", "ortschaft": "Ergoldsbach"}, lh)["orte"] == ["Ergoldsbach"],
+           "„Rathaus“ anderswo bleibt unberührt")
+
+
 def test_killswitch():
     print("\nKill-Switch")
     import shared.geo as g
@@ -314,6 +335,7 @@ def main():
     test_abdeckung(termine, meta, labels)
     test_kernfaelle(termine, meta, labels, rubriken)
     test_orte_und_ortschaften()
+    test_landkreis_abgleich()
     test_killswitch()
     test_plz()
     ohne_treffer(termine)

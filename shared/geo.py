@@ -179,6 +179,16 @@ def geo_fuer_termin(termin: dict, meta_eintrag: dict | None = None,
             if treffer:
                 eintraege = [min(treffer, key=lambda x: x[0])[1]]
 
+    # Landkreis-Abgleich (v1.40): Das Register sucht Namen ohne Regionsbezug, und
+    # Allerweltsnamen gibt es in mehreren Landkreisen („Klause" ist eine Einöde in
+    # Mallersdorf-Pfaffenberg). Trifft der Text Orte aus mehreren Landkreisen und ist
+    # der Landkreis des Vereins darunter, bleiben nur dessen Treffer.
+    verein_lk = str((meta_eintrag or {}).get("landkreis") or "").strip()
+    if verein_lk and len(eintraege) > 1:
+        eigene = [e for e in eintraege if e.get("landkreis") == verein_lk]
+        if eigene:
+            eintraege = eigene
+
     if not eintraege:
         aus_feld = eintrag_fuer(termin.get("ortschaft", ""))
         heimat = eintrag_fuer(heimatort_of(meta_eintrag, label))
