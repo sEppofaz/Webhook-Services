@@ -144,6 +144,7 @@ Gottesdienste aus `gottesdienste.json` erreichen die Abonnenten also **nicht**. 
 - `location /verein` → proxy_pass Flask (Auth-Seiten, Dashboard)
 - `location /telegram` → Telegram Haupt-Bot-Webhook (**Pflicht!** Muss in dieser Config stehen)
 - `location /kalender-bot` → Telegram Kalender-Bot-Webhook
+- `location ~ ^/hero-region(-1000)?\.jpg$` → `root /opt/rename-webhook/static`, `Cache-Control: public, 30 Tage`, Security-Header wiederholt (seit 2026-10-04, v1.45, Titelbild). `/static/` selbst ist auf den VKO-Domains **nicht** freigegeben – neue statische Dateien brauchen eine eigene Location.
 - **Rate-Limit-Conf:** `/etc/nginx/conf.d/rate-limit.conf` (api_zone, api_termine_zone, auth_zone)
 - **Security-Header:** HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy – in Locations mit eigenem `add_header` explizit wiederholen (nginx-Vererbungsregel)
 - Nach Änderungen: `nginx -t && systemctl reload nginx`
