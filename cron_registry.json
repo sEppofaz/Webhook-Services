@@ -164,7 +164,8 @@
       "selbsttest": "/opt/kargl-invoice/zugferd_selftest.json"
     },
     {
-      "name": "life-doku"
+      "name": "life-doku",
+      "selbsttest": "/opt/life-doku/selftest.json"
     },
     {
       "name": "rechnungen"
