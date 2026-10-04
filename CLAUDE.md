@@ -625,6 +625,7 @@ Prüft **alle** venvs unter `/opt` (dynamisch erkannt, seit 2026-09-20 – vorhe
   - **`--dry-run`:** `/opt/rename-webhook/bin/python3 /opt/rename-webhook/pip_update_audit.py --dry-run` gibt den Report aus, **ohne** `secrets.env` zu lesen oder zu senden (~40 s) – so wird das Script getestet, ohne Telegram-Spam und ohne Secrets.
   - **Pitfall:** Beim Sichten von `pip-audit`-Ausgaben nie mit `tail` kürzen – der erste Blick am 2026-09-20 zeigte durch `tail -n 6` nur einen Teil der CVEs von `sentiment-scanner` (real: pillow 13, anyio 3, soupsieve 2, pip 6 Advisories).
   - **Gehaltene Pakete (Commit `2eed541`):** `held_back()` prüft im Python des jeweiligen venvs (pip-eigenes `packaging`), ob ein installiertes Paket die neueste Version per Requirement ausschließt; solche Pakete zählen nicht in die Ampel und stehen gesammelt in der Inventar-Zeile ⏸. Endet der Pin, erscheint das Paket automatisch wieder normal – es kann nichts still vergessen werden. Keine feste Liste zu pflegen.
+  - **Ausnahme `MANUAL_HOLDS` (seit 2026-10-04, PKA #426):** Pakete, die per Requirement erlaubt, aber praktisch inkompatibel sind (der Abhängige verlangt nur `>=`), stehen mit Begründung in `MANUAL_HOLDS` und erscheinen in derselben ⏸-Zeile mit Präfix „manuell:“. Aktuell nur `av` (v19 bricht faster-whisper 1.2.1 in life-doku). Diese Liste **verfällt nicht von selbst** – Gegenstück ist `PINNED` in `Claude-Remote/scripts/pip-upgrade-safe` + `claude-remote-pip-upgrade`; beim Freigeben alle drei Stellen anpassen.
 
 ---
 
