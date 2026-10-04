@@ -239,6 +239,43 @@ def test_registry():
         pruefe(True, "Lieferzustand: alle Jobs unbeobachtet (kein Alarmsturm beim ersten Lauf)")
 
 
+def test_dienste():
+    print("\nDienste (systemd + Selbsttest)")
+    jetzt = t("2026-10-04 09:00")
+    d, k = {"name": "x"}, {"name": "kargl", "selbsttest": "/tmp/st.json"}
+    pruefe(cw.bewerte_dienst("x", d, "active", None)["status"] == cw.OK, "active ohne Selbsttest → ok")
+    for zwischen in ("activating", "reloading"):
+        pruefe(cw.bewerte_dienst("x", d, zwischen, None)["status"] == cw.OK, "%s (Neustart) zählt nicht als Ausfall" % zwischen)
+    aus = cw.bewerte_dienst("x", d, "failed", None)
+    pruefe(aus["status"] == cw.DIENST_AUS and "failed" in aus["grund"] and "journalctl -u x" in aus["grund"],
+           "failed → läuft nicht, mit Log-Befehl", aus)
+    pruefe(cw.bewerte_dienst("x", d, "", None)["status"] == cw.DIENST_AUS, "leere Antwort → läuft nicht")
+    ok_st = {"name": "ZUGFeRD-Selbsttest", "zeit": "2026-10-04T08:44:42+02:00", "ok": True, "fehler": []}
+    pruefe(cw.bewerte_dienst("kargl", k, "active", ok_st)["status"] == cw.OK, "Selbsttest ok → ok")
+    kaputt = {**ok_st, "ok": False, "fehler": ["Positionen: PostcodeCode unerwartet", "Pauschal: dito"]}
+    b = cw.bewerte_dienst("kargl", k, "active", kaputt)
+    pruefe(b["status"] == cw.SELBSTTEST and "PostcodeCode" in b["grund"] and "04.10. 08:44" in b["grund"]
+           and "journalctl -u kargl" in b["grund"], "Selbsttest-Fehler → Alarm mit Fehlertext, Startzeit, Log-Befehl", b)
+    pruefe(cw.bewerte_dienst("kargl", k, "active", None)["status"] == cw.SELBSTTEST, "Selbsttest-Datei fehlt → Alarm")
+    pruefe(cw.bewerte_dienst("kargl", k, "inactive", kaputt)["status"] == cw.DIENST_AUS, "Dienst aus hat Vorrang vor Selbsttest")
+    bew = {"dienst:kargl": b, "cron_a": {"status": cw.OK, "grund": ""}}
+    m, z = cw.entscheide(bew, {"alarme": {}}, jetzt)
+    pruefe(len(m) == 1 and m[0].startswith("🧪 Dienst „kargl“ Selbsttest fehlgeschlagen"), "Alarmtext nennt Dienst, nicht Cron", m)
+    m2, _ = cw.entscheide({"dienst:kargl": {"status": cw.OK, "grund": ""}}, z, jetzt + timedelta(minutes=10))
+    pruefe(m2 == ["✅ Dienst „kargl“ läuft wieder."], "Entwarnung für Dienst", m2)
+    lz = cw.lebenszeichen({"cron_a": {"status": cw.OK, "grund": ""}, "dienst:kargl": b,
+                           "dienst:x": {"status": cw.OK, "grund": ""}}, jetzt)
+    pruefe("1/1 Jobs ok" in lz and "1/2 Dienste ok" in lz and "Problem: kargl" in lz, "Lebenszeichen zählt Dienste getrennt", lz)
+    dienste = cw.lade_dienste(ROOT / "cron_registry.json")
+    pruefe("kargl-invoice" in dienste and "nginx" in dienste and "claude-code" not in dienste,
+           "Registry: kargl-invoice + nginx überwacht, claude-code bewusst nicht", sorted(dienste))
+    pruefe(dienste["kargl-invoice"].get("selbsttest", "").startswith("/opt/kargl-invoice/"), "kargl-invoice hat Selbsttest-Pfad")
+    with tempfile.TemporaryDirectory() as tmp:
+        reg = Path(tmp) / "r.json"
+        reg.write_text('{"jobs": []}', encoding="utf-8")
+        pruefe(cw.lade_dienste(reg) == {}, "Registry ohne Abschnitt dienste → nichts überwacht")
+
+
 if __name__ == "__main__":
     test_soll()
     test_bewertung()
@@ -246,5 +283,6 @@ if __name__ == "__main__":
     test_dateien()
     test_cronwrap()
     test_registry()
+    test_dienste()
     print("\n%s" % ("ALLE PRÜFUNGEN BESTANDEN" if not _fehler else "%d FEHLGESCHLAGEN: %s" % (len(_fehler), "; ".join(_fehler))))
     sys.exit(1 if _fehler else 0)

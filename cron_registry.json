@@ -148,5 +148,42 @@
       "grace_min": 10,
       "aktiv_seit": null
     }
-  ]
+  ],
+  "dienste": [
+    {
+      "name": "nginx"
+    },
+    {
+      "name": "rename-webhook"
+    },
+    {
+      "name": "claude-remote"
+    },
+    {
+      "name": "kargl-invoice",
+      "selbsttest": "/opt/kargl-invoice/zugferd_selftest.json"
+    },
+    {
+      "name": "life-doku"
+    },
+    {
+      "name": "rechnungen"
+    },
+    {
+      "name": "newsletter-digest"
+    },
+    {
+      "name": "orgkompass"
+    },
+    {
+      "name": "bewerbung"
+    },
+    {
+      "name": "sentiment-scanner"
+    },
+    {
+      "name": "qg-feedback-bot"
+    }
+  ],
+  "_hinweis_dienste": "Dauerhaft laufende systemd-Dienste: Alarm, wenn `systemctl is-active` nicht active/activating/reloading meldet (einmal 20 s nachgefasst, falls gerade ein Neustart läuft). `selbsttest` = JSON-Datei {name, zeit, ok, fehler[]}, die der Dienst beim Start schreibt. claude-code fehlt bewusst (läuft nur auf Abruf, ADR-003). Neuer Dauer-Dienst ⇒ hier eintragen."
 }
