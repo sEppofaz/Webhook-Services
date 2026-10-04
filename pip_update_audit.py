@@ -31,6 +31,12 @@ INV_ICON = {"rot": "🔴", "gelb": "🟡", "ok": "✓"}
 # Nur Paketmanager-Tools, keine App-Laufzeit-Abhängigkeiten
 IGNORE_PACKAGES = {"pip", "setuptools", "wheel", "pip-api"}
 
+# Bewusst gehaltene Pakete, die kein Requirement-Pin erkennbar macht (der Abhängige verlangt nur
+# ein ">="). Erscheinen in der ⏸-Zeile statt in der Ampel. Gegenstück: PINNED in pip-upgrade-safe.
+MANUAL_HOLDS = {
+    "av": "manuell: av 19 bricht faster-whisper 1.2.1 (#426)",
+}
+
 MAX_NAMES_SHOWN = 6        # Minor-Updates pro venv namentlich (Rest als „+N")
 TELEGRAM_LIMIT = 4000      # Telegram-Hardlimit 4096, etwas Puffer
 
@@ -215,6 +221,9 @@ def analyse_venv(name: str, bin_dir: str) -> dict:
 
     # Paketmanager-Tools und durch Abhängigkeits-Pins gehaltene Pakete aus der Ampel nehmen
     held     = held_back(bin_dir, outdated)
+    for p in outdated:
+        if p["name"].lower() in MANUAL_HOLDS:
+            held.setdefault(p["name"], MANUAL_HOLDS[p["name"].lower()])
     relevant = [p for p in outdated
                 if p["name"].lower() not in IGNORE_PACKAGES and p["name"] not in held]
 
