@@ -162,8 +162,32 @@ def ortschaft_aus_name(name: str, gemeinde: str) -> str:
     return treffer.pop() if len(treffer) == 1 else ""
 
 
+def _ort_norm(text: str) -> str:
+    return re.sub(r"\s+", " ", str(text or "")).strip().casefold()
+
+
+def zuordnung_fuer(ort: str, verein: str, gemeinde: str, zuordnung: list | None) -> dict | None:
+    """Register-Eintrag aus einer Admin-Zuordnung (`_orte_zuordnung` in vereinstermine.json, v1.42).
+
+    Gilt für den exakten Ortstext (Groß/Klein und Leerzeichen egal). Eine Zuordnung nur für
+    einen Verein schlägt die für die ganze Gemeinde.
+    """
+    n = _ort_norm(ort)
+    if not n or not zuordnung:
+        return None
+    passend = [z for z in zuordnung if isinstance(z, dict) and _ort_norm(z.get("ort")) == n]
+    for z in passend:
+        if z.get("verein") and z["verein"] == verein:
+            return eintrag_fuer(z.get("ortschaft", ""))
+    gem = _gem_norm(gemeinde).casefold()
+    for z in passend:
+        if not z.get("verein") and gem and _gem_norm(z.get("gemeinde", "")).casefold() == gem:
+            return eintrag_fuer(z.get("ortschaft", ""))
+    return None
+
+
 def geo_fuer_termin(termin: dict, meta_eintrag: dict | None = None,
-                    label: str = "") -> dict | None:
+                    label: str = "", zuordnung: list | None = None) -> dict | None:
     """Geo-Labels eines Termins, oder None wenn kein Register vorhanden ist.
 
     Reihenfolge – die erste Stufe mit Ergebnis gewinnt:
@@ -187,6 +211,13 @@ def geo_fuer_termin(termin: dict, meta_eintrag: dict | None = None,
         return None
 
     eintraege = treffer_im_text(termin.get("ort", ""))
+    quelle = "ort" if eintraege else ""
+
+    if not eintraege:
+        z = zuordnung_fuer(termin.get("ort", ""), termin.get("verein") or termin.get("_vkey") or "",
+                           (meta_eintrag or {}).get("gemeinde", ""), zuordnung)
+        if z:
+            eintraege, quelle = [z], "zuordnung"
 
     if not eintraege:
         # Keine Ortschaft vor der PLZ: den Ort hinter der PLZ prüfen
@@ -201,6 +232,7 @@ def geo_fuer_termin(termin: dict, meta_eintrag: dict | None = None,
                     treffer.append((m.start(), eintrag))
             if treffer:
                 eintraege = [min(treffer, key=lambda x: x[0])[1]]
+                quelle = "ort"
 
     # Landkreis-Abgleich (v1.40): Das Register sucht Namen ohne Regionsbezug, und
     # Allerweltsnamen gibt es in mehreren Landkreisen („Klause" ist eine Einöde in
@@ -218,14 +250,15 @@ def geo_fuer_termin(termin: dict, meta_eintrag: dict | None = None,
         if aus_feld and aus_feld.get("hauptort") and heimat \
                 and heimat["gemeinde"] == aus_feld["gemeinde"] \
                 and heimat["ort"] != aus_feld["ort"]:
-            eintraege = [heimat]
+            eintraege, quelle = [heimat], "heimat"
         elif aus_feld:
-            eintraege = [aus_feld]
+            eintraege, quelle = [aus_feld], "ortschaft"
         elif heimat:
-            eintraege = [heimat]
+            eintraege, quelle = [heimat], "heimat"
 
     if not eintraege:
-        return {"orte": [], "ortschaften": [], "plz": [], "gemeinden": [], "landkreise": [], "bundeslaender": []}
+        return {"orte": [], "ortschaften": [], "plz": [], "gemeinden": [], "landkreise": [],
+                "bundeslaender": [], "quelle": ""}
 
     def sammeln(feld):
         gesehen, out = set(), []
@@ -246,6 +279,9 @@ def geo_fuer_termin(termin: dict, meta_eintrag: dict | None = None,
         "gemeinden":     sammeln("gemeinde"),
         "landkreise":    sammeln("landkreis"),
         "bundeslaender": sammeln("bundesland"),
+        # Herkunft: "ort" (Name im Ortstext), "zuordnung" (Admin-Tab „Orte“),
+        # "ortschaft" (Feld ortschaft) oder "heimat" (Heimatort des Vereins – nur geraten)
+        "quelle":        quelle,
     }
 
 

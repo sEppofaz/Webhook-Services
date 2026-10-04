@@ -12,7 +12,7 @@ from pathlib import Path
 
 from flask import Blueprint, Response, request
 
-from shared.geo import geo_fuer_termin
+from shared.geo import geo_fuer_termin, eintrag_fuer, _lade as _geo_register, _gem_norm, _ort_norm, ORTE_FREI_FILE
 from shared.flyer_store import upload_flyer, delete_flyer
 from shared.termin_felder import BESCHREIBUNG_MAX, DATUM_RE, zeit_fehler
 from shared.vk_db import db_conn
@@ -913,7 +913,8 @@ def api_termine():
     # ohne _geo (orte.json fehlt = Kill-Switch) fällt das Frontend auf das Verein-Verhalten zurück.
     for t in termine:
         try:
-            g = geo_fuer_termin(t, merged_meta.get(t["verein"]), labels.get(t["verein"], ""))
+            g = geo_fuer_termin(t, merged_meta.get(t["verein"]), labels.get(t["verein"], ""),
+                                raw.get("_orte_zuordnung"))
         except Exception as ex:
             log(f"⚠️  geo_fuer_termin: {ex}")
             g = None
@@ -1231,7 +1232,8 @@ def api_ical_feed():
             return True
         # Ortschaft des Termins laut Register (ADR-014), sonst wie bisher Substring auf ort/ortschaft
         try:
-            g = geo_fuer_termin(t, raw.get("_meta", {}).get(t.get("_vkey")), labels.get(t.get("_vkey"), ""))
+            g = geo_fuer_termin(t, raw.get("_meta", {}).get(t.get("_vkey")), labels.get(t.get("_vkey"), ""),
+                                raw.get("_orte_zuordnung"))
         except Exception:
             g = None
         if g and g.get("orte"):
@@ -1567,6 +1569,118 @@ def _schreibe_import_status(status: dict) -> None:
         tmp.replace(_IMPORT_STATUS_FILE)
     except OSError as e:
         log(f"⚠️  Import-Status nicht geschrieben: {e}")
+
+
+# ── Admin-Tab „Orte": Veranstaltungsorte einer Ortschaft zuordnen (v1.42) ─────────────
+# Zuordnungen stehen in vereinstermine.json unter `_orte_zuordnung` (Liste von
+# {ort, gemeinde, verein, ortschaft, am}); `verein` leer = gilt für alle Vereine der Gemeinde.
+
+def _admin_ok() -> bool:
+    token = request.headers.get("X-Upload-Token", "")
+    return bool(UPLOAD_TOKEN) and hmac.compare_digest(token, UPLOAD_TOKEN)
+
+
+def _json_antwort(obj, code=200):
+    return json.dumps(obj, ensure_ascii=False), code, {
+        "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store"}
+
+
+@kalender_bp.route("/api/admin/orte", methods=["GET"])
+def api_admin_orte():
+    if not _admin_ok():
+        return _json_antwort({"error": "Nicht autorisiert"}, 401)
+    raw    = json.loads(VEREINSTERMINE_FILE.read_text()) if VEREINSTERMINE_FILE.exists() else {}
+    labels = raw.get("_labels", {})
+    meta   = raw.get("_meta", {})
+    zu     = raw.get("_orte_zuordnung", [])
+    heute  = date.today().isoformat()
+    gruppen: dict = {}
+    ohne_ortsangabe = 0
+    for key, items in raw.items():
+        if key.startswith("_") or not isinstance(items, list):
+            continue
+        m = meta.get(key, {})
+        for t in items:
+            if not isinstance(t, dict) or t.get("geloescht") or t.get("deleted") or t.get("datum", "") < heute:
+                continue
+            g = geo_fuer_termin({**t, "verein": key}, m, labels.get(key, ""), zu)
+            if g is None:
+                continue
+            ort = re.sub(r"\s+", " ", str(t.get("ort") or "")).strip()
+            if not ort:
+                if not g["orte"]:
+                    ohne_ortsangabe += 1
+                continue
+            if g.get("quelle") in ("ort", "zuordnung"):
+                continue
+            gk = (_ort_norm(ort), _gem_norm(m.get("gemeinde", "")).casefold())
+            grp = gruppen.setdefault(gk, {
+                "ort": ort, "gemeinde": _gem_norm(m.get("gemeinde", "")), "landkreis": m.get("landkreis", ""),
+                "termine": 0, "vereine": {}, "aktuell": g["orte"], "quelle": g.get("quelle", "")})
+            grp["termine"] += 1
+            grp["vereine"][key] = labels.get(key, key)
+    liste = sorted(gruppen.values(), key=lambda x: (bool(x["aktuell"]), x["gemeinde"], -x["termine"], x["ort"].lower()))
+    for x in liste:
+        x["vereine"] = [{"key": k, "label": v} for k, v in sorted(x["vereine"].items(), key=lambda kv: kv[1].lower())]
+    register, _ = _geo_register()
+    try:
+        fest = json.loads(ORTE_FREI_FILE.read_text())
+    except Exception:
+        fest = []
+    return _json_antwort({
+        "offen": liste,
+        "ohne_ortsangabe": ohne_ortsangabe,
+        "zuordnungen": [{**z, "verein_label": labels.get(z.get("verein", ""), "")} for z in zu if isinstance(z, dict)],
+        "fest": [{"name": f.get("name", ""), "alias": f.get("alias", []), "ortschaft": f.get("ortschaft", "")} for f in fest],
+        "ortschaften": sorted(({"ort": e["ort"], "gemeinde": e.get("gemeinde", ""), "landkreis": e.get("landkreis", "")}
+                               for e in register), key=lambda e: (e["gemeinde"], e["ort"])),
+    })
+
+
+@kalender_bp.route("/api/admin/orte/zuordnung", methods=["POST", "DELETE"])
+def api_admin_orte_zuordnung():
+    if not _admin_ok():
+        return _json_antwort({"error": "Nicht autorisiert"}, 401)
+    body     = request.get_json(silent=True) or {}
+    ort      = re.sub(r"\s+", " ", str(body.get("ort") or "")).strip()
+    gemeinde = _gem_norm(str(body.get("gemeinde") or ""))
+    verein   = str(body.get("verein") or "").strip()
+    if not ort or len(ort) > 200:
+        return _json_antwort({"error": "Ort fehlt oder ist zu lang"}, 400)
+    if not verein and not gemeinde:
+        return _json_antwort({"error": "Gemeinde oder Verein nötig"}, 400)
+    gleich = lambda z: (_ort_norm(z.get("ort")) == _ort_norm(ort) and (z.get("verein") or "") == verein
+                        and (verein or _gem_norm(z.get("gemeinde", "")).casefold() == gemeinde.casefold()))
+
+    from shared.kalender_store import KalenderStore
+    if request.method == "DELETE":
+        weg = {"n": 0}
+
+        def _loeschen(d):
+            alt = d.get("_orte_zuordnung", [])
+            d["_orte_zuordnung"] = [z for z in alt if not gleich(z)]
+            weg["n"] = len(alt) - len(d["_orte_zuordnung"])
+        KalenderStore.update(_loeschen)
+        log(f"🗺  Ort-Zuordnung gelöscht: {ort!r} ({verein or gemeinde}) – {weg['n']}")
+        return _json_antwort({"ok": True, "geloescht": weg["n"]})
+
+    ziel = eintrag_fuer(str(body.get("ortschaft") or ""))
+    if not ziel:
+        return _json_antwort({"error": "Unbekannte Ortschaft"}, 400)
+
+    def _setzen(d):
+        if verein and verein not in d.get("_labels", {}):
+            raise ValueError("Unbekannter Verein")
+        liste = [z for z in d.get("_orte_zuordnung", []) if not gleich(z)]
+        liste.append({"ort": ort, "gemeinde": gemeinde, "verein": verein, "ortschaft": ziel["ort"],
+                      "am": datetime.now().isoformat(timespec="seconds")})
+        d["_orte_zuordnung"] = liste
+    try:
+        KalenderStore.update(_setzen)
+    except ValueError as e:
+        return _json_antwort({"error": str(e)}, 400)
+    log(f"🗺  Ort-Zuordnung: {ort!r} → {ziel['ort']} ({verein or gemeinde})")
+    return _json_antwort({"ok": True, "ortschaft": ziel["ort"]})
 
 
 @kalender_bp.route("/api/admin/importe/status", methods=["GET"])

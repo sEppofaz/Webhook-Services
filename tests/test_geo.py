@@ -192,6 +192,24 @@ def test_landkreis_abgleich():
            == ["Mallersdorf"], "Rathaus-Sitzung des Marktes → Heimatort Mallersdorf")
     pruefe(geo_fuer_termin({"ort": "hinter dem Rathaus", "ortschaft": "Ergoldsbach"}, lh)["orte"] == ["Ergoldsbach"],
            "„Rathaus“ anderswo bleibt unberührt")
+    zu = [{"ort": "Feuerwehrgerätehaus", "gemeinde": "Mallersdorf-Pfaffenberg", "verein": "ff_ol", "ortschaft": "Oberlindhart"},
+          {"ort": "Gasthaus Moser", "gemeinde": "Mallersdorf-Pfaffenberg", "verein": "", "ortschaft": "Mallersdorf"},
+          {"ort": "Gasthaus Moser", "gemeinde": "Mallersdorf-Pfaffenberg", "verein": "sv_wr", "ortschaft": "Pfaffenberg"}]
+    srm = {**sr, "gemeinde": "Markt Mallersdorf-Pfaffenberg", "heimatort": "Pfaffenberg"}
+    g1 = geo_fuer_termin({"ort": "Feuerwehrgerätehaus", "verein": "ff_ol"}, srm, "", zu)
+    pruefe(g1["orte"] == ["Oberlindhart"] and g1["quelle"] == "zuordnung", "Zuordnung nur für Verein greift", g1)
+    g2 = geo_fuer_termin({"ort": "Feuerwehrgerätehaus", "verein": "ff_pf"}, srm, "", zu)
+    pruefe(g2["orte"] == ["Pfaffenberg"] and g2["quelle"] == "heimat", "anderer Verein: keine Vereins-Zuordnung, Rückfall Heimatort", g2)
+    pruefe(geo_fuer_termin({"ort": "gasthaus  MOSER ", "verein": "x"}, srm, "", zu)["orte"] == ["Mallersdorf"],
+           "Gemeinde-Zuordnung, Text ohne Groß/Klein/Leerzeichen-Unterschiede")
+    pruefe(geo_fuer_termin({"ort": "Gasthaus Moser", "verein": "sv_wr"}, srm, "", zu)["orte"] == ["Pfaffenberg"],
+           "Vereins-Zuordnung schlägt Gemeinde-Zuordnung")
+    pruefe(geo_fuer_termin({"ort": "Gasthaus Moser", "verein": "y"}, lh, "", zu)["orte"] == ["Ergoldsbach"],
+           "Zuordnung gilt nicht in anderer Gemeinde")
+    pruefe(geo_fuer_termin({"ort": "im Gasthaus Moser", "verein": "x"}, srm, "", zu)["quelle"] == "heimat",
+           "nur exakter Text, kein Teiltreffer")
+    pruefe(geo_fuer_termin({"ort": "Haus der Generationen"}, srm, "", zu)["quelle"] == "ort",
+           "Namen im Text gehen vor (quelle=ort)")
     from shared.geo import ortschaft_aus_name as oan
     faelle = [("Freiwillige Feuerwehr Oberlindhart", "Mallersdorf-Pfaffenberg", "Oberlindhart"),
               ("Oberlindharther Theaterbrettl", "Mallersdorf-Pfaffenberg", "Oberlindhart"),

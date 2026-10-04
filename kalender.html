@@ -327,7 +327,7 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
   </div>
   <div class="hdr-right" style="display:flex;align-items:center;gap:6px">
     <div class="hdr-ver" style="display:flex;flex-direction:column;align-items:flex-end;gap:1px">
-      <span class="ver-lbl" style="margin-right:0">v1.41</span>
+      <span class="ver-lbl" style="margin-right:0">v1.42</span>
       <span style="font-size:9px;color:rgba(255,255,255,.28);letter-spacing:.2px;line-height:1">a sEpp-App</span>
     </div>
     <a class="refresh-btn" id="verein-login-btn" href="/verein/login" title="Vereins-Login oder Registrierung" style="width:auto;padding:0 10px;font-size:13px;font-weight:600;letter-spacing:.3px;text-decoration:none;white-space:nowrap">Login</a>
@@ -456,7 +456,7 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title" style="width:55%"></div><div class="sk-line sk-ort"></div></div>
       <div class="ev-card sk-card" aria-hidden="true"><div class="sk-line sk-date"></div><div class="sk-line sk-title"></div><div class="sk-line sk-ort" style="width:30%"></div></div>
     </div>
-    <p class="version">Vereinskalender &middot; v1.41 &middot; 2026-10-04 &middot; a sEpp-App</p>
+    <p class="version">Vereinskalender &middot; v1.42 &middot; 2026-10-04 &middot; a sEpp-App</p>
     <p style="font-size:11px;color:var(--text3);text-align:center;padding:0 0 24px;line-height:2">&#127807; Hosting in Finnland mit &Ouml;kostrom &middot; Werbefrei &middot; DSGVO-konform</p>
   </div>
 
@@ -486,6 +486,7 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
       <button class="adm-tab" id="admbtn-trm" onclick="switchAdmTab('trm')" style="display:flex;align-items:center;gap:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> Termine</button>
       <button class="adm-tab" id="admbtn-sta" onclick="switchAdmTab('sta')" style="display:flex;align-items:center;gap:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg> Stats</button>
       <button class="adm-tab" id="admbtn-lnk" onclick="switchAdmTab('lnk')" style="display:flex;align-items:center;gap:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Verknüpfen<span id="lnk-badge" style="display:none;background:#ff9500;color:#fff;border-radius:8px;padding:0 5px;font-size:10px;margin-left:4px;vertical-align:middle;line-height:16px"></span></button>
+      <button class="adm-tab" id="admbtn-ort" onclick="switchAdmTab('ort')" style="display:flex;align-items:center;gap:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> Orte</button>
       <button class="adm-tab adm-tab-logout" onclick="adminLogout()" title="Abmelden" aria-label="Abmelden" style="color:#ff3b30;display:flex;align-items:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
     </div>
 
@@ -598,6 +599,13 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
     <!-- Tab 7: Verknüpfungen -->
     <div id="adm-tab-lnk" style="display:none">
       <div id="lnk-tab-content">
+        <div style="text-align:center;padding:40px 20px;color:var(--text3)">Lade&#8230;</div>
+      </div>
+    </div>
+
+    <!-- Tab 8: Orte → Ortschaft (v1.42) -->
+    <div id="adm-tab-ort" style="display:none">
+      <div id="ort-tab-content">
         <div style="text-align:center;padding:40px 20px;color:var(--text3)">Lade&#8230;</div>
       </div>
     </div>
@@ -2059,7 +2067,7 @@ document.querySelector(".content").addEventListener("scroll",function(){
 
 /* ── Admin-Tabs ── */
 function switchAdmTab(tab){
-  ["upload","imp","ver","acc","trm","sta","lnk"].forEach(t=>{
+  ["upload","imp","ver","acc","trm","sta","lnk","ort"].forEach(t=>{
     document.getElementById("adm-tab-"+t).style.display=t===tab?"":"none";
     document.getElementById("admbtn-"+t).classList.toggle("on",t===tab);
   });
@@ -2069,6 +2077,93 @@ function switchAdmTab(tab){
   if(tab==="trm")loadTermine();
   if(tab==="sta")loadStats();
   if(tab==="lnk")loadVerknuepfungen();
+  if(tab==="ort")loadOrte();
+}
+
+/* ── Admin-Tab „Orte": Veranstaltungsort → Ortschaft (v1.42) ── */
+let _ortDaten=null;
+async function loadOrte(){
+  const el=document.getElementById("ort-tab-content");
+  const token=localStorage.getItem("ut")||"";
+  el.innerHTML=`<div style="text-align:center;padding:30px;color:var(--text3)">${icon("loader",20)} Lade&hellip;</div>`;
+  try{
+    const r=await fetch("/api/admin/orte",{headers:{"X-Upload-Token":token}});
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    _ortDaten=await r.json();
+  }catch(e){el.innerHTML='<div style="color:#ff3b30;padding:16px">Fehler: '+escHtml(String(e))+'</div>';return;}
+  const d=_ortDaten;
+  const offen=d.offen.map((o,i)=>_ortZeile(o,i)).join("");
+  const keine=d.offen.filter(o=>!o.aktuell.length).length;
+  const zu=d.zuordnungen.length?d.zuordnungen.map((z,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="flex:1;min-width:0;font-size:13px;color:var(--text)"><strong>${escHtml(z.ort)}</strong> &rarr; ${escHtml(z.ortschaft)}
+        <div style="font-size:11px;color:var(--text3)">${z.verein?"nur "+escHtml(z.verein_label||z.verein):"alle Vereine der Gemeinde "+escHtml(z.gemeinde)}</div></div>
+      <button onclick="ortZuordnungLoeschen(${i})" title="Zuordnung löschen" aria-label="Zuordnung löschen" style="border:none;background:none;color:#ff3b30;cursor:pointer;padding:6px;display:flex">${icon("trash",16)}</button>
+    </div>`).join(""):'<div style="font-size:13px;color:var(--text3);padding:6px 0">Noch keine.</div>';
+  const fest=d.fest.map(f=>`<div style="font-size:12px;color:var(--text2);padding:3px 0">${escHtml(f.name)}${(f.alias||[]).length?" ("+f.alias.map(escHtml).join(", ")+")":""} &rarr; ${escHtml(f.ortschaft)}</div>`).join("");
+  el.innerHTML=`
+    <div style="font-size:13px;color:var(--text2);margin:4px 0 12px;line-height:1.5">Veranstaltungsorte künftiger Termine ohne erkannten Ortsnamen. Eine Zuordnung gilt für den genauen Ortstext – für alle Vereine der Gemeinde oder nur für einen Verein (bei Angaben wie „Feuerwehrgerätehaus“). Sie wirkt sofort auf Ortschafts-Filter, Favoriten und Kalender-Abo.</div>
+    <div style="font-weight:600;font-size:15px;color:var(--text);margin-bottom:8px">Offen: ${d.offen.length} ${d.offen.length===1?"Ort":"Orte"}${keine?` <span style="font-size:12px;font-weight:400;color:var(--text3)">(${keine} ganz ohne Ortschaft)</span>`:""}</div>
+    ${offen||'<div style="font-size:13px;color:var(--text3);padding:6px 0 14px">Alle Veranstaltungsorte sind zugeordnet.</div>'}
+    ${d.ohne_ortsangabe?`<div style="font-size:12px;color:var(--text3);margin:4px 0 16px">${d.ohne_ortsangabe} ${d.ohne_ortsangabe===1?"Termin hat":"Termine haben"} gar keine Ortsangabe und keinen Heimatort – dort hilft nur ein Heimatort beim Verein (Tab „Vereine“).</div>`:""}
+    <div style="font-weight:600;font-size:15px;color:var(--text);margin:18px 0 4px">Zuordnungen</div>
+    ${zu}
+    ${fest?`<div style="font-weight:600;font-size:13px;color:var(--text2);margin:16px 0 4px">Fest eingetragen (orte_frei.json)</div>${fest}`:""}`;
+}
+
+function _ortZeile(o,i){
+  const gemNorm=s=>(s||"").replace(/^(Gemeinde|Markt|Stadt)\s+/i,"").replace(/\s+(bei|b\.)\s+.+$/i,"").trim().toLowerCase();
+  const eigene=_ortDaten.ortschaften.filter(e=>gemNorm(e.gemeinde)===gemNorm(o.gemeinde));
+  const andere=_ortDaten.ortschaften.filter(e=>gemNorm(e.gemeinde)!==gemNorm(o.gemeinde));
+  const vorwahl=o.aktuell[0]||"";
+  const opt=e=>`<option value="${escHtml(e.ort)}"${e.ort===vorwahl?" selected":""}>${escHtml(e.ort)}${gemNorm(e.gemeinde)===gemNorm(o.gemeinde)?"":" ("+escHtml(e.gemeinde)+")"}</option>`;
+  const ortOpts=`<option value="">— Ortschaft wählen —</option>`
+    +(eigene.length?`<optgroup label="${escHtml(o.gemeinde||"Gemeinde")}">${eigene.map(opt).join("")}</optgroup>`:"")
+    +`<optgroup label="Andere Gemeinden">${andere.map(opt).join("")}</optgroup>`;
+  const fuerOpts=`<option value="">alle Vereine der Gemeinde</option>`+o.vereine.map(v=>`<option value="${escHtml(v.key)}">nur ${escHtml(v.label)}</option>`).join("");
+  const status=o.aktuell.length
+    ?`aktuell: <strong>${escHtml(o.aktuell.join(", "))}</strong> <span style="color:var(--text3)">(${o.quelle==="heimat"?"Heimatort des Vereins – geraten":"aus dem Feld Ortschaft – oft nur die Gemeinde"})</span>`
+    :`<span style="color:#ff9500;font-weight:600">keine Ortschaft</span>`;
+  return `<div style="background:var(--card);border:1.5px solid var(--border2);border-radius:12px;padding:12px 14px;margin-bottom:10px">
+    <div style="font-weight:600;font-size:14px;color:var(--text)">${escHtml(o.ort)}</div>
+    <div style="font-size:12px;color:var(--text3);margin:2px 0 6px">${o.termine} ${o.termine===1?"Termin":"Termine"} · ${escHtml(o.gemeinde||"Gemeinde unbekannt")} · ${o.vereine.map(v=>escHtml(v.label)).join(", ")}</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:8px">${status}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <select id="ort-sel-${i}" class="ve-sel" style="flex:1 1 160px;min-width:0">${ortOpts}</select>
+      <select id="ort-fuer-${i}" class="ve-sel" style="flex:1 1 160px;min-width:0">${fuerOpts}</select>
+      <button onclick="ortZuordnen(${i})" style="height:38px;padding:0 14px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer">Zuordnen</button>
+    </div>
+    <div id="ort-msg-${i}" style="font-size:12px;margin-top:6px"></div>
+  </div>`;
+}
+
+async function ortZuordnen(i){
+  const o=_ortDaten.offen[i];
+  const ortschaft=document.getElementById("ort-sel-"+i).value;
+  const verein=document.getElementById("ort-fuer-"+i).value;
+  const msg=document.getElementById("ort-msg-"+i);
+  if(!ortschaft){msg.style.color="var(--text3)";msg.textContent="Bitte Ortschaft wählen.";return;}
+  const token=localStorage.getItem("ut")||"";
+  msg.style.color="var(--text3)";msg.textContent="Speichere…";
+  try{
+    const r=await fetch("/api/admin/orte/zuordnung",{method:"POST",headers:{"Content-Type":"application/json","X-Upload-Token":token},
+      body:JSON.stringify({ort:o.ort,gemeinde:o.gemeinde,verein,ortschaft})});
+    const d=await r.json();
+    if(d.ok){loadOrte();}
+    else{msg.style.color="#ff3b30";msg.textContent=d.error||"Fehler";}
+  }catch(e){msg.style.color="#ff3b30";msg.textContent="Netzwerkfehler";}
+}
+
+async function ortZuordnungLoeschen(i){
+  const z=_ortDaten.zuordnungen[i];
+  if(!confirm(`Zuordnung „${z.ort}“ → ${z.ortschaft} löschen?`))return;
+  const token=localStorage.getItem("ut")||"";
+  try{
+    const r=await fetch("/api/admin/orte/zuordnung",{method:"DELETE",headers:{"Content-Type":"application/json","X-Upload-Token":token},
+      body:JSON.stringify({ort:z.ort,gemeinde:z.gemeinde,verein:z.verein||""})});
+    const d=await r.json();
+    if(d.ok)loadOrte();else alert("Fehler: "+(d.error||"unbekannt"));
+  }catch(e){alert("Netzwerkfehler: "+e);}
 }
 
 async function loadVerknuepfungen(){
