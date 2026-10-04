@@ -270,7 +270,7 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
 .srch-item-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .srch-item-sub{font-size:11px;color:var(--text3);margin-top:1px}
 .srch-type{font-size:11px;color:var(--text3);flex-shrink:0;background:var(--bg2);border-radius:6px;padding:2px 6px}
-.srch-chips{display:flex;gap:6px;flex-wrap:wrap;padding:0 4px 10px;justify-content:center}
+.srch-chips{display:flex;gap:6px;flex-wrap:wrap;padding:6px 14px;border-bottom:.5px solid var(--border)}
 .srch-chip{display:inline-flex;align-items:center;gap:4px;background:var(--accent);color:#fff;border-radius:16px;padding:4px 10px 4px 8px;font-size:12px;font-weight:500}
 .srch-chip-x{cursor:pointer;font-size:14px;line-height:1;opacity:.75;margin-left:2px}
 .srch-chip-x:active{opacity:1}
@@ -327,7 +327,7 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
 
 /* ── Suchleiste im Übergang (v1.45): ragt halb ins Titelbild ── */
 .kal-hero{margin-bottom:0;padding-bottom:40px}
-.kal-search{position:relative;z-index:5;display:flex;align-items:center;gap:8px;margin:-26px 10px 14px;padding:4px;background:var(--card);border-radius:999px;box-shadow:0 6px 24px rgba(0,0,0,.14),0 1px 3px rgba(0,0,0,.08)}
+.kal-search{position:relative;z-index:60;display:flex;align-items:center;gap:8px;margin:-26px 10px 14px;padding:4px;background:var(--card);border-radius:999px;box-shadow:0 6px 24px rgba(0,0,0,.14),0 1px 3px rgba(0,0,0,.08)}
 .kal-sel{display:none;align-items:center;gap:6px;height:40px;padding:0 12px;border:1.5px solid var(--border);border-radius:999px;color:var(--text);flex-shrink:0;position:relative}
 .kal-sel svg{color:var(--text2)}
 .kal-sel select{border:none;background:transparent;color:var(--text);font-size:14px;font-weight:500;font-family:inherit;outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;padding-right:18px;max-width:170px;
@@ -340,7 +340,12 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
 .rubrik-chip.on .rb-cnt{opacity:.85}
 
 /* ── Filter zurücksetzen + Vereinskarte: nur Desktop-Seitenleiste ── */
-.f-reset-row,.verein-cta,.ft-desk{display:none}
+.f-reset-row,.verein-cta{display:none}
+/* Filter-Karte (Handy + Desktop): Rubriken oben, darunter „Weitere Filter“ mit Pfeil + Zurücksetzen direkt über den Auswahlfeldern */
+.kal-side .filter-card{display:flex;flex-direction:column}
+.kal-side .rubrik-bar{order:-1}
+.kal-side .filter-hdr{position:static;border-radius:0;padding:10px 14px;border-bottom:none}
+.kal-side .filter-title{font-size:13px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px}
 .f-reset{width:100%;height:40px;border:1.5px solid var(--border2);border-radius:999px;background:var(--card);color:var(--text);font-size:14px;font-weight:500;font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px}
 .f-reset:active{background:var(--bg2)}
 .verein-cta{align-items:center;gap:12px;margin-top:14px;padding:16px;border-radius:14px;background:color-mix(in srgb,var(--accent) 8%,var(--card));border:1px solid color-mix(in srgb,var(--accent) 18%,transparent);text-decoration:none;color:var(--text)}
@@ -360,7 +365,6 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
   .kal-hero h2{font-size:38px;max-width:520px}
   .kal-hero p{font-size:16px;margin-top:10px;max-width:460px}
   #s-kal>.kal-search{grid-column:1/-1;width:min(940px,82%);justify-self:center;margin:-34px 0 22px;padding:6px 6px 6px 4px}
-  #s-kal>.srch-chips{justify-content:flex-start;padding-left:0}
   .kal-sel{display:inline-flex}
   .kal-sel.kal-sel-off{display:none}
   /* fest stehend, kein inneres Scrollen; ist sie höher als der Platz, setzt _fitSide() top negativ → sie läuft mit, bis ihr Ende sichtbar ist */
@@ -368,12 +372,7 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
   .kal-side .filter-card{margin-bottom:0;box-shadow:0 1px 2px rgba(0,0,0,.04),0 4px 14px rgba(0,0,0,.05)}
   /* „✕ Zurücksetzen“ neben FILTER erscheint nur bei aktiven Filtern – wichtig, wenn eingeklappt; großer Knopf klappt mit ein */
   /* „Filter“-Zeile mit Pfeil unter die Rubriken, direkt über Zeitraum – sie klappt nur die Auswahlfelder */
-  .kal-side .filter-card{display:flex;flex-direction:column}
-  .kal-side .rubrik-bar{order:-1}
-  .kal-side .filter-hdr{position:static;border-radius:0;padding:10px 14px 4px;border-bottom:none}
-  .kal-side .ft-mob{display:none}
-  .kal-side .ft-desk{display:inline}
-  .kal-side .filter-title{font-size:13px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px}
+  .kal-side .filter-hdr{padding:10px 14px 4px}
   .kal-side #filter-body>div:last-child{display:none}  /* „einklappen“ */
   .kal-side .f-reset-row{display:block;padding:8px 14px 10px}
   .kal-side .verein-cta{display:flex}
@@ -478,16 +477,16 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
       <label class="kal-sel kal-sel-desk"><span class="kal-sel-ico" data-ico="mapPin"></span><select id="sel-region" onchange="selectLandkreis(this.value)" aria-label="Region"><option value="alle">Alle Regionen</option></select></label>
       <label class="kal-sel kal-sel-desk"><span class="kal-sel-ico" data-ico="calendar"></span><select id="sel-zeit" onchange="const c=document.querySelector('.chip[data-z=&quot;'+this.value+'&quot;]');if(c)c.click()" aria-label="Zeitraum"></select></label>
     </div>
-    <div class="srch-chips" id="srch-chips" style="display:none"></div>
     <aside class="kal-side">
     <div class="filter-card">
       <div class="filter-hdr" id="filter-hdr" onclick="toggleFilterCard()" style="cursor:pointer">
         <span class="filter-title" style="display:flex;align-items:center;gap:8px">
           <span id="fc-arrow" style="font-size:13px;color:var(--tab);transition:transform .2s;display:inline-block"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:block"><polyline points="9 18 15 12 9 6"/></svg></span>
-          <span class="ft-mob">Filter</span><span class="ft-desk">Weitere Filter</span>
+          Weitere Filter
         </span>
         <button class="reset-btn" id="reset-btn" onclick="event.stopPropagation();resetAll()" style="display:none">&#10005; Zur&#252;cksetzen</button>
       </div>
+      <div class="srch-chips" id="srch-chips" style="display:none"></div>
       <div id="active-pills" style="display:none;flex-wrap:wrap;gap:6px;padding:6px 14px;border-bottom:.5px solid var(--border)"></div>
       <div id="fav-hint" style="display:none"></div>
       <div id="fav-bar" style="display:none;flex-wrap:wrap;gap:6px;padding:8px 14px 6px;border-bottom:.5px solid var(--border)"></div>
@@ -3988,7 +3987,7 @@ function showInfoModal(){
         <span class="help-icon">${icon("scale",20)}</span>
         <div><strong>Impressum</strong><span>Josef Fischer &middot; H&ouml;lskofen 13 &middot; 84092 Bayerbach b. Ergoldsbach<br><a href="mailto:Vereinskalender@icloud.com" style="color:var(--accent);text-decoration:none">Vereinskalender@icloud.com</a></span></div>
       </div>
-      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.45 &middot; 2026-10-04 &middot; a sEpp-App</p>
+      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.46 &middot; 2026-10-04 &middot; a sEpp-App</p>
       <button onclick="document.getElementById('info-modal').remove()" style="width:100%;margin-top:16px;padding:12px;background:none;border:1.5px solid var(--border2);border-radius:12px;font-size:14px;color:var(--text2);cursor:pointer">Schlie&szlig;en</button>
     </div>`;
   document.body.appendChild(m);
