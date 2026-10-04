@@ -214,16 +214,9 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
 .act-pill:active{opacity:.7}
 .act-pill-x{display:inline-flex;align-items:center;opacity:.8}
 /* Alle Toggle-Chips der Filter-Card exakt gleich hoch (34px); Breite richtet sich nach dem Inhalt */
-.filter-card .chip,.filter-card .rubrik-chip,.fav-hint .fav-hint-btn{box-sizing:border-box;height:34px;padding-top:0;padding-bottom:0;display:inline-flex;align-items:center;gap:5px;line-height:1.2}
+.filter-card .chip,.filter-card .rubrik-chip{box-sizing:border-box;height:34px;padding-top:0;padding-bottom:0;display:inline-flex;align-items:center;gap:5px;line-height:1.2}
 /* Favoriten-Chips: Icon 14px statt 18px */
 #fav-bar .chip>svg{width:14px;height:14px;flex-shrink:0}
-/* Favoriten-Ansicht: Hinweisbox + gedimmte (pausierte) Filter */
-.fav-hint{margin:8px 14px 2px;padding:9px 12px 10px;border-radius:10px;background:var(--bg);border:1px solid var(--border2);border-left:3px solid var(--accent);color:var(--text2);font-size:12.5px;line-height:1.45}
-.fav-hint strong{display:flex;align-items:center;gap:5px;color:var(--text);font-size:13px;margin-bottom:2px}
-.fav-hint strong svg{color:#ff3b30;flex-shrink:0}
-.fav-hint-btn{width:fit-content;margin-top:8px;background:none;border:1.5px solid var(--accent);color:var(--text);border-radius:20px;padding:7px 14px;font-size:13px;font-weight:500;line-height:normal;cursor:pointer}
-.fav-hint-btn:active{opacity:.7}
-.fav-hint .fav-hint-btn{display:flex;width:fit-content}  /* eigene Zeile unter dem Text (gewinnt gegen die inline-flex-Chip-Gruppenregel) */
 
 /* ── Skeleton Loader ── */
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
@@ -487,7 +480,6 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
       </div>
       <div class="srch-chips" id="srch-chips" style="display:none"></div>
       <div id="active-pills" style="display:none;flex-wrap:wrap;gap:6px;padding:6px 14px;border-bottom:.5px solid var(--border)"></div>
-      <div id="fav-hint" style="display:none"></div>
       <div id="fav-bar" style="display:none;flex-wrap:wrap;gap:6px;padding:8px 14px 6px;border-bottom:.5px solid var(--border)"></div>
       <div id="rubrik-bar" class="rubrik-bar" style="display:none"></div>
       <div id="filter-body" style="display:none">
@@ -901,16 +893,13 @@ function _migrateGemFavorites(){
     if(!keys.length){out.push(f);return;}
     if(keys.length===1&&keys[0]===f.key&&f.label===_gemLabel(keys[0])){out.push(f);seen.add(f.key);return;}
     changed=true;
-    const wasActive=activeFavs.has("gemeinde:"+f.key);
-    activeFavs.delete("gemeinde:"+f.key);
     keys.forEach(k=>{
       if(seen.has(k))return;
       seen.add(k);
       out.push({type:"gemeinde",key:k,label:_gemLabel(k),icon:f.icon});
-      if(wasActive)activeFavs.add("gemeinde:"+k);
     });
   });
-  if(changed){favorites=out;saveFavorites();saveActiveFavs();}
+  if(changed){favorites=out;saveFavorites();}
 }
 
 /* ── Region: Landkreis-Name ohne Präfix (Landkreis/Stadt/Kreis) – "Landshut" umfasst Landkreis + Stadt Landshut ── */
@@ -925,13 +914,10 @@ function _migrateRegionFavorites(){
     const r=_regionOf(f.key);
     if(r===f.key){out.push(f);return;}
     changed=true;
-    const wasActive=activeFavs.has("region:"+f.key);
-    activeFavs.delete("region:"+f.key);
     if(out.some(x=>x.type==="region"&&x.key===r)||favorites.some(x=>x.type==="region"&&x.key===r))return;
     out.push({...f,key:r,label:r});
-    if(wasActive)activeFavs.add("region:"+r);
   });
-  if(changed){favorites=out;saveFavorites();saveActiveFavs();}
+  if(changed){favorites=out;saveFavorites();}
 }
 
 /* ── Ortschaft-Identität: Ortsname + Gemeinde (ADR-006) ──
@@ -1021,30 +1007,22 @@ function _migrateOrtFavorites(){
     const keys=Object.keys(allOrteAll).filter(l=>_ortBase[l]===f.key);
     if(!keys.length){out.push(f);return;}
     changed=true;
-    const oldId=f.type+":"+f.key;
-    const wasActive=activeFavs.has(oldId);
-    activeFavs.delete(oldId);
     keys.forEach(k=>{
       if(out.some(x=>x.type===f.type&&x.key===k)||favorites.some(x=>x.type===f.type&&x.key===k))return;
       out.push({...f,key:k,label:k});
-      if(wasActive)activeFavs.add(f.type+":"+k);
     });
   });
-  if(changed){favorites=out;saveFavorites();saveActiveFavs();}
+  if(changed){favorites=out;saveFavorites();}
 }
 const secOpen={zeit:false,lk:false,gem:false,ort:false,ver:false,hlp:false};
 const FAV_KEY="vk_favorites";
-const ACTIVE_FAV_KEY="vk_active_favs";
 let favorites=JSON.parse(localStorage.getItem(FAV_KEY)||"[]");
-let activeFavs=(()=>{
-  const stored=localStorage.getItem(ACTIVE_FAV_KEY);
-  if(stored===null)return new Set(favorites.map(f=>f.type+":"+String(f.key)));
-  try{return new Set(JSON.parse(stored));}catch(e){return new Set(favorites.map(f=>f.type+":"+String(f.key)));}
-})();
 const ADMIN=window.location.hash==="#admin"||window.location.pathname==="/admin";
 // Vorschau: zeigt nur die vom Vereinsformular übergebenen Termine, liest und schreibt keinen gespeicherten Zustand
 const VORSCHAU=document.documentElement.classList.contains("vorschau");
-if(VORSCHAU){favorites=[];activeFavs=new Set();}
+if(VORSCHAU){favorites=[];}
+// Favoriten-Ansicht entfallen (v1.49, ADR-024): Favoriten sind Schnellauswahl für normale Filter – alten Schlüssel aufräumen
+if(!VORSCHAU){try{localStorage.removeItem("vk_active_favs");}catch(e){}}
 const RUBRIK_KEY="vk_rubrik";
 let aktRubrikSet=(()=>{if(VORSCHAU)return new Set();try{const v=localStorage.getItem(RUBRIK_KEY);if(!v)return new Set();const p=JSON.parse(v);return new Set(Array.isArray(p)?p:(p&&p!=="alle"?[p]:[]));}catch(e){return new Set();}})();
 const STATE_KEY="vk_state";
@@ -1281,7 +1259,6 @@ function buildLandkreisFilter(){
 }
 
 function selectLandkreis(lk){
-  leaveFavMode();
   aktLandkreis=(lk==="alle"||aktLandkreis===lk)?null:lk;
   aktGemeinden=new Set();
   document.querySelectorAll("[data-lk]").forEach(c=>c.classList.toggle("on",c.dataset.lk===(aktLandkreis||"alle")));
@@ -1315,7 +1292,6 @@ function buildGemeindeFilter(){
 }
 
 function toggleGemeinde(g){
-  leaveFavMode();
   if(g==="alle"){
     aktGemeinden=new Set();
   } else {
@@ -1338,25 +1314,24 @@ function updateAllBadges(){
   document.getElementById("ort-badge").textContent=aktOrte.size===0?"Alle":aktOrte.size===1?[...aktOrte][0]:aktOrte.size+" Orte";
   const tot=Object.keys(labels).length,act=aktVereine.size;
   document.getElementById("ver-badge").textContent=act===tot?"Alle":act+"/"+tot;
-  if(_favMode())["lk-badge","gem-badge","ort-badge","ver-badge"].forEach(id=>{const b=document.getElementById(id);if(b)b.textContent="pausiert";});
-  const active=zeitraum!=="zukunft"||aktOrte.size>0||aktGemeinden.size>0||act!==tot||aktLandkreis!==null||searchChips.length>0||srchText.length>0||_favMode()||aktRubrikSet.size>0;
+  const active=zeitraum!=="zukunft"||aktOrte.size>0||aktGemeinden.size>0||act!==tot||aktLandkreis!==null||searchChips.length>0||srchText.length>0||aktRubrikSet.size>0;
   document.getElementById("reset-btn").style.display=active?"":"none";
   const _sz=document.getElementById("sel-zeit");if(_sz)_sz.value=zeitraum;
   const _sr=document.getElementById("sel-region");if(_sr)_sr.value=aktLandkreis||"alle";
   renderActiveFilterPills();
+  renderFavBar();  // Favoriten-Chips spiegeln den Filterzustand
 }
 
 function renderActiveFilterPills(){
   const el=document.getElementById("active-pills");
   if(!el)return;
   const pills=[];
-  const fm=_favMode();  // Favoriten-Ansicht: pausierte Filter zeigen keine Pills
   if(zeitraum!=="zukunft")pills.push({label:ZEIT_LBL[zeitraum],fn:()=>{zeitraum="zukunft";document.querySelectorAll("[data-z]").forEach(c=>c.classList.toggle("on",c.dataset.z==="zukunft"));updateAllBadges();render();}});
-  if(!fm&&aktLandkreis)pills.push({label:aktLandkreis.replace(/^Landkreis\s+/,""),fn:()=>selectLandkreis(aktLandkreis)});
-  if(!fm)aktGemeinden.forEach(g=>pills.push({label:_gemLabel(g),fn:()=>toggleGemeinde(g)}));
-  if(!fm)aktOrte.forEach(o=>pills.push({label:o,fn:()=>toggleOrt(o)}));
+  if(aktLandkreis)pills.push({label:aktLandkreis.replace(/^Landkreis\s+/,""),fn:()=>selectLandkreis(aktLandkreis)});
+  aktGemeinden.forEach(g=>pills.push({label:_gemLabel(g),fn:()=>toggleGemeinde(g)}));
+  aktOrte.forEach(o=>pills.push({label:o,fn:()=>toggleOrt(o)}));
   const tot=Object.keys(labels).length;
-  if(!fm&&aktVereine.size<tot)pills.push({label:aktVereine.size+"/"+tot+" Vereine",fn:()=>selectAllVereine(true)});
+  if(aktVereine.size<tot)pills.push({label:aktVereine.size+"/"+tot+" Vereine",fn:()=>selectAllVereine(true)});
   _activePillActions=pills.map(p=>p.fn);
   if(!pills.length){el.style.display="none";el.innerHTML="";return;}
   el.style.display="flex";
@@ -1371,8 +1346,6 @@ function resetAll(){
   aktGemeinden=new Set();
   aktVereine=new Set(Object.keys(labels));
   searchChips=[];
-  activeFavs=new Set();
-  saveActiveFavs();
   aktRubrikSet=new Set();
   if(!VORSCHAU)localStorage.removeItem(RUBRIK_KEY);
   renderRubrikBar();
@@ -1484,7 +1457,6 @@ function filterVereinListForOrt(){
 
 
 function toggleOrt(o){
-  leaveFavMode();
   if(o==="alle"){
     aktOrte=new Set();
   } else {
@@ -1538,7 +1510,6 @@ function buildVereinFilter(){
 }
 
 function selectAllVereine(all){
-  leaveFavMode();
   aktVereine=all?new Set(Object.keys(labels)):new Set();
   aktOrte=new Set();
   document.querySelectorAll("[data-o]").forEach(c=>c.classList.toggle("on",c.dataset.o==="alle"));
@@ -1557,7 +1528,7 @@ function toggleFavVerein(k,l){
   const fi=favorites.findIndex(f=>f.type==="verein"&&f.key===k);
   if(fi>=0){
     favorites.splice(fi,1);
-    activeFavs.delete("verein:"+k);
+    
   } else {
     favorites.push(r);  // Herz = nur merken; aktiv erst per Tipp auf den Favoriten-Chip (v1.48)
   }
@@ -1600,7 +1571,6 @@ function _fillRubrikCounts(){
   });
 }
 function clearRubrik(){
-  leaveFavMode();
   aktRubrikSet=new Set();
   if(!VORSCHAU)localStorage.removeItem(RUBRIK_KEY);
   renderRubrikBar();
@@ -1608,7 +1578,6 @@ function clearRubrik(){
   render();
 }
 function setRubrik(r){
-  leaveFavMode();
   if(aktRubrikSet.has(r))aktRubrikSet.delete(r);
   else aktRubrikSet.add(r);
   if(!VORSCHAU){
@@ -1625,7 +1594,6 @@ function updateChecks(){
 }
 
 function onCbChange(cb){
-  leaveFavMode();
   if(cb.checked)aktVereine.add(cb.dataset.vk);
   else aktVereine.delete(cb.dataset.vk);
   aktOrte=new Set();
@@ -1647,43 +1615,41 @@ document.querySelectorAll("[data-z]").forEach(c=>c.onclick=()=>{
 /* ── Favoriten ── */
 function isFavorite(r){return favorites.some(f=>f.type===r.type&&String(f.key)===String(r.key));}
 function saveFavorites(){if(VORSCHAU)return;localStorage.setItem(FAV_KEY,JSON.stringify(favorites));}
-function saveActiveFavs(){if(VORSCHAU)return;localStorage.setItem(ACTIVE_FAV_KEY,JSON.stringify([...activeFavs]));}
 
-/* ── Favoriten-Ansicht ──
-   Aktive Favoriten ersetzen Region/Gemeinde/Ortschaft/Verein/Rubrik-Filter (Zeitraum + Suche gelten weiter).
-   Hinweisbox + gedimmte Filter machen den Modus sichtbar; ein Filter-Tipp beendet ihn automatisch. */
-function _favMode(){return favorites.some(f=>activeFavs.has(f.type+":"+String(f.key)));}
-function leaveFavMode(){
-  if(!_favMode())return false;
-  activeFavs=new Set();
-  saveActiveFavs();
-  renderFavBar();
-  return true;
+/* ── Favoriten = Schnellauswahl (v1.49, ADR-024) ──
+   Ein Favoriten-Chip setzt bzw. löst den passenden normalen Filter (kombinierbar mit allen anderen);
+   ob er „an“ ist, wird aus dem Filterzustand abgeleitet – es gibt keinen eigenen Favoriten-Modus mehr. */
+function _favAktiv(f){
+  const k=String(f.key);
+  if(f.type==="ortschaft"||f.type==="ort")return aktOrte.has(k);
+  if(f.type==="gemeinde")return aktGemeinden.has(k);
+  if(f.type==="region")return aktLandkreis===k;
+  if(f.type==="verein")return aktVereine.size<Object.keys(labels).length&&aktVereine.has(k);
+  return false;
 }
-function favModeOff(){leaveFavMode();updateAllBadges();render();}
-function _renderFavHint(){
-  const on=_favMode();
-  const sk=document.getElementById("s-kal");
-  if(sk)sk.classList.toggle("fav-mode",on);
-  const el=document.getElementById("fav-hint");
-  if(!el)return;
-  if(!on){el.style.display="none";el.innerHTML="";return;}
-  el.style.display="";
-  el.innerHTML=`<div class="fav-hint"><strong>${icon("heart",13,true)} Favoriten-Ansicht</strong>Es werden nur deine aktiven Favoriten gezeigt. Region, Gemeinde, Ortschaft, Verein und Rubrik sind pausiert &ndash; Zeitraum und Suche gelten weiter. Tippe einen Filter an, um die Favoriten-Ansicht zu verlassen.<button class="fav-hint-btn" onclick="favModeOff()">Favoriten ausschalten</button></div>`;
+// Verein-Favorit: erster Tipp = nur dieser Verein, weitere Tipps fügen hinzu/entfernen; leer = wieder alle
+function toggleVereinFilter(k){
+  const alle=Object.keys(labels);
+  const auswahl=aktVereine.size<alle.length;
+  if(auswahl&&aktVereine.has(k)){aktVereine.delete(k);if(!aktVereine.size)aktVereine=new Set(alle);}
+  else if(auswahl)aktVereine.add(k);
+  else aktVereine=new Set([k]);
+  updateChecks();
+  filterVereinListForOrt();
+  updateAllBadges();
+  render();
 }
 
 // Icon immer aus dem Typ – ältere Favoriten haben im localStorage noch Emojis als „icon“ (BKM: nur Lucide), v1.47
-const FAV_ICON={verein:"house",ortschaft:"mapPin",region:"map",gemeinde:"landmark"};
+const FAV_ICON={verein:"house",ortschaft:"mapPin",ort:"mapPin",region:"map",gemeinde:"landmark"};
 function renderFavBar(){
-  _renderFavHint();
   const el=document.getElementById("fav-bar");
   if(!favorites.length){el.style.display="none";el.innerHTML="";return;}
   el.style.display="flex";
   el.style.alignItems="center";
   const label='<span style="font-size:11px;font-weight:700;color:var(--text3);white-space:nowrap;padding-right:4px;letter-spacing:.03em;align-self:center">Favoriten</span>';
   el.innerHTML=label+favorites.map(f=>{
-    const id=f.type+":"+String(f.key);
-    const on=activeFavs.has(id);
+    const on=_favAktiv(f);
     const key=String(f.key).replace(/"/g,"&quot;").replace(/'/g,"&#39;");
     const rmBtn=`<span onclick="event.stopPropagation();removeFavorite('${f.type}','${key}')" style="margin-left:4px;opacity:.55;display:inline-flex;align-items:center;vertical-align:middle">${icon("x",11)}</span>`;
     return `<span class="chip${on?" on":""}" data-ftype="${f.type}" data-fkey="${key}">${icon(FAV_ICON[f.type]||"heart",14)} ${escHtml(f.label)}${rmBtn}</span>`;
@@ -1694,8 +1660,8 @@ function removeFavorite(type,key){
   const fi=favorites.findIndex(f=>f.type===type&&String(f.key)===String(key));
   if(fi<0)return;
   favorites.splice(fi,1);
-  activeFavs.delete(type+":"+String(key));
-  saveFavorites();saveActiveFavs();
+  
+  saveFavorites();
   renderFavBar();updateAllBadges();render();
   if(type==="ortschaft"){buildOrtFilter();applyStateToUI();}
   else if(type==="region"){buildLandkreisFilter();applyStateToUI();}
@@ -1704,19 +1670,16 @@ function removeFavorite(type,key){
 }
 
 function toggleFavChip(type,key){
-  const id=type+":"+key;
-  if(activeFavs.has(id))activeFavs.delete(id);
-  else activeFavs.add(id);
-  saveActiveFavs();
-  renderFavBar();
-  updateAllBadges();
-  render();
+  if(type==="ortschaft"||type==="ort")toggleOrt(key);
+  else if(type==="gemeinde")toggleGemeinde(key);
+  else if(type==="region")selectLandkreis(key);
+  else if(type==="verein")toggleVereinFilter(key);
 }
 function toggleFavOrtschaft(o){
   const fi=favorites.findIndex(f=>f.type==="ortschaft"&&f.key===o);
-  if(fi>=0){favorites.splice(fi,1);activeFavs.delete("ortschaft:"+o);}
+  if(fi>=0){favorites.splice(fi,1);}
   else{favorites.push({type:"ortschaft",key:o,label:o,icon:icon("mapPin")});}
-  saveFavorites();saveActiveFavs();
+  saveFavorites();
   renderFavBar();updateAllBadges();render();
   buildOrtFilter();applyStateToUI();
 }
@@ -1724,9 +1687,9 @@ function toggleFavOrtschaft(o){
 function toggleFavRegion(lk){
   const lkLabel=lk.replace(/^Landkreis\s+/,"");
   const fi=favorites.findIndex(f=>f.type==="region"&&f.key===lk);
-  if(fi>=0){favorites.splice(fi,1);activeFavs.delete("region:"+lk);}
+  if(fi>=0){favorites.splice(fi,1);}
   else{favorites.push({type:"region",key:lk,label:lkLabel,icon:icon("map")});}
-  saveFavorites();saveActiveFavs();
+  saveFavorites();
   renderFavBar();updateAllBadges();render();
   buildLandkreisFilter();applyStateToUI();
 }
@@ -1734,9 +1697,9 @@ function toggleFavRegion(lk){
 function toggleFavGemeinde(g){
   const gLabel=_gemLabel(g);
   const fi=favorites.findIndex(f=>f.type==="gemeinde"&&f.key===g);
-  if(fi>=0){favorites.splice(fi,1);activeFavs.delete("gemeinde:"+g);}
+  if(fi>=0){favorites.splice(fi,1);}
   else{favorites.push({type:"gemeinde",key:g,label:gLabel,icon:icon("landmark")});}
-  saveFavorites();saveActiveFavs();
+  saveFavorites();
   renderFavBar();updateAllBadges();render();
   buildGemeindeFilter();applyStateToUI();
 }
@@ -1765,12 +1728,12 @@ function toggleFavorite(idx,ev){
   const fi=favorites.findIndex(f=>f.type===r.type&&String(f.key)===String(r.key));
   if(fi>=0){
     favorites.splice(fi,1);
-    activeFavs.delete(r.type+":"+String(r.key));
+    
   } else {
     favorites.push(r);
   }
   saveFavorites();
-  saveActiveFavs();
+  
   renderFavBar();
   updateAllBadges();
   render();
@@ -1880,15 +1843,6 @@ function renderSearchChips(){
 }
 
 /* ── Favorit-Match (zentrale Hilfsfunktion) ── */
-function _termMatchFav(t,f){
-  if(!activeFavs.has(f.type+":"+String(f.key)))return false;
-  const k=t.verein;
-  if(f.type==="verein")return k===f.key;
-  if(f.type==="ort"||f.type==="ortschaft")return _terminOrte(t).includes(f.key);
-  if(f.type==="region")return _regionForVerein(k)===f.key;
-  if(f.type==="gemeinde")return(_gemOf[k]||"")===f.key;
-  return false;
-}
 
 /* ── Render events ── */
 function render(){
@@ -1912,7 +1866,6 @@ function render(){
     if(t.datum!==todayStr||!t.uhrzeit)return false;
     return _min(t.uhrzeit)<nowMin;
   };
-  const hasFavs=_favMode();
 
   let out=allT.filter(t=>{
     // Zeitraum gilt immer
@@ -1931,8 +1884,6 @@ function render(){
         if((d<h&&!laeuftNoch)||d>b)return false;
       }
     }
-    // Favoriten überschreiben alle anderen Filter vollständig
-    if(hasFavs)return favorites.some(f=>_termMatchFav(t,f));
     // Normaler UND-Filter
     if(!aktVereine.has(t.verein))return false;
     if(aktLandkreis!==null&&_regionForVerein(t.verein)!==aktLandkreis)return false;
@@ -1975,7 +1926,7 @@ function render(){
   _rubrikCnt={};
   out.forEach(t=>{const r=rubriken[t.verein]||"Verein";_rubrikCnt[r]=(_rubrikCnt[r]||0)+1;});
   _fillRubrikCounts();
-  if(!hasFavs&&aktRubrikSet.size>0)out=out.filter(t=>aktRubrikSet.has(rubriken[t.verein]||"Verein"));
+  if(aktRubrikSet.size>0)out=out.filter(t=>aktRubrikSet.has(rubriken[t.verein]||"Verein"));
 
   out.sort((a,b)=>a.datum.localeCompare(b.datum)||(a.uhrzeit||"").localeCompare(b.uhrzeit||""));
 
@@ -3976,7 +3927,7 @@ function showInfoModal(){
       </div>
       <div class="help-row" style="padding:8px 0;border-bottom:none">
         <span class="help-icon">${icon("heart",20)}</span>
-        <div><strong>Favoriten</strong><span>Das Herz an Verein, Gemeinde oder Ortschaft merkt einen Favoriten vor &ndash; die Ansicht bleibt, wie sie ist. Erst wer den Favoriten-Chip antippt, sieht nur dessen Termine. Aktive Favoriten zeigen nur ihre Termine &ndash; Region, Gemeinde, Ortschaft, Verein und Rubrik sind dann pausiert, Zeitraum und Suche gelten weiter. Favoriten-Chip antippen = ein/aus, Kreuz = entfernen. Tippst du einen Filter an, endet die Favoriten-Ansicht automatisch.</span></div>
+        <div><strong>Favoriten</strong><span>Das Herz an Verein, Gemeinde, Ortschaft oder Region merkt sie dir als Favorit vor. Die Favoriten stehen oben im Filter als Schnellauswahl: antippen setzt den passenden Filter (z.&nbsp;B. Ortschaft &bdquo;H&ouml;lskofen&ldquo;), nochmal antippen hebt ihn auf. Er l&auml;sst sich mit allen anderen Filtern kombinieren. Kreuz = Favorit entfernen.</span></div>
       </div>
       <div class="help-row" style="padding:12px 0 8px;border-top:1.5px solid var(--border);margin-top:4px;border-bottom:none">
         <span class="help-icon">${icon("alertTriangle",20)}</span>
@@ -3986,7 +3937,7 @@ function showInfoModal(){
         <span class="help-icon">${icon("scale",20)}</span>
         <div><strong>Impressum</strong><span>Josef Fischer &middot; H&ouml;lskofen 13 &middot; 84092 Bayerbach b. Ergoldsbach<br><a href="mailto:Vereinskalender@icloud.com" style="color:var(--accent);text-decoration:none">Vereinskalender@icloud.com</a></span></div>
       </div>
-      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.48 &middot; 2026-10-04 &middot; a sEpp-App</p>
+      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.49 &middot; 2026-10-04 &middot; a sEpp-App</p>
       <button onclick="document.getElementById('info-modal').remove()" style="width:100%;margin-top:16px;padding:12px;background:none;border:1.5px solid var(--border2);border-radius:12px;font-size:14px;color:var(--text2);cursor:pointer">Schlie&szlig;en</button>
     </div>`;
   document.body.appendChild(m);
