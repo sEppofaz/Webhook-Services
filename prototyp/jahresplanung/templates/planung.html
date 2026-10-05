@@ -2,7 +2,7 @@
 {% block titel %}Planungstreffen{% endblock %}
 {% block inhalt %}
 <h1>Planungstreffen</h1>
-<p class="hint">Ein Planungsraum je Gemeinde und Jahr. Beim Anlegen werden alle Vereine mit Sitz in der Gemeinde aufgenommen und mit ihrer Vorjahres-Vorlage vorbefüllt. Live würdest du (Admin) den Raum anlegen und den Organisator-Link an Gemeinde oder Vereinsring geben.</p>
+<p class="hint">Ein Planungsraum je Gemeinde und Jahr. Beim Anlegen werden alle Vereine mit Sitz in der Gemeinde aufgenommen und bekommen eine Einladung. Die Termine legen die Vereine selbst als Entwurf an – der Raum zeigt sie nebeneinander. Live legt der Admin den Raum an und gibt den Organisator-Link an Gemeinde oder Vereinsring.</p>
 
 <form class="card zeile" method="post" action="{{ url_for('planung_neu') }}">{{ csrf()|safe }}
   <div style="flex:3 1 260px"><label>Gemeinde</label>
@@ -16,7 +16,7 @@
 <h2>Bestehende Planungsräume</h2>
 {% for r in raeume %}
   <div class="card zeile" style="align-items:center">
-    <div style="flex:3 1 260px"><b>{{ r.titel }}</b><div class="hint">{{ r.landkreis }} · {{ r.termine }} Termine · {{ 'abgeschlossen' if r.status == 'abgeschlossen' else 'offen' }}</div></div>
+    <div style="flex:3 1 260px"><b>{{ r.titel }}</b><div class="hint">{{ r.landkreis }} · {{ r.vereine }} Vereine · {{ 'abgeschlossen' if r.status == 'abgeschlossen' else 'offen' }}</div></div>
     <div style="flex:0 0 auto"><a class="btn klein" href="{{ url_for('raum_orga', token=r.token) }}">Öffnen (Organisation)</a></div>
     <form style="flex:0 0 auto" method="post" action="{{ url_for('planung_loeschen', raum_id=r.id) }}" onsubmit="return confirm('Planungsraum löschen?')">{{ csrf()|safe }}
       <button class="btn rot klein">Löschen</button></form>

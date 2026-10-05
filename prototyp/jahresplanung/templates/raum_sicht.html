@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block titel %}{{ r.titel }}{% endblock %}
+{% block inhalt %}
+<h1>{{ r.titel }}</h1>
+<p class="hint">Ansicht für euren Verein: die Entwürfe aller beteiligten Vereine. Nur lesen – eure eigenen Termine ändert und veröffentlicht ihr auf eurer Entwurfsseite.</p>
+
+<div class="card" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+  <a class="btn" href="{{ url_for('entwuerfe_seite', jahr=r.jahr) }}">Zu unseren Entwürfen</a>
+  <form method="post" action="{{ url_for('raum_fertig', raum_id=r.id) }}" style="margin:0">{{ csrf()|safe }}
+    {% if fertig %}<button class="btn sek" name="fertig" value="0">Fertig-Meldung zurücknehmen</button>
+    {% else %}<button class="btn sek" name="fertig" value="1">Wir sind fertig</button>{% endif %}
+  </form>
+  <span class="hint">„Fertig“ sagt der Organisatorin, dass eure Entwürfe für das Treffen stehen.</span>
+</div>
+
+<h2>Konflikte am gleichen Tag ({{ paare|length }})</h2>
+{% for p in paare %}
+  <div class="card" style="padding:10px 14px">
+    <b>{{ p.a.datum|wochentag_kurz }} {{ p.a.datum|tm }}</b> ·
+    <span class="vfarbe f{{ farben.get(p.a.verein, 0) }}"></span>{{ p.a.bezeichnung }} <span class="hint">({{ labels.get(p.a.verein, p.a.verein) }})</span>
+    ↔ {{ p.b.bezeichnung }} <span class="hint">({{ p.b.verein_name }})</span>
+    {% if p.a.verein == key or p.b.verein == key %}<span class="chip vorschlag">betrifft euch</span>{% endif %}
+  </div>
+{% else %}
+  <p class="ok">Keine Termine am gleichen Tag.</p>
+{% endfor %}
+
+<h2>Alle Entwürfe</h2>
+{% for monat, liste in monate %}
+  <h2>{{ monat }}</h2>
+  <div class="card tabelle-wrap"><table>
+    <tr><th>Datum</th><th>Termin</th><th class="optional">Verein</th><th>Status</th></tr>
+    {% for t in liste %}
+    <tr class="{{ 'konflikt' if t._konflikt_tag else ('we' if t._konflikte else '') }}"{% if t.verein == key %} style="font-weight:600"{% endif %}>
+      <td class="d">{{ t.datum|wochentag_kurz }} {{ t.datum|tm }}<div class="hint">{{ zeit_text(t) }}</div></td>
+      <td>{{ t.bezeichnung }}{% if t.vorschlag_datum %}<div class="hint">Verschiebe-Vorschlag: {{ t.vorschlag_datum|tm }}</div>{% endif %}</td>
+      <td class="optional"><span class="vfarbe f{{ farben.get(t.verein, 0) }}"></span>{{ labels.get(t.verein, t.verein) }}</td>
+      <td><span class="chip {{ t.status }}">{{ STATUS[t.status] }}</span></td>
+    </tr>
+    {% endfor %}
+  </table></div>
+{% else %}
+  <p class="hint">Noch keine Entwürfe.</p>
+{% endfor %}
+{% endblock %}

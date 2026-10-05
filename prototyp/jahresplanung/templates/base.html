@@ -39,7 +39,7 @@ input[type=checkbox]{width:18px;height:18px;margin:0;accent-color:var(--accent);
 .btn.sek{background:transparent;color:var(--accent);border:1px solid var(--accent)}
 .btn.klein{padding:0 10px;font-size:13px}.btn.rot{background:var(--rot)}
 .chip{display:inline-block;font-size:12px;border-radius:999px;padding:2px 9px;background:var(--line);color:var(--text2);white-space:nowrap}
-.chip.vorschlag{background:var(--gelb-bg);color:var(--gelb)}.chip.bestaetigt,.chip.neu{background:var(--gruen-bg);color:var(--gruen)}
+.chip.entwurf,.chip.vorschlag{background:var(--gelb-bg);color:var(--gelb)}.chip.veroeffentlicht,.chip.bestaetigt{background:var(--gruen-bg);color:var(--gruen)}
 .chip.verworfen{text-decoration:line-through}
 .warn{background:var(--gelb-bg);color:var(--gelb);border-radius:8px;padding:10px 12px;margin:10px 0;font-size:14px}
 .warn.rot{background:var(--rot-bg);color:var(--rot)}
@@ -74,7 +74,13 @@ tr.abgewaehlt td{opacity:.5}
   <a href="{{ url_for('start') }}">Start</a>
   <a href="{{ url_for('kollision_seite') }}">Kollisionswarnung</a>
   <a href="{{ url_for('vorlage_seite') }}">Vorjahres-Vorlage</a>
+  <a href="{{ url_for('entwuerfe_seite') }}">Entwürfe</a>
   <a href="{{ url_for('planung_liste') }}">Planungstreffen</a>
+  {% if angemeldet %}
+    <form method="post" action="{{ url_for('abmelden') }}" style="display:flex;align-items:center;gap:8px;margin:0">{{ csrf()|safe }}
+      <span style="opacity:.85;font-size:13px">{{ angemeldet_name }}</span>
+      <button class="btn sek klein" style="color:#fff;border-color:#fff">Abmelden</button></form>
+  {% else %}<a href="{{ url_for('anmelden') }}">Anmelden</a>{% endif %}
 </header>
 <div class="proto">Prototyp – lokal, schreibt nichts in den Live-Kalender. Daten: Momentaufnahme der öffentlichen Termine.</div>
 <main>

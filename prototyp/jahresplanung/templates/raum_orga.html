@@ -3,21 +3,22 @@
 {% block titel %}{{ r.titel }}{% endblock %}
 {% block css %}
 {% if treffen %}body{font-size:18px}th,td{font-size:17px;padding:10px}.konf{font-size:15px}main{max-width:1400px}{% endif %}
-.verschieben{display:flex;gap:4px;align-items:center}.verschieben input{width:auto}
+.vorschlagen{display:flex;gap:4px;align-items:center;margin:0}.vorschlagen input{width:auto}
 .links input{font-size:12px}
+.vorgeschlagen{font-size:13px;color:#5b21b6}@media (prefers-color-scheme:dark){.vorgeschlagen{color:#c4b5fd}}
 {% endblock %}
 {% block inhalt %}
 <div class="zeile" style="align-items:center">
   <div style="flex:3 1 300px">
     <h1>{{ r.titel }}</h1>
-    <p class="hint">{{ r.landkreis }} · Organisator-Ansicht · {% if r.status == 'abgeschlossen' %}<b>abgeschlossen</b>{% else %}offen – Vereine können eintragen{% endif %}</p>
+    <p class="hint">{{ r.landkreis }} · Organisator-Ansicht · {% if r.status == 'abgeschlossen' %}<b>abgeschlossen</b>{% else %}offen{% endif %}</p>
   </div>
   <div style="flex:0 0 auto;display:flex;gap:6px;flex-wrap:wrap">
     {% if treffen %}<a class="btn sek" href="{{ url_for('raum_orga', token=r.token) }}">Normale Ansicht</a>
     {% else %}<a class="btn sek" href="{{ url_for('raum_orga', token=r.token, ansicht='treffen') }}">Ansicht fürs Treffen (Beamer)</a>{% endif %}
-    <form method="post" action="{{ url_for('raum_orga_status', token=r.token) }}">{{ csrf()|safe }}
+    <form method="post" action="{{ url_for('raum_orga_status', token=r.token) }}" style="margin:0">{{ csrf()|safe }}
       {% if r.status == 'offen' %}
-        <button class="btn" name="aktion" value="abschliessen" onclick="return confirm('Planung abschließen? Vereine können dann nichts mehr ändern.')">Planung abschließen</button>
+        <button class="btn" name="aktion" value="abschliessen" onclick="return confirm('Planung abschließen? Danach keine Verschiebe-Vorschläge und Einladungen mehr. Veröffentlichen bleibt Sache der Vereine.')">Planung abschließen</button>
       {% else %}
         <button class="btn sek" name="aktion" value="oeffnen">Wieder öffnen</button>
       {% endif %}
@@ -25,12 +26,10 @@
   </div>
 </div>
 
-{% if r.status == 'abgeschlossen' %}
-  <div class="ok">Abgeschlossen. Live würden jetzt alle bestätigten und neuen Termine in den Kalender übernommen und Vereine ohne Konto zur Registrierung eingeladen. <b>Im Prototyp wird nichts geschrieben.</b></div>
-{% endif %}
-
 <div class="card">
-  <b>Jahresprogramm herunterladen</b> <span class="hint">– alle nicht verworfenen Termine aller Vereine</span>
+  <p style="margin-top:0">Hier liegen die <b>Entwürfe</b> der beteiligten Vereine nebeneinander. Du änderst nichts selbst – du schlägst Verschiebungen vor, und der Verein übernimmt sie mit einem Klick.
+  <b>Veröffentlichen</b> tut jeder Vereinsadmin selbst.</p>
+  <b>Jahresprogramm herunterladen</b> <span class="hint">– Entwürfe und veröffentlichte Termine aller beteiligten Vereine</span>
   <div class="exporte" style="margin-top:8px">
     {% for f, (name_f, _) in FORMATE.items() %}<a class="btn sek klein" href="{{ url_for('raum_orga_export', token=r.token, fmt=f) }}">{{ name_f }}</a>{% endfor %}
   </div>
@@ -38,23 +37,30 @@
 
 {% if not treffen %}
 {% set aktive = vereine|selectattr("aktiv")|list %}
-<h2 id="vereine">Vereine und ihre Links ({{ aktive|length }})</h2>
-<p class="hint">Jeder Verein bekommt seinen eigenen Link – ohne Konto. Damit prüft er seine Vorschläge und trägt neue Termine ein. Link per Mail oder WhatsApp weitergeben.
-Abwählen löscht nichts: die Termine zählen nur nicht mehr mit, und der Link ist gesperrt, bis der Verein wieder aufgenommen wird.</p>
+<h2 id="vereine">Vereine und Einladungen ({{ aktive|length }})</h2>
+<p class="hint">Jeder Verein braucht ein VKO-Konto. Die Einladung führt zur Registrierung – darüber angelegte Konten sind sofort freigegeben (einmalig, gültig {{ 60 }} Tage). Vereine mit Konto melden sich einfach an.
+Abwählen löscht nichts: die Entwürfe zählen hier nur nicht mehr mit.</p>
 <div class="card tabelle-wrap links kompakt"><table>
-  <tr><th>Verein</th><th>Termine</th><th>offen</th><th>fertig</th><th class="optional">Link</th><th></th></tr>
+  <tr><th>Verein</th><th>Konto</th><th>Entwürfe</th><th>veröff.</th><th>Vorschl.</th><th>fertig</th><th class="optional">Einladung</th><th></th></tr>
   {% for v in vereine %}
+  {% set k = konten.get(v.verein_key) %}{% set a = anzahl[v.verein_key] %}
   <tr class="{{ '' if v.aktiv else 'abgewaehlt' }}">
-    <td><span class="vfarbe f{{ farben[v.verein_key] }}"></span>{% if v.aktiv %}<a href="{{ url_for('raum_verein', token=v.token) }}" target="_blank">{{ v.verein_name }}</a>{% else %}{{ v.verein_name }}{% endif %}
+    <td><span class="vfarbe f{{ farben[v.verein_key] }}"></span>{{ v.verein_name }}
       {% if v.verein_key in nachbarn %}<span class="chip nachbar">Nachbar</span>{% endif %}
       {% if not v.aktiv %}<span class="chip">abgewählt</span>{% endif %}</td>
-    <td>{{ v.termine if v.aktiv else '–' }}</td>
-    <td>{% if v.aktiv and v.offen %}<span class="chip vorschlag">{{ v.offen }}</span>{% else %}–{% endif %}</td>
-    <td>{% if v.aktiv and v.fertig_am %}<span class="chip bestaetigt">fertig</span>{% else %}–{% endif %}</td>
-    <td class="optional">{% if v.aktiv %}<div style="display:flex;gap:4px"><input readonly value="{{ basis }}{{ url_for('raum_verein', token=v.token) }}" onfocus="this.select()">
-      <button class="btn sek klein" type="button" onclick="navigator.clipboard.writeText(this.previousElementSibling.value);this.textContent='kopiert'">Kopieren</button></div>{% endif %}</td>
+    <td>{% if not k %}<span class="chip">kein Konto</span>{% elif k.freigabe == 'ausstehend' %}<span class="chip entwurf">ausstehend</span>{% else %}<span class="chip veroeffentlicht">ja</span>{% endif %}</td>
+    <td>{{ a.entwurf if v.aktiv else '–' }}</td>
+    <td>{{ a.veroeffentlicht if v.aktiv else '–' }}</td>
+    <td>{% if v.aktiv and a.vorschlag %}<span class="chip vorschlag">{{ a.vorschlag }} offen</span>{% else %}–{% endif %}</td>
+    <td>{% if v.aktiv and v.fertig_am %}<span class="chip veroeffentlicht">fertig</span>{% else %}–{% endif %}</td>
+    <td class="optional">{% if v.aktiv and r.status == 'offen' %}
+      {% if v.einladung_bis < jetzt %}<span class="chip">abgelaufen</span>
+      {% else %}<div style="display:flex;gap:4px"><input readonly value="{{ basis }}{{ url_for('einladung', token=v.einladung) }}" onfocus="this.select()">
+        <button class="btn sek klein" type="button" onclick="navigator.clipboard.writeText(this.previousElementSibling.value);this.textContent='kopiert'">Kopieren</button></div>
+        {% if v.angenommen_am %}<div class="hint">angenommen {{ v.angenommen_am[:10]|tm }}</div>{% endif %}{% endif %}
+      {% endif %}</td>
     <td>{% if r.status == 'offen' %}
-      <form method="post" action="{{ url_for('raum_orga_verein', token=r.token, vid=v.id) }}">{{ csrf()|safe }}
+      <form method="post" action="{{ url_for('raum_orga_verein', token=r.token, vid=v.id) }}" style="margin:0">{{ csrf()|safe }}
         {% if v.aktiv %}<button class="btn sek klein" name="aktiv" value="0">Abwählen</button>
         {% else %}<button class="btn klein" name="aktiv" value="1">Wieder aufnehmen</button>{% endif %}
       </form>{% endif %}</td>
@@ -65,7 +71,7 @@ Abwählen löscht nichts: die Termine zählen nur nicht mehr mit, und der Link i
 {% if r.status == 'offen' %}
 <details class="card" id="dazuholen">
   <summary style="font-size:15px;font-weight:600">Vereine dazuholen – z. B. aus der Nachbargemeinde</summary>
-  <p class="hint">Dazugeholte Vereine bekommen einen eigenen Link und ihre Vorjahres-Vorlage. Ihre Termine zählen bei den Konflikten immer mit, auch wenn sie in einer anderen Gemeinde sitzen.</p>
+  <p class="hint">Dazugeholte Vereine bekommen eine eigene Einladung. Ihre Entwürfe zählen bei den Konflikten immer mit, auch wenn sie in einer anderen Gemeinde sitzen.</p>
   <form method="post" action="{{ url_for('raum_orga_dazuholen', token=r.token) }}">{{ csrf()|safe }}
     {{ vereinsauswahl(gruppen, "verein", "dazu") }}
     <button class="btn" style="margin-top:10px">Ausgewählte dazuholen</button>
@@ -81,8 +87,9 @@ Abwählen löscht nichts: die Termine zählen nur nicht mehr mit, und der Link i
   {% for p in paare %}
   <tr>
     <td class="d">{{ p.a.datum|wochentag_kurz }} {{ p.a.datum|tm }}</td>
-    <td><span class="vfarbe f{{ farben.get(p.a.verein, 0) }}"></span><a href="#t{{ p.a._pid }}">{{ p.a.bezeichnung }}</a><div class="hint">{{ labels.get(p.a.verein, p.a.verein) }} {{ p.a.uhrzeit }}</div></td>
-    <td>{% if p.b.quelle == 'Planung' %}<span class="vfarbe f{{ farben.get(p.b.verein, 0) }}"></span><a href="#t{{ p.b.id[1:] }}">{{ p.b.bezeichnung }}</a>{% else %}{{ p.b.bezeichnung }} <span class="chip">schon im Kalender</span>{% endif %}
+    <td><span class="vfarbe f{{ farben.get(p.a.verein, 0) }}"></span><a href="#t{{ p.a._eid }}">{{ p.a.bezeichnung }}</a>
+      <div class="hint">{{ labels.get(p.a.verein, p.a.verein) }} {{ p.a.uhrzeit }} · {{ STATUS[p.a.status] }}</div></td>
+    <td>{% if p.b.id.startswith('e') %}<span class="vfarbe f{{ farben.get(p.b.verein, 0) }}"></span><a href="#t{{ p.b.id[1:] }}">{{ p.b.bezeichnung }}</a>{% else %}{{ p.b.bezeichnung }} <span class="chip">schon im Kalender</span>{% endif %}
       <div class="hint">{{ p.b.verein_name }} {{ p.b.uhrzeit }}</div></td>
   </tr>
   {% endfor %}
@@ -92,25 +99,32 @@ Abwählen löscht nichts: die Termine zählen nur nicht mehr mit, und der Link i
 {% endif %}
 
 <h2>Jahresübersicht</h2>
-<p class="hint"><span style="color:var(--rot)">▍</span> gleicher Tag · <span style="color:var(--gelb)">▍</span> gleiches Wochenende. Als Organisatorin kannst du Termine direkt verschieben (z. B. während des Treffens).</p>
+<p class="hint"><span style="color:var(--rot)">▍</span> gleicher Tag · <span style="color:var(--gelb)">▍</span> gleiches Wochenende. „Vorschlagen“ schickt dem Verein einen Verschiebe-Vorschlag – er übernimmt ihn auf seiner Entwurfsseite.</p>
 {% for monat, liste in monate %}
   <h2>{{ monat }}</h2>
   <div class="card tabelle-wrap"><table>
-    <tr><th>Datum</th><th>Termin</th><th class="optional">Verein</th><th>Status</th><th class="optional">Verschieben</th></tr>
+    <tr><th>Datum</th><th>Termin</th><th class="optional">Verein</th><th>Status</th><th class="optional">Verschiebung vorschlagen</th></tr>
     {% for t in liste %}
-    <tr id="t{{ t._pid }}" class="{{ 'konflikt' if t._konflikt_tag else ('we' if t._konflikte else '') }}">
+    <tr id="t{{ t._eid }}" class="{{ 'konflikt' if t._konflikt_tag else ('we' if t._konflikte else '') }}">
       <td class="d">{{ t.datum|wochentag_kurz }} {{ t.datum|tm }}<div class="hint">{{ zeit_text(t) }}</div></td>
       <td>{{ t.bezeichnung }}{% if t.ort %}<div class="hint">{{ t.ort }}</div>{% endif %}
         {% for k in t._konflikte %}<div class="konf"><span class="{{ 'tag' if k.stufe == STUFE_TAG else 'we' }}">●</span> {{ k.datum|wochentag_kurz }} {{ k.bezeichnung }} – {{ k.verein_name }}</div>{% endfor %}</td>
       <td class="optional"><span class="vfarbe f{{ farben.get(t.verein, 0) }}"></span>{{ labels.get(t.verein, t.verein) }}</td>
       <td><span class="chip {{ t.status }}">{{ STATUS[t.status] }}</span></td>
-      <td class="optional">{% if r.status == 'offen' %}
-        <form class="verschieben kompakt" method="post" action="{{ url_for('raum_orga_termin', token=r.token, tid=t._pid, ansicht='treffen' if treffen else None) }}">{{ csrf()|safe }}
-          <input type="date" name="datum" value="{{ t.datum }}"><button class="btn klein">OK</button></form>{% endif %}</td>
+      <td class="optional">
+        {% if t.vorschlag_datum %}
+          <div class="vorgeschlagen">vorgeschlagen: {{ t.vorschlag_datum|wochentag_kurz }} {{ t.vorschlag_datum|tm }}</div>
+          {% if r.status == 'offen' %}<form method="post" action="{{ url_for('raum_orga_vorschlag', token=r.token, eid=t._eid, ansicht='treffen' if treffen else None) }}" style="margin:4px 0 0">{{ csrf()|safe }}
+            <button class="btn sek klein" name="aktion" value="zuruecknehmen">Zurücknehmen</button></form>{% endif %}
+        {% elif t.status == 'entwurf' and r.status == 'offen' %}
+          <form class="vorschlagen kompakt" method="post" action="{{ url_for('raum_orga_vorschlag', token=r.token, eid=t._eid, ansicht='treffen' if treffen else None) }}">{{ csrf()|safe }}
+            <input type="date" name="datum" value="{{ t.datum }}" min="{{ r.jahr }}-01-01" max="{{ r.jahr }}-12-31"><button class="btn klein">Vorschlagen</button></form>
+        {% elif t.status == 'veroeffentlicht' %}<span class="hint">schon veröffentlicht</span>{% endif %}
+      </td>
     </tr>
     {% endfor %}
   </table></div>
 {% else %}
-  <p class="hint">Noch keine Termine.</p>
+  <p class="hint">Noch keine Entwürfe. Die Vereine legen sie nach der Einladung selbst an (oder erzeugen sie aus dem Vorjahr).</p>
 {% endfor %}
 {% endblock %}

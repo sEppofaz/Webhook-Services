@@ -3,11 +3,13 @@
 Start:  ~/.venvs/vko-jahresplanung/bin/python prototyp/jahresplanung/app.py
 Dann:   http://localhost:5050
 
-Drei Bereiche:
-1. Kollisionswarnung – wie sie später im Vereinsformular erscheint (Stufe A).
-2. Vorjahres-Vorlage – Termine eines Vereins nach ihrem Schema ins Zieljahr übertragen (Stufe B).
-3. Planungstreffen – Planungsraum je Gemeinde, Links für Vereine ohne Konto, Konflikte,
-   Export (PDF, Word, Excel, LibreOffice, Kalenderdatei) (Stufe C).
+Bereiche:
+1. Kollisionswarnung – wie sie später im Vereinsformular erscheint (nur veröffentlichte Termine).
+2. Vorjahres-Vorlage – Termine eines Vereins nach ihrem Schema ins Zieljahr übertragen.
+3. Entwürfe (Vereinsadmin, simuliertes Login) – anlegen, aus dem Vorjahr erzeugen, Verschiebe-
+   Vorschläge übernehmen, einzeln oder alle veröffentlichen. Nur der Verein selbst veröffentlicht.
+4. Planungstreffen – Sicht der Organisatorin auf die Entwürfe der beteiligten Vereine: Konflikte,
+   Verschiebe-Vorschläge, Einladungen (= Registrierung mit automatischer Freigabe), Export.
 Schreibt nie in den Live-Kalender. Daten: Momentaufnahme der öffentlichen /api/termine.
 """
 from __future__ import annotations
@@ -15,9 +17,10 @@ from __future__ import annotations
 import os
 import re
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime
+from functools import wraps
 
-from flask import Flask, Response, abort, jsonify, redirect, render_template, request, url_for
+from flask import Flask, Response, abort, jsonify, redirect, render_template, request, session, url_for
 
 import daten as D
 import db
@@ -37,7 +40,8 @@ TEXT_MAX = 200
 @app.context_processor
 def _vorlagen_hilfen():
     return {"csrf": lambda: csrf_field(get_csrf_token()), "FORMATE": FORMATE, "STATUS": db.STATUS,
-            "datum_text": datum_text, "zeit_text": zeit_text, "STUFE_TAG": STUFE_TAG}
+            "FREIGABE": db.FREIGABE, "datum_text": datum_text, "zeit_text": zeit_text, "STUFE_TAG": STUFE_TAG,
+            "angemeldet": session.get("verein"), "angemeldet_name": session.get("verein_name")}
 
 
 @app.before_request
@@ -70,22 +74,24 @@ def _felder_aus_formular() -> tuple[dict, str]:
     return f, zeit_fehler(f["uhrzeit"], f["uhrzeit_bis"])
 
 
+def _veroeffentlichte() -> list[dict]:
+    """Was im Kalender steht: Momentaufnahme + im Prototyp veröffentlichte Entwürfe."""
+    return D.daten()["termine"] + db.entwuerfe(status="veroeffentlicht")
+
+
 def _kalender_im_jahr(jahr: int) -> list[dict]:
-    """Bereits veröffentlichte Termine im Zieljahr (aus dem Live-Kalender)."""
-    return [t for t in D.daten()["termine"] if t.get("datum", "")[:4] == str(jahr)]
+    return [t for t in _veroeffentlichte() if t.get("datum", "")[:4] == str(jahr)]
 
 
 def _mit_konflikten(eigene: list[dict], andere: list[dict], zusatz: set | None = None) -> list[dict]:
-    """Jedem Termin seine Kollisionen anhängen (`_konflikte`), Quelle Planung/Kalender markiert."""
+    """Jedem Termin seine Kollisionen anhängen (`_konflikte`); Quelle Entwurf/Kalender markiert."""
     d = D.daten()
+    entwurf_ids = {x["id"] for x in andere if str(x.get("id", "")).startswith("e") and x.get("status") == "entwurf"}
     for t in eigene:
-        if t.get("status") == "verworfen":
-            t["_konflikte"] = []
-            continue
         k = kollisionen(andere, d["meta"], d["labels"], t, d["rubriken"], wochenende=True,
                         ausser_ids={t.get("id")}, zusatz_vereine=zusatz)
         for x in k:
-            x["quelle"] = "Planung" if str(x.get("id", "")).startswith("p") else "Kalender"
+            x["quelle"] = "Entwurf" if x.get("id") in entwurf_ids else "Kalender"
         t["_konflikte"] = k
         t["_konflikt_tag"] = any(x["stufe"] == STUFE_TAG for x in k)
     return eigene
@@ -108,11 +114,22 @@ def _export(titel: str, zeilen: list[dict], fmt: str, mit_verein: bool) -> Respo
                     headers={"Content-Disposition": f'attachment; filename="{dateiname(titel, fmt)}"'})
 
 
-def _zieljahr() -> int:
+def _zieljahr(feld: str = "jahr") -> int:
     try:
-        return int(request.args.get("jahr", "")) if request.args.get("jahr") else date.today().year + 1
+        return int(request.values.get(feld, "")) if request.values.get(feld) else date.today().year + 1
     except ValueError:
         return date.today().year + 1
+
+
+def verein_login(f):
+    """Simuliertes Vereins-Login (live: require_verein_login + Rolle admin)."""
+    @wraps(f)
+    def wrapper(*a, **kw):
+        key = session.get("verein")
+        if not key or not db.konto(key):
+            return redirect(url_for("anmelden", weiter=request.path))
+        return f(key, *a, **kw)
+    return wrapper
 
 
 # ── Start ────────────────────────────────────────────────────────────────────
@@ -128,7 +145,7 @@ def daten_holen():
     return redirect(url_for("start"))
 
 
-# ── 1. Kollisionswarnung ─────────────────────────────────────────────────────
+# ── 1. Kollisionswarnung (nur veröffentlichte Termine – Josef 2026-10-05) ───
 
 @app.get("/kollision")
 def kollision_seite():
@@ -151,7 +168,7 @@ def api_kollisionen():
     entwurf = {"verein": request.args.get("verein", ""), "tage": tage,
                "ort": request.args.get("ort", "")[:TEXT_MAX], "uhrzeit": request.args.get("uhrzeit", "")[:5]}
     mit = {x for x in request.args.get("mit", "").split(",") if x in d["labels"]}
-    k = kollisionen(d["termine"], d["meta"], d["labels"], entwurf, d["rubriken"],
+    k = kollisionen(_veroeffentlichte(), d["meta"], d["labels"], entwurf, d["rubriken"],
                     wochenende=request.args.get("wochenende") == "1", zusatz_vereine=mit)
     return jsonify([{**x, "datum_text": datum_text(x)} for x in k])
 
@@ -166,7 +183,7 @@ def vorlage_seite():
     if verein:
         alle = D.vorschlaege(jahr)
         eigene = [dict(v, id=f"v{i}") for i, v in enumerate(alle) if v.get("verein") == verein]
-        andere = [dict(v, id=f"p{i}") for i, v in enumerate(alle) if v.get("verein") != verein] \
+        andere = [dict(v, id=f"x{i}") for i, v in enumerate(alle) if v.get("verein") != verein] \
             + _kalender_im_jahr(jahr)
         _mit_konflikten(eigene, andere)
     return render_template("vorlage.html", vereine=D.vereine(), verein=verein, jahr=jahr,
@@ -182,7 +199,189 @@ def vorlage_export(fmt):
     return _export(f"Terminvorschlag {jahr} – {name}", zeilen, fmt, mit_verein=False)
 
 
-# ── 3. Planungstreffen ───────────────────────────────────────────────────────
+# ── 3. Vereinskonto (simuliert) ──────────────────────────────────────────────
+
+@app.get("/anmelden")
+def anmelden():
+    return render_template("anmelden.html", konten=db.konten(), gruppen=D.vereine_gruppiert(),
+                           weiter=request.args.get("weiter", ""))
+
+
+def _sicheres_ziel(weiter: str) -> str:
+    return weiter if weiter.startswith("/") and not weiter.startswith("//") else url_for("entwuerfe_seite")
+
+
+@app.post("/anmelden")
+def anmelden_post():
+    key = request.form.get("verein", "")
+    labels = D.daten()["labels"]
+    if key not in labels:
+        abort(400)
+    if request.form.get("aktion") == "konto":
+        # Registrierung ohne Einladung: wartet auf Freigabe durch VKO (wie heute)
+        db.konto_anlegen(key, labels[key], "ausstehend")
+    if not db.konto(key):
+        abort(403, "Dieser Verein hat noch kein Konto.")
+    session["verein"], session["verein_name"] = key, labels[key]
+    return redirect(_sicheres_ziel(request.form.get("weiter", "")))
+
+
+@app.post("/abmelden")
+def abmelden():
+    session.pop("verein", None)
+    session.pop("verein_name", None)
+    return redirect(url_for("start"))
+
+
+@app.post("/demo/freigeben")
+def demo_freigeben():
+    """Simuliert Josefs Freigabe einer Registrierung ohne Einladung."""
+    db.konto_freigeben(request.form.get("verein", ""))
+    return redirect(request.referrer or url_for("anmelden"))
+
+
+@app.get("/einladung/<token>")
+def einladung(token):
+    e = db.einladung(token)
+    if not e:
+        abort(404)
+    gueltig = e["aktiv"] and e["raum_status"] == "offen" and e["einladung_bis"] >= datetime.now().isoformat()
+    return render_template("einladung.html", e=e, gueltig=gueltig, konto=db.konto(e["verein_key"]))
+
+
+@app.post("/einladung/<token>")
+def einladung_annehmen(token):
+    """Registrierung über die Einladung: Konto wird automatisch freigegeben (die Organisatorin kennt
+    ihre Vereine). Einmalig – danach führt die Einladung nur noch zum Login. Live: Registrierungs-
+    formular (E-Mail, Passwort, Ansprechpartner) mit vorbelegtem Verein; hier simuliert."""
+    e = db.einladung(token)
+    if not e:
+        abort(404)
+    if not (e["aktiv"] and e["raum_status"] == "offen" and e["einladung_bis"] >= datetime.now().isoformat()):
+        abort(403, "Die Einladung ist nicht mehr gültig.")
+    k = db.konto(e["verein_key"])
+    if not k:
+        if e["angenommen_am"]:
+            abort(403, "Die Einladung wurde schon verwendet.")
+        db.konto_anlegen(e["verein_key"], e["verein_name"], "einladung")
+        db.einladung_angenommen(e["id"])
+    elif k["freigabe"] == "ausstehend":
+        db.konto_freigeben(e["verein_key"])   # Einladung ersetzt die Freigabe durch VKO
+    session["verein"], session["verein_name"] = e["verein_key"], e["verein_name"]
+    return redirect(url_for("entwuerfe_seite", jahr=db.raum(e["raum_id"])["jahr"]))
+
+
+# ── 4. Entwürfe des Vereins ──────────────────────────────────────────────────
+
+@app.get("/entwuerfe")
+@verein_login
+def entwuerfe_seite(key):
+    jahr = _zieljahr()
+    eigene = db.entwuerfe(key, jahr)
+    # Konflikte hier nur mit veröffentlichten Terminen – Entwürfe anderer Vereine sieht man im Treffen
+    _mit_konflikten(eigene, _kalender_im_jahr(jahr))
+    vorlage_n = len(db.offene_vorlage(key, D.vorschlaege(jahr)))   # nur noch nicht übernommene
+    return render_template("entwuerfe.html", key=key, jahr=jahr, monate=_nach_monat(eigene),
+                           n_entwurf=sum(1 for t in eigene if t["status"] == "entwurf"),
+                           n_vorschlag=sum(1 for t in eigene if t.get("vorschlag_datum")),
+                           vorlage_n=vorlage_n, konto=db.konto(key), darf=db.darf_veroeffentlichen(key),
+                           raeume=db.raeume_des_vereins(key), fehler=request.args.get("fehler", ""),
+                           meldung=request.args.get("meldung", ""), daten_ab=D.daten_ab())
+
+
+def _zurueck(jahr, anker="", **kw):
+    return redirect(url_for("entwuerfe_seite", jahr=jahr, **kw) + (f"#{anker}" if anker else ""))
+
+
+@app.post("/entwuerfe/aus-vorjahr")
+@verein_login
+def entwuerfe_aus_vorjahr(key):
+    jahr = _zieljahr()
+    n = db.aus_vorlage(key, D.vorschlaege(jahr))
+    return _zurueck(jahr, meldung=f"{n} Entwürfe aus dem Vorjahr angelegt." if n else "Keine neuen Vorschläge aus dem Vorjahr.")
+
+
+@app.post("/entwuerfe/neu")
+@verein_login
+def entwurf_neu(key):
+    felder, fehler = _felder_aus_formular()
+    jahr = int(felder["datum"][:4]) if _datum_ok(felder["datum"]) else _zieljahr()
+    if fehler:
+        return _zurueck(jahr, "neu", fehler=fehler)
+    db.entwurf_neu(key, felder)
+    return _zurueck(jahr)
+
+
+@app.post("/entwuerfe/<int:eid>")
+@verein_login
+def entwurf_aktion(key, eid):
+    t = db.entwurf(eid)
+    if not t or t["verein"] != key:
+        abort(404)
+    jahr, aktion = int(t["datum"][:4]), request.form.get("aktion", "")
+    if aktion == "loeschen":
+        db.entwurf_loeschen(eid, key)
+    elif aktion in ("vorschlag_annehmen", "vorschlag_ablehnen"):
+        db.vorschlag_uebernehmen(eid, key, aktion == "vorschlag_annehmen")
+    elif aktion == "veroeffentlichen":
+        if not db.darf_veroeffentlichen(key):
+            abort(403, "Veröffentlichen erst nach Freigabe des Kontos.")
+        db.veroeffentlichen(key, [eid])
+    elif aktion == "zurueckziehen":
+        db.zurueckziehen(eid, key)
+    elif aktion == "speichern":
+        felder, fehler = _felder_aus_formular()
+        if fehler:
+            return _zurueck(jahr, f"t{eid}", fehler=fehler)
+        db.entwurf_aendern(eid, key, felder)
+        jahr = int(felder["datum"][:4])
+    else:
+        abort(400)
+    return _zurueck(jahr, f"t{eid}")
+
+
+@app.post("/entwuerfe/alle-veroeffentlichen")
+@verein_login
+def alle_veroeffentlichen(key):
+    jahr = _zieljahr()
+    if not db.darf_veroeffentlichen(key):
+        abort(403, "Veröffentlichen erst nach Freigabe des Kontos.")
+    eids = [t["_eid"] for t in db.entwuerfe(key, jahr, status="entwurf")]
+    n = db.veroeffentlichen(key, eids)
+    return _zurueck(jahr, meldung=f"{n} Termine veröffentlicht (Prototyp: nur markiert).")
+
+
+@app.get("/entwuerfe/export.<fmt>")
+@verein_login
+def entwuerfe_export(key, fmt):
+    jahr = _zieljahr()
+    return _export(f"Termine {jahr} – {session.get('verein_name', key)}", db.entwuerfe(key, jahr), fmt, mit_verein=False)
+
+
+@app.get("/treffen/<int:raum_id>")
+@verein_login
+def raum_vereinssicht(key, raum_id):
+    """Der Verein sieht im Treffen die Entwürfe aller beteiligten Vereine – nur lesend, eigene Termine
+    ändert er auf seiner Entwurfsseite."""
+    r = db.raum(raum_id)
+    if not r or key not in db.aktive_keys(raum_id):
+        abort(404)
+    termine, paare, farben = _raum_daten(r)
+    return render_template("raum_sicht.html", r=r, key=key, paare=paare, farben=farben,
+                           labels=D.daten()["labels"], monate=_nach_monat(termine),
+                           fertig=next((x["fertig_am"] for x in db.raeume_des_vereins(key) if x["id"] == raum_id), None))
+
+
+@app.post("/treffen/<int:raum_id>/fertig")
+@verein_login
+def raum_fertig(key, raum_id):
+    if key not in db.aktive_keys(raum_id):
+        abort(404)
+    db.fertig_melden(raum_id, key, request.form.get("fertig") == "1")
+    return redirect(url_for("raum_vereinssicht", raum_id=raum_id))
+
+
+# ── 5. Planungstreffen (Organisatorin) ───────────────────────────────────────
 
 @app.get("/planung")
 def planung_liste():
@@ -200,8 +399,7 @@ def planung_neu():
     vereine = D.vereine_der_gemeinde(gemeinde, landkreis)
     if not vereine:
         abort(400, "Keine Vereine in dieser Gemeinde.")
-    token = db.neuer_raum(gemeinde, landkreis, jahr, vereine, D.vorschlaege(jahr))
-    return redirect(url_for("raum_orga", token=token))
+    return redirect(url_for("raum_orga", token=db.neuer_raum(gemeinde, landkreis, jahr, vereine)))
 
 
 @app.post("/planung/<int:raum_id>/loeschen")
@@ -217,57 +415,63 @@ def _raum_oder_404(token):
     return r
 
 
-def _raum_konflikte(r, eigene_key: str | None = None) -> tuple[list[dict], list[dict]]:
-    """(Termine mit Konflikten, Liste der Konflikte am gleichen Tag ohne Doppel)."""
-    alle = db.termine_im_raum(r["id"], ohne_verworfen=False)
-    aktive = [t for t in alle if t["status"] != "verworfen"]
-    andere = aktive + _kalender_im_jahr(r["jahr"])
-    eigene = [t for t in alle if not eigene_key or t["verein"] == eigene_key]
-    # Wer im Raum ist, zählt immer – auch dazugeholte Nachbarn aus einer anderen Gemeinde
-    im_raum = {v["verein_key"] for v in db.vereine_im_raum(r["id"]) if v["aktiv"]}
-    _mit_konflikten(eigene, andere, zusatz=im_raum)
+def _raum_daten(r) -> tuple[list[dict], list[dict], dict]:
+    """(Entwürfe + veröffentlichte Termine der aktiven Vereine im Planungsjahr mit Konflikten,
+    Konfliktpaare am gleichen Tag, Farbe je Verein)."""
+    keys = db.aktive_keys(r["id"])
+    termine = db.entwuerfe(jahr=r["jahr"], vereine=keys)
+    # Veröffentlichte Entwürfe der Raum-Vereine stecken schon in `termine` – nicht doppelt zählen
+    andere = termine + [t for t in _kalender_im_jahr(r["jahr"])
+                        if not (str(t.get("id", "")).startswith("e") and t.get("verein") in keys)]
+    _mit_konflikten(termine, andere, zusatz=keys)   # wer im Raum ist, zählt immer – auch Nachbarn
     paare, gesehen = [], set()
-    for t in eigene:
+    for t in termine:
         for k in t.get("_konflikte", []):
             if k["stufe"] != STUFE_TAG:
                 continue
             schluessel = tuple(sorted((t["id"], str(k["id"]))))
-            if schluessel in gesehen:
-                continue
-            gesehen.add(schluessel)
-            paare.append({"a": t, "b": k})
+            if schluessel not in gesehen:
+                gesehen.add(schluessel)
+                paare.append({"a": t, "b": k})
     paare.sort(key=lambda p: p["a"]["datum"])
-    return eigene, paare
+    farben = {v["verein_key"]: i % 8 for i, v in enumerate(db.vereine_im_raum(r["id"]))}
+    return termine, paare, farben
 
 
 @app.get("/p/<token>")
 def raum_orga(token):
     r = _raum_oder_404(token)
-    termine, paare = _raum_konflikte(r)
-    labels = D.daten()["labels"]
+    termine, paare, farben = _raum_daten(r)
     vereine = db.vereine_im_raum(r["id"])
-    farben = {v["verein_key"]: i % 8 for i, v in enumerate(vereine)}
     im_raum = {v["verein_key"] for v in vereine if v["aktiv"]}
     gruppen = [{**g, "vereine": [x for x in g["vereine"] if x[0] not in im_raum]} for g in D.vereine_gruppiert()]
-    return render_template("raum_orga.html", r=r, vereine=vereine, paare=paare, labels=labels, farben=farben,
-                           gruppen=[g for g in gruppen if g["vereine"]],
+    anzahl = defaultdict(lambda: {"entwurf": 0, "veroeffentlicht": 0, "vorschlag": 0})
+    for t in termine:
+        anzahl[t["verein"]][t["status"]] += 1
+        anzahl[t["verein"]]["vorschlag"] += bool(t.get("vorschlag_datum"))
+    return render_template("raum_orga.html", r=r, vereine=vereine, paare=paare, farben=farben,
+                           labels=D.daten()["labels"], monate=_nach_monat(termine), anzahl=anzahl,
+                           konten=db.konten(), gruppen=[g for g in gruppen if g["vereine"]],
                            nachbarn={v["verein_key"] for v in vereine
                                      if D.sitz(v["verein_key"]) != (r["gemeinde"], r["landkreis"])},
-                           monate=_nach_monat([t for t in termine if t["status"] != "verworfen"]),
                            treffen=request.args.get("ansicht") == "treffen",
-                           basis=request.host_url.rstrip("/"))
+                           basis=request.host_url.rstrip("/"), jetzt=datetime.now().isoformat())
 
 
-@app.post("/p/<token>/termin/<int:tid>")
-def raum_orga_termin(token, tid):
+@app.post("/p/<token>/vorschlag/<int:eid>")
+def raum_orga_vorschlag(token, eid):
+    """Verschiebe-Vorschlag – die Organisatorin ändert nie selbst, der Verein übernimmt (Hoheit beim Verein)."""
     r = _raum_oder_404(token)
-    felder = {k: request.form[k].strip() for k in ("datum", "status") if k in request.form}
-    if "datum" in felder and not _datum_ok(felder["datum"]):
+    if r["status"] != "offen":
+        abort(403, "Die Planung ist abgeschlossen.")
+    datum = request.form.get("datum", "").strip()
+    if request.form.get("aktion") == "zuruecknehmen":
+        db.vorschlag_machen(r["id"], eid, None)
+    elif _datum_ok(datum):
+        db.vorschlag_machen(r["id"], eid, datum)
+    else:
         abort(400)
-    if "status" in felder and felder["status"] not in db.STATUS:
-        abort(400)
-    db.termin_aendern(r["id"], tid, None, felder)
-    return redirect(url_for("raum_orga", token=token, ansicht=request.args.get("ansicht")) + f"#t{tid}")
+    return redirect(url_for("raum_orga", token=token, ansicht=request.args.get("ansicht")) + f"#t{eid}")
 
 
 @app.post("/p/<token>/status")
@@ -279,7 +483,6 @@ def raum_orga_status(token):
 
 @app.post("/p/<token>/verein/<int:vid>")
 def raum_orga_verein(token, vid):
-    """Verein abwählen oder wieder aufnehmen."""
     r = _raum_oder_404(token)
     db.verein_aktiv(r["id"], vid, request.form.get("aktiv") == "1")
     return redirect(url_for("raum_orga", token=token) + "#vereine")
@@ -287,101 +490,32 @@ def raum_orga_verein(token, vid):
 
 @app.post("/p/<token>/dazuholen")
 def raum_orga_dazuholen(token):
-    """Verein aus einer anderen (Nachbar-)Gemeinde oder einen abgewählten wieder dazuholen."""
     r = _raum_oder_404(token)
     labels = D.daten()["labels"]
     for key in request.form.getlist("verein")[:50]:
         if key in labels:
-            db.verein_dazuholen(r["id"], key, labels[key], D.vorschlaege(r["jahr"]))
+            db.verein_dazuholen(r["id"], key, labels[key])
     return redirect(url_for("raum_orga", token=token) + "#vereine")
 
 
 @app.get("/p/<token>/export.<fmt>")
 def raum_orga_export(token, fmt):
     r = _raum_oder_404(token)
-    return _export(r["titel"], db.termine_im_raum(r["id"], ohne_verworfen=True), fmt, mit_verein=True)
-
-
-def _verein_oder_404(token):
-    v = db.verein_per_token(token)
-    if not v:
-        abort(404)
-    if not v["aktiv"]:
-        abort(403, "Euer Verein ist in dieser Planung nicht (mehr) dabei. Bitte bei der Organisatorin melden.")
-    return v, db.raum(v["raum_id"])
-
-
-@app.get("/v/<token>")
-def raum_verein(token):
-    v, r = _verein_oder_404(token)
-    termine, _ = _raum_konflikte(r, eigene_key=v["verein_key"])
-    return render_template("raum_verein.html", v=v, r=r, monate=_nach_monat(termine),
-                           offen=sum(1 for t in termine if t["status"] == "vorschlag"),
-                           fehler=request.args.get("fehler", ""), daten_ab=D.daten_ab())
-
-
-@app.post("/v/<token>/termin/<int:tid>")
-def raum_verein_termin(token, tid):
-    v, r = _verein_oder_404(token)
-    if r["status"] != "offen":
-        abort(403, "Die Planung ist abgeschlossen.")
-    if request.form.get("aktion") in db.STATUS:
-        db.termin_aendern(r["id"], tid, v["verein_key"], {"status": request.form["aktion"]})
-    else:
-        felder, fehler = _felder_aus_formular()
-        if fehler:
-            return redirect(url_for("raum_verein", token=token, fehler=fehler) + f"#t{tid}")
-        felder["status"] = "bestaetigt"
-        db.termin_aendern(r["id"], tid, v["verein_key"], felder)
-    return redirect(url_for("raum_verein", token=token) + f"#t{tid}")
-
-
-@app.post("/v/<token>/neu")
-def raum_verein_neu(token):
-    v, r = _verein_oder_404(token)
-    if r["status"] != "offen":
-        abort(403, "Die Planung ist abgeschlossen.")
-    felder, fehler = _felder_aus_formular()
-    if fehler:
-        return redirect(url_for("raum_verein", token=token, fehler=fehler) + "#neu")
-    db.termin_neu(r["id"], v["verein_key"], felder)
-    return redirect(url_for("raum_verein", token=token))
-
-
-@app.post("/v/<token>/alle-bestaetigen")
-def raum_verein_alle(token):
-    v, r = _verein_oder_404(token)
-    if r["status"] == "offen":
-        db.alle_vorschlaege_bestaetigen(r["id"], v["verein_key"])
-    return redirect(url_for("raum_verein", token=token))
-
-
-@app.post("/v/<token>/fertig")
-def raum_verein_fertig(token):
-    v, _ = _verein_oder_404(token)
-    db.fertig_melden(v["id"], request.form.get("fertig") == "1")
-    return redirect(url_for("raum_verein", token=token))
-
-
-@app.get("/v/<token>/export.<fmt>")
-def raum_verein_export(token, fmt):
-    v, r = _verein_oder_404(token)
-    zeilen = db.termine_im_raum(r["id"], v["verein_key"], ohne_verworfen=True)
-    return _export(f"Termine {r['jahr']} – {v['verein_name']}", zeilen, fmt, mit_verein=False)
+    return _export(r["titel"], db.entwuerfe(jahr=r["jahr"], vereine=db.aktive_keys(r["id"])), fmt, mit_verein=True)
 
 
 @app.template_filter("wochentag_kurz")
 def _wt(datum: str) -> str:
     try:
         return ("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")[date.fromisoformat(datum).weekday()]
-    except ValueError:
+    except (ValueError, TypeError):
         return ""
 
 
 @app.template_filter("tm")
 def _tm(datum: str) -> str:
     m = re.match(r"(\d{4})-(\d{2})-(\d{2})$", datum or "")
-    return f"{m[3]}.{m[2]}." if m else datum
+    return f"{m[3]}.{m[2]}." if m else (datum or "")
 
 
 if __name__ == "__main__":

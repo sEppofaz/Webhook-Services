@@ -16,6 +16,15 @@ Die venv liegt bewusst außerhalb der Dropbox. Neu anlegen:
 
 Tests: `~/.venvs/vko-jahresplanung/bin/python tests/test_jahresplanung.py`
 
+## Ablauf (ADR-026)
+
+1. **Organisatorin** legt unter „Planungstreffen“ einen Raum für ihre Gemeinde an und verschickt die Einladungen.
+2. **Verein** nimmt die Einladung an (Konto sofort freigegeben), erzeugt Entwürfe aus dem Vorjahr, ergänzt, ändert.
+3. **Treffen**: Organisatorin sieht alle Entwürfe mit Konflikten (Beamer-Ansicht) und schlägt Verschiebungen vor.
+4. **Verein** übernimmt oder lehnt Vorschläge ab und **veröffentlicht selbst** – einzeln oder alle auf einmal.
+
+Anmeldung ist simuliert (`/anmelden`: Verein wählen). Veröffentlichen setzt im Prototyp nur einen Status.
+
 ## Bausteine
 
 | Datei | Inhalt |
@@ -24,7 +33,7 @@ Tests: `~/.venvs/vko-jahresplanung/bin/python tests/test_jahresplanung.py`
 | `shared/wiederholung.py` | Vorjahres-Vorlage: Feste/Ostern/Advent, Feiertage, n-ter Wochentag, Serien, Blöcke |
 | `shared/export.py` | PDF, Word, Excel, LibreOffice Text/Tabelle, Kalenderdatei |
 | `prototyp/jahresplanung/app.py` | Flask-Oberfläche (Kollision, Vorlage, Planungsraum, Vereins-Links) |
-| `prototyp/jahresplanung/db.py` | SQLite der Planungsräume (Schema für spätere Übernahme in `vk_db.py`) |
+| `prototyp/jahresplanung/db.py` | SQLite: Konten (simuliert), Entwürfe, Planungsräume, Einladungen (Schema für `vk_db.py`) |
 | `prototyp/jahresplanung/daten/` | Momentaufnahme `/api/termine` + `planung.sqlite` – **nicht im Git** |
 
 ## Bekannte Punkte zum Weiterbasteln
