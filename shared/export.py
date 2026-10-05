@@ -306,3 +306,103 @@ def exportiere(fmt: str, titel: str, zeilen: list[dict], mit_verein: bool = True
 
 def dateiname(titel: str, fmt: str) -> str:
     return re.sub(r"[^\wäöüÄÖÜß.-]+", "_", titel).strip("_")[:80] + "." + fmt
+
+
+# ── Ergebnis einer Planungsrunde (Besprechungsergebnis) ──────────────────────
+
+STATUS_TEXT = {"entwurf": "Entwurf", "bestaetigt": "Bestätigt", "veroeffentlicht": "Veröffentlicht"}
+
+
+def ergebnis_pdf(daten: dict) -> bytes:
+    """Besprechungsergebnis aus dem eingefrorenen Stand einer Runde (`runde_ergebnis.daten_json`).
+    Kopf (Runde, Organisator, Abschluss, Teilnehmer), Termine nach Monat mit Status, offene Konflikte, Verlauf.
+    Rein aus den Daten erzeugt – derselbe Stand ergibt immer dasselbe Dokument."""
+    from fpdf import FPDF
+    pdf = FPDF(orientation="P", unit="mm", format="A4")
+    pdf.set_auto_page_break(auto=True, margin=15)
+    schrift = "Helvetica"
+    for normal, fett in _SCHRIFTEN:
+        if Path(normal).exists() and Path(fett).exists():
+            pdf.add_font("Text", "", normal)
+            pdf.add_font("Text", "B", fett)
+            schrift = "Text"
+            break
+
+    def txt(s) -> str:
+        s = str(s or "")
+        if schrift != "Helvetica":
+            return s
+        s = s.replace("–", "-").replace("→", "->").replace("„", '"').replace("“", '"').replace("…", "...")
+        return s.encode("latin-1", "replace").decode("latin-1")
+
+    def zeitpunkt(iso: str) -> str:
+        try:
+            return datetime.fromisoformat(iso).strftime("%d.%m.%Y, %H:%M Uhr")
+        except ValueError:
+            return iso
+
+    titel = f"Ergebnis: {daten['name']} {daten['jahr']}"
+    pdf.set_title(titel)
+    pdf.set_creation_date(datetime.fromisoformat(daten["abgeschlossen_am"]))   # gleicher Stand = gleiche Datei
+    pdf.add_page()
+    pdf.set_font(schrift, "B", 16)
+    pdf.multi_cell(0, 8, txt(titel), new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font(schrift, "", 10)
+    kopf = [("Organisator", daten["organisator_name"]),
+            ("Abgeschlossen", f"{zeitpunkt(daten['abgeschlossen_am'])} von {daten['abgeschlossen_von_name']}"
+                              f" (Version {daten.get('version', 1)})"),
+            ("Teilnehmer", ", ".join(t["name"] for t in daten["teilnehmer"]))]
+    for k, w in kopf:
+        pdf.set_font(schrift, "B", 10)
+        pdf.cell(32, 6, txt(k))
+        pdf.set_font(schrift, "", 10)
+        pdf.multi_cell(0, 6, txt(w), new_x="LMARGIN", new_y="NEXT")
+    termine = daten["termine"]
+    n = {s: sum(1 for t in termine if t["status"] == s) for s in STATUS_TEXT}
+    pdf.ln(2)
+    pdf.set_font(schrift, "", 9)
+    pdf.multi_cell(0, 5, txt(f"{len(termine)} Termine: {n['veroeffentlicht']} veröffentlicht, {n['bestaetigt']} bestätigt, "
+                             f"{n['entwurf']} noch Entwurf. Bestätigt = vom Verein als vereinbart gemeldet; "
+                             f"veröffentlicht = steht im Vereinskalender."), new_x="LMARGIN", new_y="NEXT")
+
+    breiten = [26, 18, 62, 44, 24]
+    for monat, gruppe in _nach_monat(termine):
+        pdf.ln(2)
+        pdf.set_font(schrift, "B", 12)
+        pdf.cell(0, 7, txt(_monat_text(monat)), new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font(schrift, "", 9)
+        with pdf.table(col_widths=breiten, text_align="LEFT", line_height=5, first_row_as_headings=True) as tab:
+            k = tab.row()
+            for h in ("Datum", "Uhrzeit", "Termin", "Verein", "Status"):
+                k.cell(txt(h))
+            for t in gruppe:
+                r = tab.row()
+                termin = t.get("bezeichnung", "") + (f" ({t['ort']})" if t.get("ort") else "")
+                for w in (datum_text(t), zeit_text(t), termin, t.get("verein_name", ""), STATUS_TEXT.get(t["status"], "")):
+                    r.cell(txt(w))
+
+    pdf.ln(3)
+    pdf.set_font(schrift, "B", 12)
+    pdf.cell(0, 7, txt(f"Offene Konflikte am gleichen Tag ({len(daten['konflikte'])})"), new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font(schrift, "", 9)
+    if not daten["konflikte"]:
+        pdf.cell(0, 5, txt("Keine."), new_x="LMARGIN", new_y="NEXT")
+    for k in daten["konflikte"]:
+        pdf.multi_cell(0, 5, txt(f"{datum_text(k)}: {k['a']} – {k['b']}"), new_x="LMARGIN", new_y="NEXT")
+
+    pdf.ln(3)
+    pdf.set_font(schrift, "B", 12)
+    pdf.cell(0, 7, txt("Verlauf der Runde"), new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font(schrift, "", 8)
+    with pdf.table(col_widths=[34, 46, 94], text_align="LEFT", line_height=4.5, first_row_as_headings=True) as tab:
+        k = tab.row()
+        for h in ("Zeit", "Verein", "Was"):
+            k.cell(txt(h))
+        for p in daten["verlauf"]:
+            r = tab.row()
+            for w in (zeitpunkt(p["zeit"]), p["verein_name"], p["aktion"] + (f": {p['details']}" if p["details"] else "")):
+                r.cell(txt(w))
+    pdf.set_y(-12)
+    pdf.set_font(schrift, "", 7)
+    pdf.cell(0, 5, txt(f"Vereinskalender.online · Planungsrunde „{daten['name']}“ · Version {daten.get('version', 1)}"), align="C")
+    return bytes(pdf.output())

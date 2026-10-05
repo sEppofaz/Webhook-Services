@@ -3,7 +3,7 @@
 {% block inhalt %}
 <h1>Planungsrunden</h1>
 <p class="hint">Eine Planungsrunde bringt die Entwürfe mehrerer Vereine zusammen – z. B. für das Jahresplanungstreffen der Gemeinde.
-Jeder Vereinsadmin kann eine starten und die anderen per Link oder Code einladen.</p>
+Jeder Vereinsadmin kann eine starten – er ist dann Organisator – und die anderen per Link oder Code einladen. Beim Abschluss bekommt jeder beteiligte Verein das Ergebnis als PDF in sein Archiv.</p>
 {% if fehler %}<div class="warn rot">{{ fehler }}</div>{% endif %}
 
 {% if not darf %}
@@ -12,7 +12,7 @@ Jeder Vereinsadmin kann eine starten und die anderen per Link oder Code einladen
 <div class="kacheln">
   <form class="card" method="post" action="{{ url_for('runde_code') }}">{{ csrf()|safe }}
     <b>Mit Code beitreten</b>
-    <label>Code vom Gastgeber</label>
+    <label>Code vom Organisator</label>
     <input name="code" value="{{ code }}" placeholder="z.B. K7M-4QX" maxlength="12" autocomplete="off" autocapitalize="characters" required>
     <div class="aktionen"><button class="btn">Weiter</button></div>
   </form>
@@ -29,7 +29,7 @@ Jeder Vereinsadmin kann eine starten und die anderen per Link oder Code einladen
 {% for r in runden %}
   <div class="card zeile" style="align-items:center">
     <div style="flex:3 1 260px"><b>{{ r.name }} {{ r.jahr }}</b>
-      <div class="hint">{{ r.anzahl }} Vereine · {{ 'Gastgeber: ihr' if r.gastgeber == angemeldet else 'ihr seid dabei' }}{{ ' · abgeschlossen' if r.status != 'offen' }}</div></div>
+      <div class="hint">{{ r.anzahl }} Vereine · {{ 'Organisator: ihr' if r.organisator == angemeldet else 'ihr seid dabei' }}{{ ' · abgeschlossen' if r.status != 'offen' }}</div></div>
     <div style="flex:0 0 auto"><a class="btn sek" href="{{ url_for('runde_seite', runde_id=r.id) }}">Öffnen</a></div>
   </div>
 {% else %}

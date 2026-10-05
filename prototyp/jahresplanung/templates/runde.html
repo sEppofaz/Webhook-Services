@@ -7,7 +7,7 @@
 <div class="zeile" style="align-items:center">
   <div style="flex:3 1 300px">
     <h1>{{ r.name }} {{ r.jahr }}</h1>
-    <p class="hint">Gastgeber: {{ labels.get(r.gastgeber, r.gastgeber) }}{{ ' (ihr)' if gastgeber }} · {% if offen %}offen{% else %}<b>abgeschlossen</b>{% endif %}</p>
+    <p class="hint">Organisator: {{ labels.get(r.organisator, r.organisator) }}{{ ' (ihr)' if organisator }} · {% if offen %}offen{% else %}<b>abgeschlossen</b>{% endif %}</p>
   </div>
   <div style="flex:0 0 auto;display:flex;gap:6px;flex-wrap:wrap">
     {% if treffen %}<a class="btn sek" href="{{ url_for('runde_seite', runde_id=r.id) }}">Normale Ansicht</a>
@@ -17,8 +17,18 @@
 </div>
 {% if fehler %}<div class="warn rot">{{ fehler }}</div>{% endif %}
 {% if meldung %}<div class="ok">{{ meldung }}</div>{% endif %}
+<div id="geaendert" class="warn" hidden>Andere Vereine haben etwas geändert. <a href="" onclick="location.reload();return false">Neu laden</a></div>
+{% if ergebnisse %}
+<div class="card">
+  <b>Ergebnis</b> <span class="hint">– liegt im Archiv jedes beteiligten Vereins</span>
+  {% for e in ergebnisse %}
+  <div class="aktionen kompakt"><span>Version {{ e.version }} · {{ e.abgeschlossen_am[:10]|tm }}{{ e.abgeschlossen_am[:4] }}, {{ e.abgeschlossen_am[11:16] }} Uhr</span>
+    {% if key in e.daten.teilnehmer|map(attribute='verein')|list %}<a class="btn klein" href="{{ url_for('archiv_ergebnis', eid=e.id, fmt='pdf') }}">Ergebnis als PDF</a>{% else %}<span class="hint">(ihr wart da nicht dabei)</span>{% endif %}</div>
+  {% endfor %}
+</div>
+{% endif %}
 
-{% if gastgeber and offen %}
+{% if organisator and offen %}
 <div class="card">
   <b>Vereine einladen</b> <span class="hint">– Link per WhatsApp/Mail schicken oder den Code beim Treffen zeigen. Beitreten geht nur mit freigegebenem Vereinskonto.</span>
   <div class="zeile kompakt" style="align-items:center;margin-top:8px">
@@ -29,11 +39,11 @@
   <div class="aktionen kompakt">
     <form method="post" action="{{ url_for('runde_erneuern', runde_id=r.id) }}" onsubmit="return confirm('Neuen Link und Code erzeugen? Die alten gelten dann nicht mehr – wer schon dabei ist, bleibt dabei.')">{{ csrf()|safe }}
       <button class="btn sek klein">Link und Code erneuern</button></form>
-    <form method="post" action="{{ url_for('runde_status', runde_id=r.id) }}" onsubmit="return confirm('Runde abschließen? Danach kann niemand mehr beitreten oder hier ändern. Veröffentlichen bleibt Sache jedes Vereins.')">{{ csrf()|safe }}
+    <form method="post" action="{{ url_for('runde_status', runde_id=r.id) }}" onsubmit="return confirm('Runde abschließen? Das Ergebnis wird festgehalten und liegt danach als PDF im Archiv jedes beteiligten Vereins. Danach kann niemand mehr beitreten oder hier ändern; veröffentlichen bleibt Sache jedes Vereins.')">{{ csrf()|safe }}
       <button class="btn sek klein" name="aktion" value="abschliessen">Runde abschließen</button></form>
   </div>
 </div>
-{% elif gastgeber %}
+{% elif organisator %}
 <div class="card"><form method="post" action="{{ url_for('runde_status', runde_id=r.id) }}">{{ csrf()|safe }}
   <button class="btn sek" name="aktion" value="oeffnen">Runde wieder öffnen</button></form></div>
 {% endif %}
@@ -41,17 +51,17 @@
 {% if not treffen %}
 <h2 id="teilnehmer">Teilnehmer</h2>
 <div class="card tabelle-wrap kompakt"><table>
-  <tr><th>Verein</th><th>Entwurf</th><th>Bestätigt</th><th>Veröff.</th>{% if gastgeber %}<th></th>{% endif %}</tr>
+  <tr><th>Verein</th><th>Entwurf</th><th>Bestätigt</th><th>Veröff.</th>{% if organisator %}<th></th>{% endif %}</tr>
   {% for p in teilnehmer %}{% set s = stand[p.verein_key] %}
   <tr class="{{ '' if p.aktiv == 1 else 'abgewaehlt' }}">
     <td><span class="vfarbe f{{ farben[p.verein_key] }}"></span>{{ p.verein_name or labels.get(p.verein_key, p.verein_key) }}
-      {% if p.verein_key == r.gastgeber %}<span class="chip">Gastgeber</span>{% endif %}
+      {% if p.verein_key == r.organisator %}<span class="chip">Organisator</span>{% endif %}
       {% if p.verein_key == key %}<span class="chip">ihr</span>{% endif %}
       {% if p.aktiv == 0 %}<span class="chip">entfernt</span>{% elif p.aktiv == 2 %}<span class="chip">ausgetreten</span>{% endif %}</td>
     <td>{{ s.entwurf if p.aktiv == 1 else '–' }}</td>
     <td>{% if p.aktiv == 1 %}{{ s.bestaetigt }}{% if s.entwurf == 0 and (s.bestaetigt + s.veroeffentlicht) %} <span class="chip bestaetigt">alles bestätigt</span>{% endif %}{% else %}–{% endif %}</td>
     <td>{{ s.veroeffentlicht if p.aktiv == 1 else '–' }}</td>
-    {% if gastgeber %}<td>{% if p.verein_key != key and offen %}
+    {% if organisator %}<td>{% if p.verein_key != key and offen %}
       <form method="post" action="{{ url_for('runde_teilnehmer', runde_id=r.id) }}">{{ csrf()|safe }}<input type="hidden" name="verein" value="{{ p.verein_key }}">
         {% if p.aktiv == 1 %}<button class="btn sek klein" name="aktiv" value="0" onclick="return confirm('Verein aus der Runde entfernen? Er kann dann auch mit Link/Code nicht mehr beitreten.')">Entfernen</button>
         {% elif p.aktiv == 0 %}<button class="btn klein" name="aktiv" value="1">Wieder aufnehmen</button>{% endif %}
@@ -112,12 +122,36 @@
 </div>
 <p class="hint">Alle Termine der Teilnehmer {{ r.jahr }} – Entwürfe, bestätigte und veröffentlichte.</p>
 
-{% if not gastgeber %}
+<h2>Verlauf</h2>
+<details class="card"><summary>Wer hat wann was gemacht ({{ verlauf|length }} Einträge)</summary>
+  <div class="tabelle-wrap"><table>
+    <tr><th>Zeit</th><th>Verein</th><th>Was</th></tr>
+    {% for v in verlauf %}
+    <tr><td class="d">{{ v.zeit[:10]|tm }} {{ v.zeit[11:16] }}</td><td>{{ labels.get(v.verein_key, v.verein_key) }}</td>
+      <td>{{ v.aktion }}{% if v.details %}: <span class="hint">{{ v.details }}</span>{% endif %}</td></tr>
+    {% endfor %}
+  </table></div>
+</details>
+
+{% if not organisator %}
 <form method="post" action="{{ url_for('runde_verlassen', runde_id=r.id) }}" onsubmit="return confirm('Runde verlassen? Ihr könnt mit Link oder Code wieder beitreten.')" style="margin-top:20px">{{ csrf()|safe }}
   <button class="btn sek klein">Runde verlassen</button></form>
 {% endif %}
 
 <script>
+(function () {
+  // Andere ändern während des Treffens: alle 15 s den Stand abfragen. Die Abfrage misst nebenbei das Netz
+  // (siehe Netz-Hinweis in base.html). Nicht im Hintergrund-Tab, nicht bei eigenem Speichern.
+  let bekannt = {{ stand_kennung|tojson }};
+  async function pruefen() {
+    if (document.hidden || window.vkoSpeichert) return;
+    const r = await window.vkoAbruf("{{ url_for('runde_stand', runde_id=r.id) }}");
+    if (!r || !r.ok) return;
+    const j = await r.json();
+    if (j.stand !== bekannt) document.getElementById("geaendert").hidden = false;
+  }
+  setInterval(pruefen, 15000);
+})();
 (function () {
   // „Nur Konflikte“: blendet Karten ohne Konflikt und leere Monate aus (fürs Treffen)
   const knopf = document.getElementById("nur-konflikte"), liste = document.getElementById("liste");

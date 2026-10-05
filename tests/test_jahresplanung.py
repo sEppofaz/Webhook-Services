@@ -292,9 +292,18 @@ else:
         c.post("/runde/beitreten-code", data={"_csrf": tok, "code": "BBB-BBB"})
     pruefe(c.post("/runde/beitreten-code", data={"_csrf": tok, "code": DB.code_anzeige(runde["code"])}).status_code == 429,
            "Versuchslimit gegen Durchprobieren")
-    pruefe(c.post(f"/runde/{rid}/erneuern", data={"_csrf": tok}).status_code == 403, "nur Gastgeber erneuert")
+    pruefe(c.post(f"/runde/{rid}/erneuern", data={"_csrf": tok}).status_code == 403, "nur Organisator erneuert")
 
-    # Gastgeber: erneuern, entfernen, abschließen
+    # Netz: Lebenszeichen und Stand für „andere haben geändert“
+    pruefe(c.get("/ping").status_code == 204 and c.get("/ping").headers["Cache-Control"] == "no-store", "/ping ohne Cache")
+    stand1 = c.get(f"/runde/{rid}/stand").get_json()["stand"]
+    als("a")
+    c.post(f"/entwuerfe/{eid_a}", data={"_csrf": tok, "aktion": "bestaetigen"})
+    als("d")
+    pruefe(c.get(f"/runde/{rid}/stand").get_json()["stand"] != stand1, "Stand ändert sich, wenn ein anderer Verein bestätigt")
+    pruefe(b"vkoAbruf" in c.get(f"/runde/{rid}").data and b'id="netz"' in c.get("/").data, "Netz-Hinweis auf den Seiten")
+
+    # Organisator: erneuern, entfernen, abschließen
     als("a")
     c.post(f"/runde/{rid}/erneuern", data={"_csrf": tok})
     neu_r = DB.runde(rid)
@@ -337,9 +346,43 @@ else:
     pruefe(c.get(f"/runde/{rid}/export.exe").status_code == 404, "unbekanntes Format 404")
     pruefe(c.post("/anmelden", data={"_csrf": tok, "verein": "p"}).status_code == 403, "ohne Konto keine Anmeldung")
     als("a")
-    c.post(f"/runde/{rid}/status", data={"_csrf": tok, "aktion": "abschliessen"})
+    # Verlauf: Organisator, Beitritte, Terminänderungen
+    verlauf = [(v["verein_key"], v["aktion"], v["details"]) for v in DB.protokoll_liste(rid)]
+    pruefe(verlauf[0][:2] == ("a", "Runde gestartet (Organisator)"), "Verlauf: Organisator dokumentiert")
+    pruefe(("b", "beigetreten", "per Link") in verlauf and ("d", "beigetreten", "per Code") in verlauf, "Verlauf: Beitritte")
+    pruefe(any(v[0] == "b" and v[1] == "Termin geändert" and "Sa 10.07. → Sa 17.07." in v[2] for v in verlauf),
+           f"Verlauf: Verschiebung mit altem und neuem Datum")
+    pruefe(("a", "entfernt", "Verein D") in verlauf and ("b", "ausgetreten", "") in verlauf, "Verlauf: entfernt/ausgetreten")
+    pruefe(any(v[1] == "veröffentlicht" for v in verlauf), "Verlauf: veröffentlicht")
+
+    pruefe(c.get("/archiv").status_code == 200 and DB.ergebnisse_des_vereins("a") == [], "Archiv vor Abschluss leer")
+    r = c.post(f"/runde/{rid}/status", data={"_csrf": tok, "aktion": "abschliessen"})
+    pruefe("Archiv" in r.headers["Location"] or "meldung=" in r.headers["Location"], "Abschluss meldet Archiv")
     s = c.get(f"/runde/{rid}")
     pruefe(b"abgeschlossen" in s.data and b'value="bestaetigen"' not in s.data, "abgeschlossen: Runde nur noch lesbar")
+    e1 = DB.ergebnisse(rid)[0]
+    d1 = e1["daten"]
+    pruefe(e1["version"] == 1 and d1["organisator_name"] == "Verein A"
+           and {t["verein"] for t in d1["teilnehmer"]} == {"a", "b"}, "Ergebnis: Organisator und Teilnehmer beim Abschluss")
+    pruefe(len(d1["termine"]) == len(DB.entwuerfe(jahr=2027, vereine={"a", "b"})), "Ergebnis: alle Termine der Teilnehmer")
+    pruefe(d1["verlauf"][-1]["aktion"] == "Runde abgeschlossen", "Ergebnis enthält den Verlauf bis zum Abschluss")
+    pdf1 = c.get(f"/archiv/ergebnis/{e1['id']}.pdf")
+    pruefe(pdf1.status_code == 200 and pdf1.data[:4] == b"%PDF", "Ergebnis-PDF")
+    pruefe(c.get(f"/archiv/ergebnis/{e1['id']}.pdf").data == pdf1.data, "gleicher Stand = gleiches PDF")
+    pruefe(c.get(f"/archiv/ergebnis/{e1['id']}.xlsx").status_code == 200, "Ergebnis auch als Excel")
+    pruefe(b"Version 1" in c.get("/archiv").data, "Ergebnis im Archiv des Organisators")
+    als("b")
+    pruefe(b"Version 1" in c.get("/archiv").data and c.get(f"/archiv/ergebnis/{e1['id']}.pdf").status_code == 200,
+           "Ergebnis im Archiv des Teilnehmers")
+    als("d")
+    pruefe(c.get(f"/archiv/ergebnis/{e1['id']}.pdf").status_code == 404 and b"Version 1" not in c.get("/archiv").data,
+           "entfernter Verein bekommt das Ergebnis nicht")
+    # Wieder öffnen und erneut abschließen → Version 2, Version 1 bleibt
+    als("a")
+    c.post(f"/runde/{rid}/status", data={"_csrf": tok, "aktion": "oeffnen"})
+    c.post(f"/runde/{rid}/status", data={"_csrf": tok, "aktion": "abschliessen"})
+    pruefe([e["version"] for e in DB.ergebnisse(rid)] == [2, 1], "zweiter Abschluss = Version 2, Version 1 bleibt")
+    pruefe(c.get(f"/archiv/ergebnis/{e1['id']}.pdf").data == pdf1.data, "Version 1 unverändert")
     als("c")
     c.post("/demo/freigeben", data={"_csrf": tok, "verein": "c"})
     pruefe(c.post(f"/runde/{rid}/beitreten", data={"_csrf": tok, "nachweis": neu_r["link"]}).status_code == 403,

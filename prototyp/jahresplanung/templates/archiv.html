@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block titel %}Archiv{% endblock %}
+{% block inhalt %}
+<h1>Archiv</h1>
+<p class="hint">Hier liegen die Ergebnisse aller Planungsrunden, an denen {{ angemeldet_name }} beim Abschluss beteiligt war.
+Jedes Ergebnis ist ein festgehaltener Stand: Teilnehmer, alle Termine mit Status, offene Konflikte und der Verlauf der Runde.
+Später gehören hier auch andere Vereinsdokumente hin (Satzung, Beitrittserklärung …).</p>
+
+<h2>Ergebnisse von Planungsrunden</h2>
+{% for e in ergebnisse %}{% set d = e.daten %}
+  <div class="card">
+    <div class="kopf"><b>{{ d.name }} {{ d.jahr }}</b> <span class="chip">Version {{ e.version }}</span></div>
+    <div class="hint">Organisator: {{ d.organisator_name }} · abgeschlossen am {{ e.abgeschlossen_am[:10]|tm }}{{ e.abgeschlossen_am[:4] }}, {{ e.abgeschlossen_am[11:16] }} Uhr
+      · {{ d.teilnehmer|length }} Vereine · {{ d.termine|length }} Termine · {{ d.konflikte|length }} offene Konflikte</div>
+    <div class="exporte" style="margin-top:8px">
+      <a class="btn klein" href="{{ url_for('archiv_ergebnis', eid=e.id, fmt='pdf') }}">Ergebnis (PDF)</a>
+      {% for f, (name_f, _) in FORMATE.items() if f != 'pdf' %}<a class="btn sek klein" href="{{ url_for('archiv_ergebnis', eid=e.id, fmt=f) }}">{{ name_f }}</a>{% endfor %}
+    </div>
+  </div>
+{% else %}
+  <p class="hint">Noch keine. Sobald eine Planungsrunde abgeschlossen wird, an der ihr beteiligt seid, liegt ihr Ergebnis hier.</p>
+{% endfor %}
+{% endblock %}

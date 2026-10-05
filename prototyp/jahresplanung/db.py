@@ -4,9 +4,12 @@ Modell (Josef 2026-10-05, ADR-026):
 - **Jeder Verein plant in seinem eigenen Bereich:** Entwürfe gehören dem Verein. Der Vereinsadmin legt sie an
   (auch aus der Vorjahres-Vorlage), ändert, **bestätigt** (= „steht so“, für die anderen sichtbar) und
   **veröffentlicht selbst** – einzeln oder alle. Niemand sonst veröffentlicht.
-- **Planungsrunde:** Jeder freigegebene Vereinsadmin kann eine starten (Gastgeber) und andere per **Link oder Code**
-  einladen. Beitreten nur eingeloggt, mit freigegebenem Konto, durch aktiven Klick. In der Runde sieht jeder die
+- **Planungsrunde:** Jeder freigegebene Vereinsadmin kann eine starten (**Organisator**, dokumentiert) und andere per
+  **Link oder Code** einladen – ohne Josef. Beitreten nur eingeloggt, mit freigegebenem Konto, durch aktiven Klick. In der Runde sieht jeder die
   Entwürfe aller Teilnehmer und ändert/bestätigt seine eigenen – am Mac oder Handy.
+- **Dokumentation:** Jede Runde führt einen Verlauf (`runde_protokoll`). Beim Abschließen wird das Ergebnis
+  eingefroren (`runde_ergebnis`, versioniert) – daraus entsteht für jeden beteiligten Verein das Ergebnis-PDF im
+  Vereins-Archiv. Gespeichert wird der Stand, nicht die Datei: das PDF ist bei jedem Abruf identisch.
 - **Jedes neue Konto gibt Josef persönlich frei** (App/Telegram). Vorher: eigene Entwürfe ja, Runden nein,
   Veröffentlichen nein.
 
@@ -58,7 +61,7 @@ CREATE TABLE IF NOT EXISTS runde (
     id          INTEGER PRIMARY KEY,
     name        TEXT NOT NULL,
     jahr        INTEGER NOT NULL,
-    gastgeber   TEXT NOT NULL,              -- verein_key des Vereins, der die Runde gestartet hat
+    organisator TEXT NOT NULL,              -- verein_key des Vereins, der die Runde gestartet hat
     link        TEXT NOT NULL UNIQUE,       -- Einladungslink-Token
     code        TEXT NOT NULL UNIQUE,       -- Beitrittscode (ohne Bindestrich, Großbuchstaben)
     status      TEXT NOT NULL DEFAULT 'offen',   -- offen | abgeschlossen
@@ -68,8 +71,25 @@ CREATE TABLE IF NOT EXISTS runde_teilnehmer (
     runde_id       INTEGER NOT NULL REFERENCES runde(id) ON DELETE CASCADE,
     verein_key     TEXT NOT NULL,
     beigetreten_am TEXT NOT NULL,
-    aktiv          INTEGER NOT NULL DEFAULT 1,      -- 1 dabei · 0 vom Gastgeber entfernt · 2 selbst verlassen
+    aktiv          INTEGER NOT NULL DEFAULT 1,      -- 1 dabei · 0 vom Organisator entfernt · 2 selbst verlassen
     PRIMARY KEY (runde_id, verein_key)
+);
+CREATE TABLE IF NOT EXISTS runde_protokoll (    -- Verlauf: nur Vereinsnamen und Termine, keine Personendaten
+    id         INTEGER PRIMARY KEY,
+    runde_id   INTEGER NOT NULL REFERENCES runde(id) ON DELETE CASCADE,
+    zeit       TEXT NOT NULL,
+    verein_key TEXT NOT NULL,
+    aktion     TEXT NOT NULL,
+    details    TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS runde_ergebnis (     -- eingefrorener Stand beim Abschließen, je Abschluss eine Version
+    id               INTEGER PRIMARY KEY,
+    runde_id         INTEGER NOT NULL REFERENCES runde(id) ON DELETE CASCADE,
+    version          INTEGER NOT NULL,
+    abgeschlossen_am TEXT NOT NULL,
+    abgeschlossen_von TEXT NOT NULL,
+    daten_json       TEXT NOT NULL,              -- Teilnehmer, Termine, Konflikte, Verlauf
+    UNIQUE (runde_id, version)
 );
 """
 
@@ -97,6 +117,8 @@ def init():
             c.execute("ALTER TABLE entwurf RENAME TO entwurf_alt")
         if "eingeladen_raum_id" in {r["name"] for r in c.execute("PRAGMA table_info(konto)")}:
             c.execute("ALTER TABLE konto RENAME TO konto_alt")
+        if "gastgeber" in {r["name"] for r in c.execute("PRAGMA table_info(runde)")}:
+            c.execute("ALTER TABLE runde RENAME COLUMN gastgeber TO organisator")
         c.executescript(_SCHEMA)
         if c.execute("SELECT 1 FROM sqlite_master WHERE name = 'entwurf_alt'").fetchone():
             c.execute("INSERT INTO entwurf (id, verein_key, datum, uhrzeit, uhrzeit_bis, bezeichnung, ort, regel, "
@@ -238,25 +260,27 @@ def bestaetigen(verein_key: str, eids: list[int] | None = None, ja: bool = True)
     """Einzeln (eids) oder alle eigenen unveröffentlichten Entwürfe bestätigen bzw. zurücknehmen."""
     if eids is not None and not eids:
         return 0
-    sql = "UPDATE entwurf SET bestaetigt_am = ? WHERE verein_key = ? AND veroeffentlicht_am IS NULL" + _ids_sql(eids)
+    sql = "UPDATE entwurf SET bestaetigt_am = ?, geaendert_am = ? WHERE verein_key = ? AND veroeffentlicht_am IS NULL" \
+          + _ids_sql(eids)
     with conn() as c:
-        return c.execute(sql, [jetzt() if ja else None, verein_key] + list(eids or [])).rowcount
+        return c.execute(sql, [jetzt() if ja else None, jetzt(), verein_key] + list(eids or [])).rowcount
 
 
 def veroeffentlichen(verein_key: str, eids: list[int] | None = None) -> int:
     """Einzeln (eids) oder alle. Prototyp: nur Zeitstempel – live: in den Kalender schreiben."""
     if eids is not None and not eids:
         return 0
-    sql = "UPDATE entwurf SET veroeffentlicht_am = ? WHERE verein_key = ? AND veroeffentlicht_am IS NULL" + _ids_sql(eids)
+    sql = "UPDATE entwurf SET veroeffentlicht_am = ?, geaendert_am = ? WHERE verein_key = ? AND veroeffentlicht_am IS NULL" \
+          + _ids_sql(eids)
     with conn() as c:
-        return c.execute(sql, [jetzt(), verein_key] + list(eids or [])).rowcount
+        return c.execute(sql, [jetzt(), jetzt(), verein_key] + list(eids or [])).rowcount
 
 
 def zurueckziehen(eid: int, verein_key: str) -> bool:
     """Prototyp-Hilfe: Veröffentlichung zurücknehmen (live: Termin löschen = Soft-Delete)."""
     with conn() as c:
-        return c.execute("UPDATE entwurf SET veroeffentlicht_am = NULL WHERE id = ? AND verein_key = ?",
-                         (eid, verein_key)).rowcount == 1
+        return c.execute("UPDATE entwurf SET veroeffentlicht_am = NULL, geaendert_am = ? WHERE id = ? AND verein_key = ?",
+                         (jetzt(), eid, verein_key)).rowcount == 1
 
 
 # ── Planungsrunden ───────────────────────────────────────────────────────────
@@ -277,12 +301,13 @@ def code_anzeige(code: str) -> str:
     return f"{code[:3]}-{code[3:]}" if len(code) == CODE_LAENGE else code
 
 
-def runde_starten(name: str, jahr: int, gastgeber: str) -> int:
+def runde_starten(name: str, jahr: int, organisator: str) -> int:
     with conn() as c:
-        cur = c.execute("INSERT INTO runde (name, jahr, gastgeber, link, code, erstellt_am) VALUES (?,?,?,?,?,?)",
-                        (name, jahr, gastgeber, secrets.token_urlsafe(16), _neuer_code(c), jetzt()))
+        cur = c.execute("INSERT INTO runde (name, jahr, organisator, link, code, erstellt_am) VALUES (?,?,?,?,?,?)",
+                        (name, jahr, organisator, secrets.token_urlsafe(16), _neuer_code(c), jetzt()))
         c.execute("INSERT INTO runde_teilnehmer (runde_id, verein_key, beigetreten_am) VALUES (?,?,?)",
-                  (cur.lastrowid, gastgeber, jetzt()))
+                  (cur.lastrowid, organisator, jetzt()))
+        _protokoll(c, cur.lastrowid, organisator, "Runde gestartet (Organisator)", f"{name} {jahr}")
         return cur.lastrowid
 
 
@@ -311,7 +336,7 @@ def einladung_erneuern(runde_id: int) -> None:
 
 
 def beitreten(runde_id: int, verein_key: str) -> str:
-    """'neu' | 'schon' | 'entfernt' (vom Gastgeber entfernt → nur der Gastgeber nimmt wieder auf)."""
+    """'neu' | 'schon' | 'entfernt' (vom Organisator entfernt → nur der Organisator nimmt wieder auf)."""
     with conn() as c:
         r = c.execute("SELECT aktiv FROM runde_teilnehmer WHERE runde_id = ? AND verein_key = ?",
                       (runde_id, verein_key)).fetchone()
@@ -333,7 +358,7 @@ def verlassen(runde_id: int, verein_key: str) -> None:
 
 
 def teilnehmer_setzen(runde_id: int, verein_key: str, aktiv: bool) -> None:
-    """Gastgeber: entfernen (aktiv = 0, Link/Code helfen dann nicht mehr) oder wieder aufnehmen."""
+    """Organisator: entfernen (aktiv = 0, Link/Code helfen dann nicht mehr) oder wieder aufnehmen."""
     with conn() as c:
         c.execute("UPDATE runde_teilnehmer SET aktiv = ? WHERE runde_id = ? AND verein_key = ?",
                   (1 if aktiv else 0, runde_id, verein_key))
@@ -359,3 +384,82 @@ def runden_des_vereins(verein_key: str) -> list[sqlite3.Row]:
 def runde_status(runde_id: int, status: str) -> None:
     with conn() as c:
         c.execute("UPDATE runde SET status = ? WHERE id = ?", (status, runde_id))
+
+
+# ── Verlauf und Ergebnis ─────────────────────────────────────────────────────
+
+def _protokoll(c, runde_id: int, verein_key: str, aktion: str, details: str = "") -> None:
+    c.execute("INSERT INTO runde_protokoll (runde_id, zeit, verein_key, aktion, details) VALUES (?,?,?,?,?)",
+              (runde_id, jetzt(), verein_key, aktion, details))
+
+
+def protokoll(runde_id: int, verein_key: str, aktion: str, details: str = "") -> None:
+    with conn() as c:
+        _protokoll(c, runde_id, verein_key, aktion, details)
+
+
+def protokoll_liste(runde_id: int) -> list[dict]:
+    with conn() as c:
+        return [dict(r) for r in c.execute("SELECT * FROM runde_protokoll WHERE runde_id = ? ORDER BY id", (runde_id,))]
+
+
+def offene_runden(verein_key: str, jahr: int) -> list[int]:
+    """Offene Runden, in denen der Verein dabei ist und die dieses Jahr planen – dort wird eine Terminänderung protokolliert."""
+    return [r["id"] for r in runden_des_vereins(verein_key) if r["status"] == "offen" and r["jahr"] == jahr]
+
+
+def ergebnis_speichern(runde_id: int, verein_key: str, daten: dict) -> int:
+    with conn() as c:
+        version = (c.execute("SELECT MAX(version) FROM runde_ergebnis WHERE runde_id = ?", (runde_id,)).fetchone()[0] or 0) + 1
+        c.execute("INSERT INTO runde_ergebnis (runde_id, version, abgeschlossen_am, abgeschlossen_von, daten_json) "
+                  "VALUES (?,?,?,?,?)", (runde_id, version, daten["abgeschlossen_am"], verein_key,
+                                         json.dumps(daten, ensure_ascii=False)))
+        _protokoll(c, runde_id, verein_key, "Runde abgeschlossen", f"Ergebnis Version {version}")
+        return version
+
+
+def ergebnisse(runde_id: int | None = None) -> list[dict]:
+    sql, args = "SELECT * FROM runde_ergebnis", []
+    if runde_id:
+        sql += " WHERE runde_id = ?"
+        args.append(runde_id)
+    with conn() as c:
+        out = []
+        for r in c.execute(sql + " ORDER BY abgeschlossen_am DESC, version DESC", args):
+            e = dict(r)
+            e["daten"] = json.loads(e.pop("daten_json"))
+            out.append(e)
+        return out
+
+
+def ergebnisse_des_vereins(verein_key: str) -> list[dict]:
+    """Ergebnisse aller Runden, an denen der Verein beim Abschluss beteiligt war – sein Archiv."""
+    return [e for e in ergebnisse() if verein_key in {t["verein"] for t in e["daten"]["teilnehmer"]}]
+
+
+def ergebnis(ergebnis_id: int) -> dict | None:
+    with conn() as c:
+        r = c.execute("SELECT * FROM runde_ergebnis WHERE id = ?", (ergebnis_id,)).fetchone()
+    if not r:
+        return None
+    e = dict(r)
+    e["daten"] = json.loads(e.pop("daten_json"))
+    return e
+
+
+def stand_version(runde_id: int, jahr: int) -> str:
+    """Kennung des aktuellen Stands einer Runde – Prüfsumme über alle Termine der Teilnehmer, die Teilnehmer und
+    den Status. Nicht nur der letzte Änderungszeitpunkt: zwei Änderungen in derselben Sekunde (Treffen!) fielen
+    sonst nicht auf."""
+    import hashlib
+    keys = aktive_teilnehmer(runde_id)
+    with conn() as c:
+        zeilen = c.execute("SELECT id, datum, uhrzeit, uhrzeit_bis, bezeichnung, ort, bestaetigt_am, veroeffentlicht_am "
+                           "FROM entwurf WHERE substr(datum, 1, 4) = ? AND verein_key IN (SELECT verein_key FROM "
+                           "runde_teilnehmer WHERE runde_id = ? AND aktiv = 1) ORDER BY id", (str(jahr), runde_id)).fetchall()
+        st = c.execute("SELECT status FROM runde WHERE id = ?", (runde_id,)).fetchone()
+    h = hashlib.sha1()
+    for z in zeilen:
+        h.update(repr(tuple(z)).encode())
+    h.update(f"|{','.join(sorted(keys))}|{st['status'] if st else ''}".encode())
+    return h.hexdigest()[:16]

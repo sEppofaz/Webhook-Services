@@ -71,6 +71,11 @@ tr.abgewaehlt td{opacity:.5}
 .kopf{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}.kopf b{font-size:16px}
 .aktionen{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center}.aktionen form{margin:0}
 .code{font:700 28px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em}
+.netz{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom));z-index:100;
+  max-width:min(560px,calc(100% - 32px));padding:10px 14px;border-radius:10px;font-size:14px;box-shadow:0 4px 16px rgba(0,0,0,.2);
+  background:var(--gelb-bg);color:var(--gelb)}
+.netz.weg{background:var(--rot-bg);color:var(--rot)}
+.btn.speichert{opacity:.7;pointer-events:none}
 body.treffen{font-size:18px}body.treffen .code{font-size:44px}body.treffen main{max-width:1400px}
 @media (max-width:640px){th.optional,td.optional{display:none}}
 {% block css %}{% endblock %}
@@ -84,6 +89,7 @@ body.treffen{font-size:18px}body.treffen .code{font-size:44px}body.treffen main{
   <a href="{{ url_for('vorlage_seite') }}">Vorjahres-Vorlage</a>
   <a href="{{ url_for('entwuerfe_seite') }}">Entwürfe</a>
   <a href="{{ url_for('runden_seite') }}">Planungsrunden</a>
+  <a href="{{ url_for('archiv') }}">Archiv</a>
   {% if angemeldet %}
     <form method="post" action="{{ url_for('abmelden') }}" style="display:flex;align-items:center;gap:8px;margin:0">{{ csrf()|safe }}
       <span style="opacity:.85;font-size:13px">{{ angemeldet_name }}</span>
@@ -94,5 +100,72 @@ body.treffen{font-size:18px}body.treffen .code{font-size:44px}body.treffen main{
 <main>
 {% block inhalt %}{% endblock %}
 </main>
+<div id="netz" class="netz" role="status" aria-live="polite" hidden></div>
+<script>
+/* Netz-Hinweis (Josef 2026-10-05): Teilnehmer sollen sich bei schlechtem WLAN/Netz nicht wundern.
+   - offline (Browser meldet es oder /ping scheitert): rotes Banner, Formulare werden nicht abgeschickt
+     (die Eingaben bleiben stehen)
+   - langsam (/ping > 2,5 s oder Netz meldet 2G): gelbes Banner
+   - beim Speichern: Knopf zeigt „Wird gespeichert …“, kein Doppel-Absenden; dauert es > 4 s, Hinweis „langsam“ */
+(function () {
+  const banner = document.getElementById("netz");
+  let zustand = "ok";
+  function zeige(z) {
+    zustand = z;
+    banner.hidden = z === "ok";
+    banner.classList.toggle("weg", z === "weg");
+    banner.textContent = z === "weg"
+      ? "Keine Verbindung zum Vereinskalender. Eure Eingaben bleiben stehen – speichern geht, sobald das Netz wieder da ist."
+      : z === "langsam" ? "Langsame Verbindung – Speichern und Laden können etwas dauern. Bitte nicht doppelt tippen."
+      : z === "speichert" ? "Speichern dauert länger als üblich – die Verbindung ist langsam. Bitte warten." : "";
+  }
+  // Abruf mit Zeitmessung und Zeitlimit – auch für andere Skripte (Runde: „andere haben geändert“)
+  window.vkoAbruf = async function (url) {
+    if (!navigator.onLine) { zeige("weg"); return null; }
+    const ctrl = new AbortController(), t0 = performance.now();
+    const limit = setTimeout(() => ctrl.abort(), 8000);
+    try {
+      const r = await fetch(url, { cache: "no-store", signal: ctrl.signal, credentials: "same-origin" });
+      const ms = performance.now() - t0;
+      const zweiG = navigator.connection && /2g/.test(navigator.connection.effectiveType || "");
+      if (zustand !== "speichert") zeige(ms > 2500 || zweiG ? "langsam" : "ok");
+      return r;
+    } catch (e) {
+      zeige("weg");
+      return null;
+    } finally { clearTimeout(limit); }
+  };
+  const lebenszeichen = () => { if (!document.hidden) window.vkoAbruf("{{ url_for('ping') }}"); };
+  window.addEventListener("offline", () => zeige("weg"));
+  window.addEventListener("online", lebenszeichen);
+  document.addEventListener("visibilitychange", lebenszeichen);
+  setInterval(lebenszeichen, 30000);
+  lebenszeichen();
+
+  document.addEventListener("submit", (e) => {
+    const form = e.target;
+    if (e.defaultPrevented || (form.method || "").toLowerCase() !== "post") return;
+    if (!navigator.onLine) { e.preventDefault(); zeige("weg"); return; }
+    if (form.dataset.sendet) { e.preventDefault(); return; }       // Doppel-Absenden verhindern
+    form.dataset.sendet = "1";
+    window.vkoSpeichert = true;
+    const knopf = e.submitter;
+    if (knopf) {   // nicht „disabled“ – sonst fehlt name/value des Knopfs im Formular
+      knopf.dataset.text = knopf.textContent;
+      knopf.textContent = "Wird gespeichert …";
+      knopf.classList.add("speichert");
+    }
+    setTimeout(() => zeige("speichert"), 4000);
+  });
+  // Zurück-Taste (bfcache): Knöpfe wieder freigeben
+  window.addEventListener("pageshow", (e) => {
+    if (!e.persisted) return;
+    for (const f of document.querySelectorAll("form[data-sendet]")) delete f.dataset.sendet;
+    for (const k of document.querySelectorAll(".speichert")) { k.textContent = k.dataset.text; k.classList.remove("speichert"); }
+    window.vkoSpeichert = false;
+    zeige("ok");
+  });
+})();
+</script>
 </body>
 </html>
