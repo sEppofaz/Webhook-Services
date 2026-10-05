@@ -161,7 +161,7 @@ Gottesdienste aus `gottesdienste.json` erreichen die Abonnenten also **nicht**. 
 | `/api/termine` | GET/PATCH/DELETE – Termine (PATCH/DELETE: Auth X-Upload-Token) |
 | `/api/termine/flyer` | POST multipart – Admin: Flyer hochladen/ersetzen (`aktion=hochladen`, Datei `flyer`) oder `aktion=entfernen`; Termin über `verein_key`+`datum`+`bezeichnung`, gelöschte Termine ausgenommen; alter Flyer wird in Dropbox gelöscht (Auth X-Upload-Token, nginx 10m) |
 | `/api/ical` | GET – iCal-Export einzelner Termin |
-| `/api/ical/feed` | GET – Abonnierbarer Feed (`webcal://`), optional `?v=key1,key2` oder `?ort=Ortschaft` |
+| `/api/ical/feed` | GET – Abonnierbarer Feed (`webcal://`). Favoriten-Abo (v1.61, ADR-025): `v=` Vereine, `o=Ort\|Gemeinde`, `g=Gemeinde\|Landkreis X`, `r=Region` – ODER-verknüpft, Orte nach Mischregel; altes `?ort=` gleiche Regel. Je Parameter max. 50 Einträge à 100 Zeichen. Vereinssitz aus `_merged_meta()` (Datei + DB, wie `/api/termine`) |
 | `/api/check-token` | POST – Admin-Token prüfen |
 | `/api/confirm-import` | POST – Upload-Import bestätigen |
 | `/api/admin/importe` | GET – Pending-Liste |
@@ -336,11 +336,11 @@ hatte – auch einen ohne künftige Termine. Seit ADR-013 werden beide über
 `bundeslaender`); `kalender.html::_terminOrte(t)` macht daraus Chip-Labels und ersetzt
 `_ortOf[t.verein]` im Haupt-Terminfilter, den Such-Chips und den Favoriten. `_ortOf`
 (Heimatort des Vereins) bleibt für die Kaskade und die Vereinsliste und ist der Rückfall, wenn
-`_geo` fehlt. **Gemeinde- und Landkreis-Filter hängen weiter am Verein** (Stufe 3, offen).
+`_geo` fehlt. **Seit v1.61 (Stufe 3 + ADR-025 Mischregel):** Ortschaft, Gemeinde und Region zählen am Ort des Termins **und** am Vereinssitz, Pfarreien nur am Ort (`_terminOrte`/`_terminGems`/`_terminRegionen`, `_mitVereinssitz`). Server-Gegenstück für das Abo: `shared/geo.py::termin_orte_misch()`/`abo_treffer()` – **beide Seiten zusammen ändern**, Tests `tests/test_app.py` Abschnitt 19.
 Bei „Termin ist in der API, erscheint aber nicht in der App" zuerst `t._geo.orte` ansehen und
 dann `python3 tests/test_geo.py` (Abschnitt „Veranstaltungsorte ohne Registertreffer").
-Der iCal-Feed filtert `?ort=` über dieselbe Zuordnung (exakter Ortsname), der Favoriten-Feed
-(`?v=`) bleibt Verein-basiert.
+Der iCal-Feed filtert `?ort=`/`o=`/`g=`/`r=` seit v1.61 nach der Mischregel (ADR-025); `?v=` allein
+bleibt Verein-basiert (alte Favoriten-Abos liefern unverändert).
 
 **Dateien der Geo-Zuordnung (ADR-014, live seit 2026-10-02):**
 
