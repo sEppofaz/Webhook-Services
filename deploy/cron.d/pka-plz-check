@@ -1,0 +1,6 @@
+# PLZ-Wächter (Todo #419) – Quelle im Repo: deploy/cron.d/pka-plz-check
+# Installation: install -m 644 -o root -g root /opt/rename-webhook/deploy/cron.d/pka-plz-check /etc/cron.d/pka-plz-check
+# Monatlich am 1. um 05:00: meldet per Telegram, wenn OpenPLZ einen neuen Export hat (plz_check.py), sonst still.
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+0 5 1 * * root /opt/rename-webhook/bin/python3 /opt/rename-webhook/cronwrap.py plz_check -- /opt/rename-webhook/bin/python3 /opt/rename-webhook/plz_check.py >> /var/log/pka-plz-check.log 2>&1

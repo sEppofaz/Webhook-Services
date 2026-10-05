@@ -707,11 +707,49 @@ def test_register_pruefen():
            "1 Import bestätigen · 2 Vereine freigeben · 19 Register-Einträge prüfen", "Text im Bericht")
 
 
+# ── 22: PLZ-Wächter (Todo #419) ─────────────────────────────────────────────
+def test_plz_check():
+    print("\n22 · PLZ-Wächter: nur bei neuem Export rechnen, Vergleich, Meldung")
+    import plz_check as pc
+    alt = {"_stand": "2026-10-02", "plz": {"84092": {"g": ["A"]}, "84061": {"g": ["B"]}, "99999": {"g": ["C"]}},
+           "gemeinden": {"A": {"name": "Bayerbach"}, "B": {"name": "Ergoldsbach"}, "C": {"name": "Weg"}}}
+    neu = {"plz": {"84092": {"g": ["A", "B"]}, "84061": {"g": ["B"]}, "11111": {"g": ["A"]}},
+           "gemeinden": {"A": {"name": "Bayerbach"}, "B": {"name": "Ergoldsbach"}}}
+    d = pc.vergleiche(alt, neu)
+    pruefe(d["geaendert"] == {"84092": (["Bayerbach"], ["Bayerbach", "Ergoldsbach"])}
+           and d["neu"] == ["11111"] and d["weg"] == ["99999"], "Vergleich: geändert/neu/weg", d)
+    with vk_db.db_conn() as c:
+        c.execute("INSERT INTO vereine_accounts (verein_name, status, plz) VALUES ('PLZ-Testverein', 'aktiv', '84092')")
+    alt_db = pc.DB_PATH; pc.DB_PATH = vk_db.DB_FILE
+    b = pc.betroffene(d)
+    pc.DB_PATH = alt_db
+    pruefe(("PLZ-Testverein", "84092") in b["konten"], "betroffenes Vereinskonto erkannt", b["konten"])
+    pruefe(any(p == "84092" for _, p in b["register"]), "betroffene Register-Einträge (orte.json) erkannt", b["register"][:3])
+    t = pc.meldung({"datum": "2026-11-01", "sha": "x"}, "2026-10-02", d, b)
+    pruefe("84092: Bayerbach → Bayerbach, Ergoldsbach" in t and "PLZ-Testverein (84092)" in t and "<b>" not in t,
+           "Meldung nennt Änderung und Konto, ohne HTML", t[:200])
+    # Kein neuer Export → kein Download, keine Meldung
+    snap, stand, export = pc.SNAPSHOT, pc.STAND_FILE, pc.letzter_export
+    pc.SNAPSHOT = TMP / "plz_snap.json"; pc.SNAPSHOT.write_text(json.dumps(alt))
+    pc.STAND_FILE = TMP / "plz_stand.json"
+    pc.letzter_export = lambda: {"sha": "abc", "datum": "2025-11-22"}
+    sys.argv = ["plz_check.py"]
+    gebaut = []
+    import types as _t
+    sys.modules["build_plz_gemeinden"] = _t.SimpleNamespace(lade_gemeinden=lambda: gebaut.append(1) or {})
+    pruefe(pc.main() == 0 and not gebaut, "Export älter als Schnappschuss → nichts geladen")
+    pc.STAND_FILE.write_text(json.dumps({"sha": "abc", "gemeldet_am": "2026-11-01"}))
+    pc.letzter_export = lambda: {"sha": "abc", "datum": "2026-11-01"}
+    pruefe(pc.main() == 0 and not gebaut, "schon gemeldeter Export → nichts geladen")
+    pc.SNAPSHOT, pc.STAND_FILE, pc.letzter_export = snap, stand, export
+    del sys.modules["build_plz_gemeinden"]
+
+
 TESTS = [test_xss, test_telegram_secret, test_vereine_api_lock, test_erinnerung, test_sessions,
          test_admin_loeschen, test_admin_verein_meta, test_verknuepfen,
          test_ical_uids, test_registrierung_key, test_fremde_endpunkte,
          test_pending_atomar, test_import_vergangenheit, test_stats_zeit, test_cookies,
-         test_freigabe_nachricht, test_store_mehrprozess, test_bot_tastatur, test_abo_mischregel, test_import_ortschaft, test_register_pruefen]
+         test_freigabe_nachricht, test_store_mehrprozess, test_bot_tastatur, test_abo_mischregel, test_import_ortschaft, test_register_pruefen, test_plz_check]
 
 if __name__ == "__main__":
     for t in TESTS:

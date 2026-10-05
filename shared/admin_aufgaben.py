@@ -101,7 +101,7 @@ def offene_aufgaben(raw: dict, pending_dir: Path, db_path: Path) -> dict:
         pass
     vereine = 0
     try:
-        with sqlite3.connect(str(db_path)) as conn:
+        with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:   # nur lesen, nie eine leere DB anlegen
             vereine = conn.execute("SELECT COUNT(*) FROM vereine_accounts WHERE status='pending'").fetchone()[0]
     except Exception:
         pass

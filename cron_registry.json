@@ -1,5 +1,5 @@
 {
-  "_hinweis": "Soll-Zustand aller Cronjobs. Ein Job steht automatisch unter Aufsicht, sobald er über cronwrap.py zum ersten Mal gelaufen ist (erster Heartbeat). `aktiv_seit` (ISO mit Uhrzeit) ist nur nötig, um einen Job schon VOR seinem ersten Heartbeat zu überwachen. Zeiten: Europe/Berlin, days: Mo=0 … So=6, fehlt = täglich. `monatstage` (z. B. [1]) = Takt für Monatsjobs, zusammen mit `at`. Noch nicht erfasst: plz_update (Baustein B, existiert noch nicht), e-Rechnungen-Retry (läuft nicht im Crontab, vermutlich App-intern); OrgKompass-Erinnerungen sind ein systemd-Timer und stehen unter `timer`. pip_update_audit.py läuft nicht im Crontab, sondern sonntags 03:00 aus server-maintenance.sh (Josef, 2026-10-02; Journal bestätigt den Start des Wrappers am 27.09.) und ist über den Job server_maintenance mit abgedeckt.",
+  "_hinweis": "Soll-Zustand aller Cronjobs. Ein Job steht automatisch unter Aufsicht, sobald er über cronwrap.py zum ersten Mal gelaufen ist (erster Heartbeat). `aktiv_seit` (ISO mit Uhrzeit) ist nur nötig, um einen Job schon VOR seinem ersten Heartbeat zu überwachen. Zeiten: Europe/Berlin, days: Mo=0 … So=6, fehlt = täglich. `monatstage` (z. B. [1]) = Takt für Monatsjobs, zusammen mit `at`. Noch nicht erfasst: e-Rechnungen-Retry (läuft nicht im Crontab, vermutlich App-intern); OrgKompass-Erinnerungen sind ein systemd-Timer und stehen unter `timer`. pip_update_audit.py läuft nicht im Crontab, sondern sonntags 03:00 aus server-maintenance.sh (Josef, 2026-10-02; Journal bestätigt den Start des Wrappers am 27.09.) und ist über den Job server_maintenance mit abgedeckt.",
   "jobs": [
     {
       "name": "logbuch_summary",
@@ -160,6 +160,20 @@
       "max_laufzeit_min": 30,
       "_zweck": "update_geoip.sh – GeoLite2-DB (Vereinskalender-Statistik), Log /var/log/pka-geoip.log",
       "aktiv_seit": "2026-10-04T09:15:00+02:00"
+    },
+    {
+      "name": "plz_check",
+      "at": [
+        "05:00"
+      ],
+      "monatstage": [
+        1
+      ],
+      "grace_min": 60,
+      "max_laufzeit_min": 30,
+      "projekt": "Vereinskalender",
+      "_zweck": "plz_check.py – meldet neuen OpenPLZ-Export (Todo #419), /etc/cron.d/pka-plz-check, Log /var/log/pka-plz-check.log",
+      "aktiv_seit": "2026-10-05T12:00:00+02:00"
     }
   ],
   "dienste": [
