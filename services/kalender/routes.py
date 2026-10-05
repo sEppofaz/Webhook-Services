@@ -912,6 +912,11 @@ def api_termine():
 
     merged_meta = _merged_meta(raw)
     rubriken    = {k: _get_rubrik(k, v, merged_meta.get(k, {})) for k, v in labels.items()}
+    # Standard-Quelle je Verein (`_meta[key].quelle`, z. B. „Pfarrbrief“ für Postau-Moosthann): gilt für Termine
+    # ohne eigene Quelle – so tragen auch künftige Importe dieses Vereins sie, ohne Daten umzuschreiben.
+    for t in termine:
+        if not t.get("quelle") and (merged_meta.get(t["verein"]) or {}).get("quelle"):
+            t["quelle"] = merged_meta[t["verein"]]["quelle"]
 
     # Geo-Zuordnung am Termin (ADR-014). Ein Fehler im Resolver darf die Terminliste nie kippen;
     # ohne _geo (orte.json fehlt = Kill-Switch) fällt das Frontend auf das Verein-Verhalten zurück.

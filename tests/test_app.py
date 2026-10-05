@@ -745,11 +745,32 @@ def test_plz_check():
     del sys.modules["build_plz_gemeinden"]
 
 
+# ── 23: Quelle „Pfarrbrief“ (Josef 2026-10-05) ──────────────────────────────
+def test_quelle_pfarrbrief():
+    print("\n23 · Quelle „Pfarrbrief“: Gottesdienste und Standard-Quelle aus _meta")
+    import shared.kalender_core as kc
+    d = daten()
+    d["_labels"]["pfarrgemeinde_test"] = "Pfarrgemeinde Test"
+    d["_meta"]["pfarrgemeinde_test"] = {"quelle": "Pfarrbrief"}
+    d["pfarrgemeinde_test"] = [{"datum": "2099-09-01", "uhrzeit": "19:00", "ort": "Postau", "bezeichnung": "Messe A"},
+                               {"datum": "2099-09-02", "uhrzeit": "19:00", "ort": "Postau", "bezeichnung": "Messe B",
+                                "quelle": "eigene"}]
+    schreibe(d)
+    (TMP / "gottesdienste.json").write_text(json.dumps({"hk": [
+        {"datum": "2099-09-03", "uhrzeit": "08:30", "ort": "Hölskofen", "art": "Messe C"}]}))
+    kc.GOTTESDIENSTE_FILE = TMP / "gottesdienste.json"
+    T = {t["bezeichnung"]: t.get("quelle", "") for t in app.test_client().get("/api/termine").get_json()["termine"]}
+    pruefe(T.get("Messe A") == "Pfarrbrief", "Standard-Quelle aus _meta eingesetzt", T.get("Messe A"))
+    pruefe(T.get("Messe B") == "eigene", "eigene Quelle bleibt", T.get("Messe B"))
+    pruefe(T.get("Messe C") == "Pfarrbrief", "Gottesdienste aus gottesdienste.json: Pfarrbrief", T.get("Messe C"))
+    (TMP / "gottesdienste.json").unlink()
+
+
 TESTS = [test_xss, test_telegram_secret, test_vereine_api_lock, test_erinnerung, test_sessions,
          test_admin_loeschen, test_admin_verein_meta, test_verknuepfen,
          test_ical_uids, test_registrierung_key, test_fremde_endpunkte,
          test_pending_atomar, test_import_vergangenheit, test_stats_zeit, test_cookies,
-         test_freigabe_nachricht, test_store_mehrprozess, test_bot_tastatur, test_abo_mischregel, test_import_ortschaft, test_register_pruefen, test_plz_check]
+         test_freigabe_nachricht, test_store_mehrprozess, test_bot_tastatur, test_abo_mischregel, test_import_ortschaft, test_register_pruefen, test_plz_check, test_quelle_pfarrbrief]
 
 if __name__ == "__main__":
     for t in TESTS:

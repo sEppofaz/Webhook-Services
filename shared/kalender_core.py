@@ -112,6 +112,7 @@ def gottesdienste_eintraege(raw: dict) -> list[tuple[str, dict]]:
                 "uhrzeit":     t.get("uhrzeit", ""),
                 "ort":         t.get("ort", ""),
                 "bezeichnung": t.get("art", ""),
+                "quelle":      "Pfarrbrief",   # gottesdienste.json entsteht aus dem Pfarrbrief-Scan (Josef 2026-10-05)
             }))
     return eintraege
 
