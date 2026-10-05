@@ -6,7 +6,7 @@ Plan: `~/.claude/plans/2-ja-3-erkl-re-agile-squirrel.md`, Ideen: `PKA/Expert-Kno
 ## Starten
 
 ```bash
-cd ~/Library/CloudStorage/Dropbox/Apps/Claude/Vereinskalender/src
+cd ~/Developer/vko-jahresplanung   # git worktree, Branch jahresplanung
 ~/.venvs/vko-jahresplanung/bin/python prototyp/jahresplanung/app.py
 # → http://localhost:5050   (Strg+C beendet)
 ```
