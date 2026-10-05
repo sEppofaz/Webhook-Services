@@ -5,6 +5,20 @@
 <h1>Einstellungen</h1>
 {% if meldung %}<div class="ok">{{ meldung }}</div>{% endif %}
 
+<p class="hint">Alles rund um euren Verein. Die Termine selbst pflegt ihr unter „Termine“.</p>
+
+{% macro platzhalter(titel, text, pfad) %}
+<div class="card">
+  <b>{{ titel }}</b>
+  <p class="hint" style="margin:4px 0 0">{{ text }}</p>
+  <p class="hint" style="margin:6px 0 0"><span class="chip">aus dem heutigen Dashboard</span> Im Prototyp nicht nachgebaut – live <code>{{ pfad }}</code>, hierher verschoben.</p>
+</div>
+{% endmacro %}
+<h2>Verein</h2>
+{{ platzhalter("Vereinsprofil", "Name, Rubrik, Ortschaft und PLZ, Ansprechpartner, Telefon, E-Mail-Adresse ändern (mit Bestätigung).", "/verein/profil") }}
+{{ platzhalter("Mitglieder", "Weitere Vereinsadmins oder Mitglieder einladen und entfernen (max. 3).", "/verein/mitglieder") }}
+{{ platzhalter("Passwort ändern", "Neues Passwort setzen; alle anderen Anmeldungen werden beendet.", "/verein/passwort") }}
+
 <form method="post">{{ csrf()|safe }}
 <h2>Überschneidungen prüfen mit …</h2>
 <div class="card">
@@ -33,6 +47,10 @@
 
 <div class="aktionen"><button class="btn">Speichern</button></div>
 </form>
+
+<h2>Rechtliches</h2>
+<div class="card hint"><a href="https://vereinskalender.online/verein/datenschutz" target="_blank" rel="noopener">Datenschutzerklärung</a> ·
+  <a href="https://vereinskalender.online/verein/nutzungsbedingungen" target="_blank" rel="noopener">Nutzungsbedingungen</a></div>
 <script>
   // Gespeicherte Auswahl in der Vereinsliste anhaken
   (function () {

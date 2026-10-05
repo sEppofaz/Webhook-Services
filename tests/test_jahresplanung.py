@@ -244,6 +244,13 @@ else:
     s = c.get("/termine?jahr=2027")
     pruefe(b"Sommerfest" in s.data and b"Entwurf" in s.data, "Termine 2027: Entwurf aus dem Vorjahr")
     pruefe(b'class="card kollision-pruefen"' in s.data and b"kollision-hinweis" in s.data, "Formular mit Kollisionswarnung")
+    pruefe(re.search(rb'hdr-pill-pri" href="/termine" aria-current="page"', s.data) is not None, "Kopf: Tab Termine aktiv (gefüllt)")
+    pruefe(b'hdr-pill hdr-pill-sec" href="/einstellungen"' in s.data, "Kopf: andere Tabs umrandet wie Info/Login")
+    pruefe(b"Terminplan hochladen" in s.data and b"Hilfe &amp; FAQ" in s.data, "Termine: Upload und Hilfe aus dem Dashboard")
+    s = c.get("/einstellungen")
+    pruefe(all(x.encode() in s.data for x in ("Vereinsprofil", "Mitglieder", "Passwort ändern", "Überschneidungen prüfen mit", "Datenschutzerklärung")),
+           "Einstellungen: Profil, Mitglieder, Passwort, Prüfkreis, Rechtliches")
+    pruefe(b'hdr-pill-pri" href="/einstellungen" aria-current="page"' in s.data, "Kopf: Tab Einstellungen aktiv")
 
     # Kollisions-API aus der Sitzung + Prüfkreis aus den Einstellungen
     j = c.get("/api/kollisionen?verein=d&von=2026-07-11&ort=Testdorf").get_json()

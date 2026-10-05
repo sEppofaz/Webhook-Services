@@ -30,6 +30,7 @@
 
 <div class="aktionen" style="margin:10px 0">
   <a class="btn" href="#neu">Neuer Termin</a>
+  <a class="btn sek" href="#hochladen">Terminplan hochladen</a>
   {% if vorlage_n %}
   <form method="post" action="{{ url_for('entwuerfe_aus_vorjahr') }}">{{ csrf()|safe }}<input type="hidden" name="jahr" value="{{ vorlage_jahr }}">{% if jahr %}<input type="hidden" name="ansicht_jahr" value="{{ jahr }}">{% endif %}
     <button class="btn sek">Entwürfe {{ vorlage_jahr }} aus dem Vorjahr erzeugen ({{ vorlage_n }})</button></form>
@@ -59,6 +60,22 @@
 
 <h2 id="neu">Neuer Termin</h2>
 {{ neuer_termin(csrf, jahr, darf=darf, ansicht_jahr=jahr) }}
+
+<h2 id="hochladen">Terminplan hochladen</h2>
+<div class="card">
+  <p style="margin-top:0">PDF, Foto (JPG/PNG/HEIC) oder Excel-Vorlage – die KI liest die Termine aus, ihr prüft sie vor dem Speichern.
+  3 Uploads pro Tag. Für die Jahresplanung: den Plan des Vorjahres hochladen, wenn Termine fehlen.</p>
+  <p class="hint" style="margin-bottom:0"><span class="chip">aus dem heutigen Dashboard</span> Im Prototyp nicht nachgebaut – live die bestehende Seite <code>/verein/upload</code> samt Excel-Vorlage, nur hierher verschoben.</p>
+</div>
+
+<details class="card">
+  <summary style="font-size:15px;font-weight:600">Hilfe &amp; FAQ</summary>
+  <p><b>Entwurf oder veröffentlichen?</b> Unter dem Jahr meist gleich „Veröffentlichen“. „Als Entwurf“ für die Jahresplanung – Entwürfe sieht niemand außer euch und den Vereinen einer Planungsrunde.</p>
+  <p><b>Warnung „Am selben Tag schon geplant“</b> ist nur ein Hinweis. Welche Vereine geprüft werden, stellt ihr unter „Einstellungen“ ein.</p>
+  <p><b>Mehrtägig:</b> „bis Datum“ ausfüllen – je Tag entsteht ein eigener Termin (max. 16).</p>
+  <p><b>Flyer:</b> Bild oder PDF (max. 8 MB) zuerst auf dem Gerät speichern und dann hochladen – direkt aus Outlook gezogen klappt nicht.</p>
+  <p class="hint" style="margin-bottom:0">Live kommen hier die bisherigen Hilfetexte des Dashboards dazu (Upload, Excel-Datum, Tageslimit, Vorschau).</p>
+</details>
 
 <h2>Herunterladen</h2>
 <div class="exporte">

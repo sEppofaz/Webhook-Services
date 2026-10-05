@@ -5,18 +5,34 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{% block titel %}Jahresplanung{% endblock %} · Prototyp</title>
 <style>
-:root{--bg:#f2f2f7;--card:#fff;--text:#1c1c1e;--text2:#6c6c70;--line:#e5e5ea;--accent:#7C3AED;--link:#6D28D9;--hdr:#6D28D9;
+:root{--bg:#f2f2f7;--card:#fff;--text:#1c1c1e;--text2:#6c6c70;--line:#e5e5ea;--border:rgba(0,0,0,.1);--border2:rgba(0,0,0,.18);--pill-pri-bg:#1e1b4b;--pill-pri-fg:#fff;--accent:#7C3AED;--link:#6D28D9;--hdr:#6D28D9;
   --feld:44px;--feld-kompakt:36px;--rot:#dc2626;--rot-bg:#fee2e2;--gelb:#b45309;--gelb-bg:#fef3c7;--gruen:#15803d;--gruen-bg:#dcfce7;--radius:12px;
   --v0:#7C3AED;--v1:#0891b2;--v2:#ca8a04;--v3:#db2777;--v4:#16a34a;--v5:#ea580c;--v6:#2563eb;--v7:#9333ea}
-@media (prefers-color-scheme:dark){:root{--bg:#1c1c1e;--card:#2c2c2e;--text:#f2f2f7;--text2:#aeaeb2;--line:#3a3a3c;
+@media (prefers-color-scheme:dark){:root{--bg:#1c1c1e;--card:#2c2c2e;--text:#f2f2f7;--text2:#aeaeb2;--line:#3a3a3c;--border:rgba(255,255,255,.1);--border2:rgba(255,255,255,.2);--pill-pri-bg:#f2f2f7;--pill-pri-fg:#1c1c1e;
   --accent:#7C3AED;--link:#C4B5FD;--hdr:#5B21B6;--rot:#f87171;--rot-bg:#451a1a;--gelb:#fbbf24;--gelb-bg:#422006;--gruen:#4ade80;--gruen-bg:#052e16}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-header{background:var(--hdr);color:#fff;padding:12px 16px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
 /* Links: eigene Farbe statt Browser-Blau (im Nachtmodus 1,5:1 – unlesbar). Kontrast ≥ 7:1 auf Karte und Hintergrund. */
 a{color:var(--link)}
-header a{color:#fff;text-decoration:none;opacity:.9}header a:hover{opacity:1;text-decoration:underline}
-header .titel{font-weight:700;margin-right:auto}
+/* Kopf wie die Live-App (kalender.html v1.64): weiß, Logo + Titel, Pillen wie „Login“/„Info“; aktiver Tab gefüllt */
+.hdr{background:var(--card);color:var(--text);border-bottom:.5px solid var(--border);box-shadow:0 1px 8px rgba(0,0,0,.04);
+  padding:10px 16px;padding-top:max(10px,env(safe-area-inset-top));display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.hdr-logo{display:flex;align-items:center;gap:10px;color:inherit;text-decoration:none;min-width:0}
+.hdr-icon{width:38px;height:38px;flex-shrink:0}
+.hdr-text{display:flex;flex-direction:column;min-width:0}.hdr-text b{font-size:17px;line-height:1.2}
+.hdr-text span{font-size:12px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:6px}
+.hdr-pill{display:inline-flex;align-items:center;gap:7px;height:38px;padding:0 16px;border-radius:999px;font:600 14px/1 inherit;
+  text-decoration:none;cursor:pointer;white-space:nowrap;transition:opacity .15s,background .15s;box-sizing:border-box}
+.hdr-pill:active{opacity:.75}
+.hdr-pill-pri{background:var(--pill-pri-bg);color:var(--pill-pri-fg);border:1.5px solid var(--pill-pri-bg)}
+.hdr-pill-sec{background:transparent;color:var(--text);border:1.5px solid var(--border2)}
+@media (max-width:640px){
+  .hdr-right{margin-left:0;width:100%;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+  .hdr-right::-webkit-scrollbar{display:none}
+  .hdr-pill{height:34px;padding:0 12px;font-size:13px;flex-shrink:0}
+  .hdr-pill svg{display:none}
+}
 .proto{background:#fef3c7;color:#92400e;font-size:12px;padding:6px 16px;text-align:center}
 main{max-width:1100px;margin:0 auto;padding:16px}
 h1{font-size:22px;margin:8px 0 4px}h2{font-size:17px;margin:20px 0 8px}
@@ -85,18 +101,27 @@ body.treffen{font-size:18px}body.treffen .code{font-size:44px}body.treffen main{
 </style>
 </head>
 <body class="{% block body_klasse %}{% endblock %}">
-<header>
-  <span class="titel">Vereinskalender · Jahresplanung</span>
+<header class="hdr">
+  <a class="hdr-logo" href="{{ url_for('start') }}">
+    <svg class="hdr-icon" viewBox="0 0 38 38" fill="none" aria-hidden="true">
+      <rect width="38" height="38" rx="9" fill="#FFFFFF"/>
+      <rect x="4" y="4" width="19" height="11" rx="2.5" fill="#e74c3c"/><rect x="25" y="4" width="9" height="11" rx="2.5" fill="#f39c12"/>
+      <rect x="4" y="17" width="13" height="8" rx="2.5" fill="#27ae60"/><rect x="19" y="17" width="15" height="8" rx="2.5" fill="#2980b9"/>
+      <rect x="4" y="27" width="9" height="7" rx="2.5" fill="#9b59b6"/><rect x="15" y="27" width="19" height="7" rx="2.5" fill="#1abc9c"/>
+    </svg>
+    <span class="hdr-text"><b>Vereinskalender</b><span>{{ angemeldet_name or 'Vereinsbereich' }}</span></span>
+  </a>
+  <nav class="hdr-right" aria-label="Vereinsbereich">
+  {% set ep = request.endpoint or '' %}
   {% if angemeldet %}
-  <a href="{{ url_for('termine_seite') }}">Termine</a>
-  <a href="{{ url_for('runden_seite') }}">Planungsrunden</a>
-  <a href="{{ url_for('einstellungen') }}">Einstellungen</a>
+    <a class="hdr-pill {{ 'hdr-pill-pri' if ep in ('termine_seite',) else 'hdr-pill-sec' }}" href="{{ url_for('termine_seite') }}"{{ ' aria-current="page"'|safe if ep == 'termine_seite' }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>Termine</a>
+    <a class="hdr-pill {{ 'hdr-pill-pri' if ep.startswith('runde') else 'hdr-pill-sec' }}" href="{{ url_for('runden_seite') }}"{{ ' aria-current="page"'|safe if ep.startswith('runde') }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Planungsrunden</a>
+    <a class="hdr-pill {{ 'hdr-pill-pri' if ep == 'einstellungen' else 'hdr-pill-sec' }}" href="{{ url_for('einstellungen') }}"{{ ' aria-current="page"'|safe if ep == 'einstellungen' }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></svg>Einstellungen</a>
+    <form method="post" action="{{ url_for('abmelden') }}" style="margin:0">{{ csrf()|safe }}<button class="hdr-pill hdr-pill-sec" title="Abmelden"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>Abmelden</button></form>
+  {% else %}
+    <a class="hdr-pill hdr-pill-pri" href="{{ url_for('anmelden') }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Login</a>
   {% endif %}
-  {% if angemeldet %}
-    <form method="post" action="{{ url_for('abmelden') }}" style="display:flex;align-items:center;gap:8px;margin:0">{{ csrf()|safe }}
-      <span style="opacity:.85;font-size:13px">{{ angemeldet_name }}</span>
-      <button class="btn sek klein" style="color:#fff;border-color:#fff">Abmelden</button></form>
-  {% else %}<a href="{{ url_for('anmelden') }}">Anmelden</a>{% endif %}
+  </nav>
 </header>
 <div class="proto">Prototyp – lokal, schreibt nichts in den Live-Kalender. Daten: Momentaufnahme der öffentlichen Termine.</div>
 <main>
