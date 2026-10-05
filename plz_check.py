@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import sqlite3
 import sys
 import tempfile
@@ -132,7 +133,7 @@ def main() -> int:
         strassen = Path(tmp) / "streets.csv"
         req = urllib.request.Request(b.STREETS_URL, headers=b.UA)
         with urllib.request.urlopen(req, timeout=300) as r, open(strassen, "wb") as f:
-            f.write(r.read())
+            shutil.copyfileobj(r, f, 1 << 20)   # streamen statt die ganze CSV in den Speicher
         neu = b.baue(strassen, gemeinden)
     if len(neu["plz"]) < 8000:
         raise SystemExit(f"Abbruch: nur {len(neu['plz'])} PLZ – Export unvollständig?")

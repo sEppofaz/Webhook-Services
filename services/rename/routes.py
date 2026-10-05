@@ -39,7 +39,7 @@ def _ist_rechnungsrelevant(new_name: str, kategorie: str | None) -> bool:
     if not kategorie:
         teile = Path(new_name).stem.split("_")
         kategorie = teile[1] if len(teile) > 1 else ""
-    return kategorie.strip().lower() not in _KEINE_RECHNUNG_KATEGORIEN
+    return str(kategorie).strip().lower() not in _KEINE_RECHNUNG_KATEGORIEN
 
 
 def _notify_rechnungen_api(new_name: str, steuer_kategorie: str | None, felder: dict | None = None) -> None:

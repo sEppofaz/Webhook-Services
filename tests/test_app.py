@@ -646,6 +646,8 @@ def test_abo_mischregel():
     pruefe(any(mv in x for x in t) and not any(messe in x for x in t), "Gemeinde Ergoldsbach: Versammlung, keine Messe", t)
     t = titel("r=Straubing-Bogen")
     pruefe(not any(mv in x or messe in x for x in t), "Region Straubing-Bogen: nichts davon", t)
+    t = titel("r=Landkreis%20Landshut")
+    pruefe(any(mv in x for x in t), "Region im alten Format „Landkreis Landshut“ (Favorit vor v1.61)", t)
     t = titel("v=kp")
     pruefe(any(mv in x for x in t) and not any(messe in x for x in t), "nur Verein kp: unverändert Verein-basiert", t)
     t = titel("ort=H%C3%B6lskofen")
@@ -653,6 +655,20 @@ def test_abo_mischregel():
     t = titel("v=kp&o=Postau%7CPostau")
     pruefe(any(mv in x for x in t), "Verein ODER Ortschaft kombiniert", t)
     (TMP / "gottesdienste.json").unlink()
+
+
+def test_chips_ohne_onclick():
+    print("\n19c · Favoriten-/Rubrik-Chips ohne Daten im onclick (v1.63)")
+    html_ = (BASIS / "kalender.html").read_text() if "BASIS" in globals() else Path(__file__).resolve().parent.parent.joinpath("kalender.html").read_text()
+    pruefe("removeFavorite('${" not in html_, "kein removeFavorite('${…}') im Markup")
+    pruefe("setRubrik('${" not in html_, "kein setRubrik('${…}') im Markup")
+
+
+def test_rename_relevanz():
+    print("\n19b · Rename: Rechnungs-Relevanz verträgt Nicht-Text aus der KI-Antwort")
+    from services.rename.routes import _ist_rechnungsrelevant as rel
+    pruefe(rel("2026-10-05_Rechnung_Firma.pdf", 17) is True, "Zahl statt Kategorie bricht nicht ab")
+    pruefe(rel("2026-10-05_Kontakt_X.pdf", None) is False, "Kategorie aus Dateiname: Kontakt")
 
 
 # ── 20: heimat-Import schreibt keine Gemeinde als Ortschaft (Todo #417) ─────
@@ -770,7 +786,7 @@ TESTS = [test_xss, test_telegram_secret, test_vereine_api_lock, test_erinnerung,
          test_admin_loeschen, test_admin_verein_meta, test_verknuepfen,
          test_ical_uids, test_registrierung_key, test_fremde_endpunkte,
          test_pending_atomar, test_import_vergangenheit, test_stats_zeit, test_cookies,
-         test_freigabe_nachricht, test_store_mehrprozess, test_bot_tastatur, test_abo_mischregel, test_import_ortschaft, test_register_pruefen, test_plz_check, test_quelle_pfarrbrief]
+         test_freigabe_nachricht, test_store_mehrprozess, test_bot_tastatur, test_abo_mischregel, test_chips_ohne_onclick, test_rename_relevanz, test_import_ortschaft, test_register_pruefen, test_plz_check, test_quelle_pfarrbrief]
 
 if __name__ == "__main__":
     for t in TESTS:

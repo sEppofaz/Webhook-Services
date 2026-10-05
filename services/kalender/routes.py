@@ -13,7 +13,7 @@ from pathlib import Path
 from flask import Blueprint, Response, request
 
 from shared.admin_aufgaben import offene_orte, register_pruefung
-from shared.geo import geo_fuer_termin, termin_orte_misch, abo_treffer, eintrag_fuer, _lade as _geo_register, _gem_norm, _ort_norm, ORTE_FREI_FILE
+from shared.geo import geo_fuer_termin, termin_orte_misch, abo_treffer, region_of, eintrag_fuer, _lade as _geo_register, _gem_norm, _ort_norm, ORTE_FREI_FILE
 from shared.flyer_store import upload_flyer, delete_flyer
 from shared.termin_felder import BESCHREIBUNG_MAX, DATUM_RE, zeit_fehler
 from shared.vk_db import db_conn
@@ -1235,7 +1235,8 @@ def api_ical_feed():
         gem, _, lk = x.partition("|")
         if gem.strip():
             f_gems.add((_gem_norm(gem).lower(), (lk.strip() or "Landkreis Landshut").lower()))
-    f_regs = {x.lower() for x in _liste("r")}
+    # Region gekürzt vergleichen: alte Favoriten (vor v1.61) tragen noch „Landkreis Landshut“ (v1.63)
+    f_regs = {region_of(x).lower() for x in _liste("r") if region_of(x)}
     nach_ort = bool(f_orte or f_gems or f_regs)
     filtert  = bool(filter_vereine) or nach_ort
 

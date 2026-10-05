@@ -1273,9 +1273,16 @@ async function load(){
 
   renderFavBar();
   renderRubrikBar();
+  // Rubrik-Chips per data-rubrik statt onclick="setRubrik('…')" (v1.63, Rubrik kann aus Admin-PATCH/_meta frei kommen)
+  document.getElementById("rubrik-bar").addEventListener("click",e=>{
+    const b=e.target.closest("[data-rubrik]");
+    if(b)setRubrik(b.dataset.rubrik);
+  });
   document.getElementById("fav-bar").addEventListener("click",e=>{
     const c=e.target.closest("[data-ftype]");
-    if(c)toggleFavChip(c.dataset.ftype,c.dataset.fkey);
+    if(!c)return;
+    if(e.target.closest(".fav-rm"))removeFavorite(c.dataset.ftype,c.dataset.fkey);
+    else toggleFavChip(c.dataset.ftype,c.dataset.fkey);
   });
   document.getElementById("active-pills").addEventListener("click",e=>{
     const p=e.target.closest("[data-pi]");
@@ -1685,8 +1692,8 @@ function renderRubrikBar(){
   // Zähler (data-rcnt) füllt render() – sie zeigen, was die übrigen Filter je Rubrik übrig lassen
   bar.innerHTML=`<button class="rubrik-chip rubrik-alle${aktRubrikSet.size===0?" on":""}" onclick="clearRubrik()">${icon("calendar",14)} <span class="rb-lbl">Alle Veranstaltungen</span><span class="rb-cnt" data-rcnt="*"></span></button>`+tabs.map(r=>{
     const on=aktRubrikSet.has(r);
-    const lbl=(icons[r]||r).replace(/^(<svg.*?<\/svg>) (.*)$/,'$1 <span class="rb-lbl">$2</span>');
-    return `<button class="rubrik-chip${on?" on":""}" onclick="setRubrik('${r}')">${lbl}<span class="rb-cnt" data-rcnt="${escHtml(r)}"></span></button>`;
+    const lbl=(icons[r]||escHtml(r)).replace(/^(<svg.*?<\/svg>) (.*)$/,'$1 <span class="rb-lbl">$2</span>');
+    return `<button class="rubrik-chip${on?" on":""}" data-rubrik="${escHtml(r)}">${lbl}<span class="rb-cnt" data-rcnt="${escHtml(r)}"></span></button>`;
   }).join("");
   _fillRubrikCounts();
 }
@@ -1778,9 +1785,10 @@ function renderFavBar(){
   const label='<span style="font-size:11px;font-weight:700;color:var(--text3);white-space:nowrap;padding-right:4px;letter-spacing:.03em;align-self:center">Favoriten</span>';
   el.innerHTML=label+favorites.map(f=>{
     const on=_favAktiv(f);
-    const key=String(f.key).replace(/"/g,"&quot;").replace(/'/g,"&#39;");
-    const rmBtn=`<span onclick="event.stopPropagation();removeFavorite('${f.type}','${key}')" style="margin-left:4px;opacity:.55;display:inline-flex;align-items:center;vertical-align:middle">${icon("x",11)}</span>`;
-    return `<span class="chip${on?" on":""}" data-ftype="${f.type}" data-fkey="${key}">${icon(FAV_ICON[f.type]||"heart",14)} ${escHtml(f.label)}${rmBtn}</span>`;
+    // Typ/Key nur als data-Attribut, Klicks über den Listener am #fav-bar (v1.63): ein `&#39;` im onclick-Attribut
+    // dekodiert der Browser vor dem JS wieder zu `'` – frei eingegebene Heimatorte konnten so ausbrechen.
+    const rmBtn=`<span class="fav-rm" style="margin-left:4px;opacity:.55;display:inline-flex;align-items:center;vertical-align:middle">${icon("x",11)}</span>`;
+    return `<span class="chip${on?" on":""}" data-ftype="${escHtml(f.type)}" data-fkey="${escHtml(f.key)}">${icon(FAV_ICON[f.type]||"heart",14)} ${escHtml(f.label)}${rmBtn}</span>`;
   }).join("");
 }
 
@@ -4241,7 +4249,7 @@ function showInfoModal(){
         <span class="help-icon">${icon("scale",20)}</span>
         <div><strong>Impressum</strong><span>Josef Fischer &middot; H&ouml;lskofen 13 &middot; 84092 Bayerbach b. Ergoldsbach<br><a href="mailto:Vereinskalender@icloud.com" style="color:var(--accent);text-decoration:none">Vereinskalender@icloud.com</a></span></div>
       </div>
-      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.62 &middot; 2026-10-05 &middot; a sEpp-App</p>
+      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.63 &middot; 2026-10-05 &middot; a sEpp-App</p>
       <button onclick="document.getElementById('info-modal').remove()" style="width:100%;margin-top:16px;padding:12px;background:none;border:1.5px solid var(--border2);border-radius:12px;font-size:14px;color:var(--text2);cursor:pointer">Schlie&szlig;en</button>
     </div>`;
   document.body.appendChild(m);
