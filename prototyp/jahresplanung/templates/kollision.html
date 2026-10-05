@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block titel %}Kollisionswarnung{% endblock %}
+{% block inhalt %}
+<h1>Kollisionswarnung</h1>
+<p class="hint">Nachbau des Vereinsformulars „Neuer Termin“. Im Live-Formular kommt der Verein aus der Anmeldung – hier wählst du ihn aus.
+Geprüft wird die Gemeinde des Veranstaltungsorts und des Vereinssitzes. Pfarrbrief-Gottesdienste zählen nicht.</p>
+
+<div class="card" style="max-width:560px">
+  <label>Verein (im Live-Formular: aus der Anmeldung)</label>
+  <select id="verein">
+    {% for k, name in vereine %}<option value="{{ k }}"{% if k == 'ffw_paindlkofen' %} selected{% endif %}>{{ name }}</option>{% endfor %}
+  </select>
+  <div class="zeile">
+    <div><label>Datum *</label><input id="von" type="date" value="{{ heute }}"></div>
+    <div><label>bis Datum (optional)</label><input id="bis" type="date"></div>
+  </div>
+  <label>Uhrzeit</label><input id="uhrzeit" type="time">
+  <label>Bezeichnung *</label><input type="text" placeholder="z.B. Sommerfest">
+  <label>Ort / Veranstaltungsort</label><input id="ort" type="text" placeholder="z.B. Gasthaus zur Post">
+  <label style="display:flex;gap:8px;align-items:center;color:var(--text)"><input id="we" type="checkbox" style="width:auto"> auch das ganze Wochenende prüfen (Fr–So)</label>
+  <div id="hinweis" aria-live="polite"></div>
+  <button class="btn" type="button" disabled title="Prototyp – speichert nichts">Termin speichern</button>
+</div>
+
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  let timer = null, laufend = 0;
+  function zeige(liste) {
+    const box = $("hinweis");
+    box.replaceChildren();
+    if (!liste.length) return;
+    const tag = liste.filter(x => x.stufe === "gleicher Tag");
+    const div = document.createElement("div");
+    div.className = "warn";
+    const kopf = document.createElement("b");
+    kopf.textContent = tag.length
+      ? "Am selben Tag in deiner Gemeinde schon geplant:"
+      : "Am selben Wochenende in deiner Gemeinde:";
+    div.append(kopf);
+    const ul = document.createElement("ul");
+    ul.style.margin = "6px 0 0"; ul.style.paddingLeft = "18px";
+    for (const x of liste) {
+      const li = document.createElement("li");
+      li.textContent = `${x.datum_text}${x.uhrzeit ? ", " + x.uhrzeit : ""} – ${x.bezeichnung} (${x.verein_name})`
+        + (x.stufe !== "gleicher Tag" ? " · gleiches Wochenende" : "");
+      ul.append(li);
+    }
+    div.append(ul);
+    const fuss = document.createElement("div");
+    fuss.className = "hint";
+    fuss.style.marginTop = "6px";
+    fuss.textContent = "Nur ein Hinweis – du kannst trotzdem speichern.";
+    div.append(fuss);
+    box.append(div);
+  }
+  async function pruefen() {
+    const von = $("von").value;
+    if (!von) { zeige([]); return; }
+    const q = new URLSearchParams({ verein: $("verein").value, von, bis: $("bis").value || von,
+      ort: $("ort").value, uhrzeit: $("uhrzeit").value, wochenende: $("we").checked ? "1" : "0" });
+    const nr = ++laufend;
+    try {
+      const r = await fetch("{{ url_for('api_kollisionen') }}?" + q);
+      const liste = r.ok ? await r.json() : [];
+      if (nr === laufend) zeige(liste);   // nur die neueste Antwort zeigen
+    } catch (e) { /* Hinweis ist optional – Fehler still */ }
+  }
+  for (const id of ["verein", "von", "bis", "uhrzeit", "ort", "we"]) {
+    $(id).addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(pruefen, 400); });
+  }
+  pruefen();
+})();
+</script>
+{% endblock %}

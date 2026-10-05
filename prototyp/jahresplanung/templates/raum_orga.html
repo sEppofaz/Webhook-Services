@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block titel %}{{ r.titel }}{% endblock %}
+{% block css %}
+{% if treffen %}body{font-size:18px}th,td{font-size:17px;padding:10px}.konf{font-size:15px}main{max-width:1400px}{% endif %}
+.verschieben{display:flex;gap:4px;align-items:center}.verschieben input{width:auto;padding:4px 6px}
+.links input{font-size:12px;padding:5px 8px}
+{% endblock %}
+{% block inhalt %}
+<div class="zeile" style="align-items:center">
+  <div style="flex:3 1 300px">
+    <h1>{{ r.titel }}</h1>
+    <p class="hint">{{ r.landkreis }} · Organisator-Ansicht · {% if r.status == 'abgeschlossen' %}<b>abgeschlossen</b>{% else %}offen – Vereine können eintragen{% endif %}</p>
+  </div>
+  <div style="flex:0 0 auto;display:flex;gap:6px;flex-wrap:wrap">
+    {% if treffen %}<a class="btn sek" href="{{ url_for('raum_orga', token=r.token) }}">Normale Ansicht</a>
+    {% else %}<a class="btn sek" href="{{ url_for('raum_orga', token=r.token, ansicht='treffen') }}">Ansicht fürs Treffen (Beamer)</a>{% endif %}
+    <form method="post" action="{{ url_for('raum_orga_status', token=r.token) }}">{{ csrf()|safe }}
+      {% if r.status == 'offen' %}
+        <button class="btn" name="aktion" value="abschliessen" onclick="return confirm('Planung abschließen? Vereine können dann nichts mehr ändern.')">Planung abschließen</button>
+      {% else %}
+        <button class="btn sek" name="aktion" value="oeffnen">Wieder öffnen</button>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+{% if r.status == 'abgeschlossen' %}
+  <div class="ok">Abgeschlossen. Live würden jetzt alle bestätigten und neuen Termine in den Kalender übernommen und Vereine ohne Konto zur Registrierung eingeladen. <b>Im Prototyp wird nichts geschrieben.</b></div>
+{% endif %}
+
+<div class="card">
+  <b>Jahresprogramm herunterladen</b> <span class="hint">– alle nicht verworfenen Termine aller Vereine</span>
+  <div class="exporte" style="margin-top:8px">
+    {% for f, (name_f, _) in FORMATE.items() %}<a class="btn sek klein" href="{{ url_for('raum_orga_export', token=r.token, fmt=f) }}">{{ name_f }}</a>{% endfor %}
+  </div>
+</div>
+
+{% if not treffen %}
+<h2>Vereine und ihre Links ({{ vereine|length }})</h2>
+<p class="hint">Jeder Verein bekommt seinen eigenen Link – ohne Konto. Damit prüft er seine Vorschläge und trägt neue Termine ein. Link per Mail oder WhatsApp weitergeben.</p>
+<div class="card tabelle-wrap links"><table>
+  <tr><th>Verein</th><th>Termine</th><th>offen</th><th>fertig</th><th class="optional">Link</th></tr>
+  {% for v in vereine %}
+  <tr>
+    <td><span class="vfarbe f{{ farben[v.verein_key] }}"></span><a href="{{ url_for('raum_verein', token=v.token) }}" target="_blank">{{ v.verein_name }}</a></td>
+    <td>{{ v.termine }}</td>
+    <td>{% if v.offen %}<span class="chip vorschlag">{{ v.offen }}</span>{% else %}–{% endif %}</td>
+    <td>{% if v.fertig_am %}<span class="chip bestaetigt">fertig</span>{% else %}–{% endif %}</td>
+    <td class="optional"><div style="display:flex;gap:4px"><input readonly value="{{ basis }}{{ url_for('raum_verein', token=v.token) }}" onfocus="this.select()">
+      <button class="btn sek klein" type="button" onclick="navigator.clipboard.writeText(this.previousElementSibling.value);this.textContent='kopiert'">Kopieren</button></div></td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% endif %}
+
+<h2>Konflikte am gleichen Tag ({{ paare|length }})</h2>
+{% if paare %}
+<div class="card tabelle-wrap"><table>
+  <tr><th>Datum</th><th>Termin A</th><th>Termin B</th></tr>
+  {% for p in paare %}
+  <tr>
+    <td class="d">{{ p.a.datum|wochentag_kurz }} {{ p.a.datum|tm }}</td>
+    <td><span class="vfarbe f{{ farben.get(p.a.verein, 0) }}"></span><a href="#t{{ p.a._pid }}">{{ p.a.bezeichnung }}</a><div class="hint">{{ labels.get(p.a.verein, p.a.verein) }} {{ p.a.uhrzeit }}</div></td>
+    <td>{% if p.b.quelle == 'Planung' %}<span class="vfarbe f{{ farben.get(p.b.verein, 0) }}"></span><a href="#t{{ p.b.id[1:] }}">{{ p.b.bezeichnung }}</a>{% else %}{{ p.b.bezeichnung }} <span class="chip">schon im Kalender</span>{% endif %}
+      <div class="hint">{{ p.b.verein_name }} {{ p.b.uhrzeit }}</div></td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% else %}
+  <p class="ok">Keine Termine am gleichen Tag.</p>
+{% endif %}
+
+<h2>Jahresübersicht</h2>
+<p class="hint"><span style="color:var(--rot)">▍</span> gleicher Tag · <span style="color:var(--gelb)">▍</span> gleiches Wochenende. Als Organisatorin kannst du Termine direkt verschieben (z. B. während des Treffens).</p>
+{% for monat, liste in monate %}
+  <h2>{{ monat }}</h2>
+  <div class="card tabelle-wrap"><table>
+    <tr><th>Datum</th><th>Termin</th><th class="optional">Verein</th><th>Status</th><th class="optional">Verschieben</th></tr>
+    {% for t in liste %}
+    <tr id="t{{ t._pid }}" class="{{ 'konflikt' if t._konflikt_tag else ('we' if t._konflikte else '') }}">
+      <td class="d">{{ t.datum|wochentag_kurz }} {{ t.datum|tm }}<div class="hint">{{ zeit_text(t) }}</div></td>
+      <td>{{ t.bezeichnung }}{% if t.ort %}<div class="hint">{{ t.ort }}</div>{% endif %}
+        {% for k in t._konflikte %}<div class="konf"><span class="{{ 'tag' if k.stufe == STUFE_TAG else 'we' }}">●</span> {{ k.datum|wochentag_kurz }} {{ k.bezeichnung }} – {{ k.verein_name }}</div>{% endfor %}</td>
+      <td class="optional"><span class="vfarbe f{{ farben.get(t.verein, 0) }}"></span>{{ labels.get(t.verein, t.verein) }}</td>
+      <td><span class="chip {{ t.status }}">{{ STATUS[t.status] }}</span></td>
+      <td class="optional">{% if r.status == 'offen' %}
+        <form class="verschieben" method="post" action="{{ url_for('raum_orga_termin', token=r.token, tid=t._pid, ansicht='treffen' if treffen else None) }}">{{ csrf()|safe }}
+          <input type="date" name="datum" value="{{ t.datum }}"><button class="btn klein">OK</button></form>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+{% else %}
+  <p class="hint">Noch keine Termine.</p>
+{% endfor %}
+{% endblock %}

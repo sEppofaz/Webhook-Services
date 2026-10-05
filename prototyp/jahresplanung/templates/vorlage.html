@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block titel %}Vorjahres-Vorlage{% endblock %}
+{% macro konflikte(t) %}
+  {% for k in t._konflikte %}
+    <div class="konf"><span class="{{ 'tag' if k.stufe == STUFE_TAG else 'we' }}">●</span>
+      {{ k.datum|wochentag_kurz }} {{ k.datum|tm }} {{ k.uhrzeit }} {{ k.bezeichnung }} – {{ k.verein_name }}
+      <span class="hint">({{ 'Vorschlag' if k.quelle == 'Planung' else 'im Kalender' }}{{ ', gleiches Wochenende' if k.stufe != STUFE_TAG }})</span></div>
+  {% endfor %}
+{% endmacro %}
+{% block inhalt %}
+<h1>Vorjahres-Vorlage</h1>
+<p class="hint">Jeder Termin des Vorjahres bekommt eine Regel und landet damit im Zieljahr. Konflikte werden gegen die Vorschläge aller anderen Vereine und gegen schon veröffentlichte Termine geprüft.</p>
+
+<form class="card zeile" method="get">
+  <div style="flex:3 1 260px"><label>Verein</label>
+    <select name="verein" onchange="this.form.submit()">
+      <option value="">– bitte wählen –</option>
+      {% for k, n in vereine %}<option value="{{ k }}"{% if k == verein %} selected{% endif %}>{{ n }}</option>{% endfor %}
+    </select></div>
+  <div><label>Zieljahr</label><input name="jahr" type="number" value="{{ jahr }}" min="2026" max="2035"></div>
+  <div style="align-self:end"><button class="btn">Anzeigen</button></div>
+</form>
+
+{% if verein %}
+  <h2>{{ name }} · {{ anzahl }} Vorschläge für {{ jahr }}</h2>
+  {% if daten_ab and daten_ab.year == jahr - 1 and daten_ab.month > 1 %}
+    <div class="warn">Termine von Januar bis {{ ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'][daten_ab.month - 2] }} {{ jahr - 1 }} sind nicht erfasst. Fasching, Ostern oder Maibaum fehlen deshalb. Live: alten Jahresplan hochladen (KI-Import) oder von Hand ergänzen.</div>
+  {% endif %}
+  {% if anzahl %}
+  <div class="exporte">
+    {% for f, (name_f, _) in FORMATE.items() %}<a class="btn sek klein" href="{{ url_for('vorlage_export', fmt=f, verein=verein, jahr=jahr) }}">{{ name_f }}</a>{% endfor %}
+  </div>
+  {% for monat, liste in monate %}
+    <h2>{{ monat }}</h2>
+    <div class="card tabelle-wrap"><table>
+      <tr><th>Datum</th><th>Uhrzeit</th><th>Termin</th><th class="optional">Regel</th></tr>
+      {% for t in liste %}
+      <tr class="{{ 'konflikt' if t._konflikt_tag else ('we' if t._konflikte else '') }}">
+        <td class="d">{{ t.datum|wochentag_kurz }} {{ t.datum|tm }}</td>
+        <td class="d">{{ zeit_text(t) }}</td>
+        <td>{{ t.bezeichnung }}{% if t.ort %}<div class="hint">{{ t.ort }}</div>{% endif %}{{ konflikte(t) }}</td>
+        <td class="optional hint">{{ t.regel }}{% if not t.sicher %} <span class="chip">prüfen</span>{% endif %}
+          {% if t.datum_vorjahr %}<div>{{ t.datum_vorjahr|wochentag_kurz }} {{ t.datum_vorjahr|tm }}{{ t.datum_vorjahr[:4] }}</div>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table></div>
+  {% endfor %}
+  {% else %}
+    <p class="hint">Keine Termine im Vorjahr – nichts zu übertragen.</p>
+  {% endif %}
+{% endif %}
+{% endblock %}

@@ -48,3 +48,6 @@ vereinstermine_backup_*.json
 
 # Flask Session-Secret – NIEMALS in Git
 flask_secret.key
+
+# Prototyp Jahresplanung: Datenkopie + SQLite (nicht in Git)
+prototyp/jahresplanung/daten/

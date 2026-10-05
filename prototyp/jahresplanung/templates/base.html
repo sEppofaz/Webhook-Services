@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block titel %}Jahresplanung{% endblock %} · Prototyp</title>
+<style>
+:root{--bg:#f2f2f7;--card:#fff;--text:#1c1c1e;--text2:#6c6c70;--line:#e5e5ea;--accent:#7C3AED;--hdr:#6D28D9;
+  --rot:#dc2626;--rot-bg:#fee2e2;--gelb:#b45309;--gelb-bg:#fef3c7;--gruen:#15803d;--gruen-bg:#dcfce7;--radius:12px;
+  --v0:#7C3AED;--v1:#0891b2;--v2:#ca8a04;--v3:#db2777;--v4:#16a34a;--v5:#ea580c;--v6:#2563eb;--v7:#9333ea}
+@media (prefers-color-scheme:dark){:root{--bg:#1c1c1e;--card:#2c2c2e;--text:#f2f2f7;--text2:#aeaeb2;--line:#3a3a3c;
+  --accent:#8B5CF6;--hdr:#5B21B6;--rot:#f87171;--rot-bg:#451a1a;--gelb:#fbbf24;--gelb-bg:#422006;--gruen:#4ade80;--gruen-bg:#052e16}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+header{background:var(--hdr);color:#fff;padding:12px 16px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+header a{color:#fff;text-decoration:none;opacity:.9}header a:hover{opacity:1;text-decoration:underline}
+header .titel{font-weight:700;margin-right:auto}
+.proto{background:#fef3c7;color:#92400e;font-size:12px;padding:6px 16px;text-align:center}
+main{max-width:1100px;margin:0 auto;padding:16px}
+h1{font-size:22px;margin:8px 0 4px}h2{font-size:17px;margin:20px 0 8px}
+.hint{color:var(--text2);font-size:13px}
+.card{background:var(--card);border-radius:var(--radius);padding:14px 16px;margin:10px 0;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.kacheln{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.kacheln a.card{color:inherit;text-decoration:none;display:block}.kacheln a.card:hover{outline:2px solid var(--accent)}
+label{display:block;font-size:13px;color:var(--text2);margin:10px 0 4px}
+input,select,textarea{font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%;max-width:100%}
+.zeile{display:flex;gap:10px;flex-wrap:wrap}.zeile>*{flex:1 1 140px;min-width:0}
+.btn{display:inline-block;font:inherit;font-weight:600;border:0;border-radius:8px;padding:9px 14px;background:var(--accent);color:#fff;cursor:pointer;text-decoration:none}
+.btn.sek{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+.btn.klein{padding:5px 10px;font-size:13px}.btn.rot{background:var(--rot)}
+.chip{display:inline-block;font-size:12px;border-radius:999px;padding:2px 9px;background:var(--line);color:var(--text2);white-space:nowrap}
+.chip.vorschlag{background:var(--gelb-bg);color:var(--gelb)}.chip.bestaetigt,.chip.neu{background:var(--gruen-bg);color:var(--gruen)}
+.chip.verworfen{text-decoration:line-through}
+.warn{background:var(--gelb-bg);color:var(--gelb);border-radius:8px;padding:10px 12px;margin:10px 0;font-size:14px}
+.warn.rot{background:var(--rot-bg);color:var(--rot)}
+.ok{background:var(--gruen-bg);color:var(--gruen);border-radius:8px;padding:10px 12px;margin:10px 0}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top;font-size:14px}
+th{font-size:12px;color:var(--text2);font-weight:600}
+td.d{white-space:nowrap;font-variant-numeric:tabular-nums}
+tr.konflikt td:first-child{box-shadow:inset 3px 0 var(--rot)}
+tr.we td:first-child{box-shadow:inset 3px 0 var(--gelb)}
+tr.verworfen td{opacity:.45}
+.konf{font-size:12px;margin-top:3px}.konf .tag{color:var(--rot)}.konf .we{color:var(--gelb)}
+.vfarbe{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:middle}
+{% for i in range(8) %}.f{{ i }}{background:var(--v{{ i }})}{% endfor %}
+.exporte{display:flex;gap:6px;flex-wrap:wrap}
+.tabelle-wrap{overflow-x:auto}
+code{background:var(--line);padding:1px 5px;border-radius:4px;font-size:13px}
+details summary{cursor:pointer;color:var(--accent);font-size:13px}
+@media (max-width:640px){th.optional,td.optional{display:none}}
+{% block css %}{% endblock %}
+</style>
+</head>
+<body>
+<header>
+  <span class="titel">Vereinskalender · Jahresplanung</span>
+  <a href="{{ url_for('start') }}">Start</a>
+  <a href="{{ url_for('kollision_seite') }}">Kollisionswarnung</a>
+  <a href="{{ url_for('vorlage_seite') }}">Vorjahres-Vorlage</a>
+  <a href="{{ url_for('planung_liste') }}">Planungstreffen</a>
+</header>
+<div class="proto">Prototyp – lokal, schreibt nichts in den Live-Kalender. Daten: Momentaufnahme der öffentlichen Termine.</div>
+<main>
+{% block inhalt %}{% endblock %}
+</main>
+</body>
+</html>

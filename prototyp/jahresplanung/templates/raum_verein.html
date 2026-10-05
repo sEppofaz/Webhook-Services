@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block titel %}{{ v.verein_name }} – {{ r.titel }}{% endblock %}
+{% block css %}
+.termin{border-left:4px solid transparent}.termin.konflikt{border-left-color:var(--rot)}.termin.we{border-left-color:var(--gelb)}
+.termin.verworfen{opacity:.5}
+.kopf{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}.kopf b{font-size:16px}
+.aktionen{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+details.bearbeiten{margin-top:8px}
+{% endblock %}
+{% block inhalt %}
+<h1>{{ r.titel }}</h1>
+<p><b>{{ v.verein_name }}</b> <span class="hint">– euer Link zur gemeinsamen Jahresplanung, kein Konto nötig.</span></p>
+
+{% if fehler %}<div class="warn rot">{{ fehler }}</div>{% endif %}
+{% if r.status != 'offen' %}<div class="ok">Die Planung ist abgeschlossen. Ihr könnt eure Termine unten herunterladen.</div>{% endif %}
+
+<div class="card">
+  <p style="margin-top:0">So geht's: Wir haben eure Termine aus dem Vorjahr nach ihrem Schema ins Jahr {{ r.jahr }} übertragen.
+  Bitte jeden Vorschlag <b>bestätigen</b>, <b>ändern</b> oder <b>verwerfen</b> und neue Termine ergänzen.
+  Rot markiert: am gleichen Tag hat ein anderer Verein der Gemeinde schon etwas vor. Beim Treffen werden nur diese Konflikte besprochen.</p>
+  {% if daten_ab and daten_ab.year == r.jahr - 1 and daten_ab.month > 1 %}
+  <p class="hint">Hinweis: Termine aus Januar bis {{ ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'][daten_ab.month - 2] }} {{ r.jahr - 1 }} kennen wir noch nicht – bitte unten ergänzen.</p>
+  {% endif %}
+  <div class="aktionen">
+    {% if r.status == 'offen' and offen %}
+    <form method="post" action="{{ url_for('raum_verein_alle', token=v.token) }}">{{ csrf()|safe }}
+      <button class="btn">Alle {{ offen }} offenen Vorschläge bestätigen</button></form>
+    {% endif %}
+    <form method="post" action="{{ url_for('raum_verein_fertig', token=v.token) }}">{{ csrf()|safe }}
+      {% if v.fertig_am %}<button class="btn sek" name="fertig" value="0">Fertig-Meldung zurücknehmen</button>
+      {% else %}<button class="btn sek" name="fertig" value="1">Wir sind fertig</button>{% endif %}
+    </form>
+    <a class="btn sek" href="#neu">Neuen Termin ergänzen</a>
+  </div>
+</div>
+
+{% for monat, liste in monate %}
+  <h2>{{ monat }}</h2>
+  {% for t in liste %}
+  <div id="t{{ t._pid }}" class="card termin {{ t.status }} {{ 'konflikt' if t._konflikt_tag else ('we' if t._konflikte else '') }}">
+    <div class="kopf">
+      <b>{{ t.datum|wochentag_kurz }} {{ t.datum|tm }}{{ t.datum[:4] }}{% if t.uhrzeit %}, {{ zeit_text(t) }}{% endif %}</b>
+      <span>{{ t.bezeichnung }}</span>
+      <span class="chip {{ t.status }}">{{ STATUS[t.status] }}</span>
+    </div>
+    {% if t.ort %}<div class="hint">{{ t.ort }}</div>{% endif %}
+    {% if t.regel %}<div class="hint">{{ t.regel }}</div>{% endif %}
+    {% for k in t._konflikte %}
+      <div class="konf"><span class="{{ 'tag' if k.stufe == STUFE_TAG else 'we' }}">●</span>
+        {{ 'Gleicher Tag' if k.stufe == STUFE_TAG else 'Gleiches Wochenende' }}: {{ k.datum|wochentag_kurz }} {{ k.datum|tm }} {{ k.uhrzeit }} {{ k.bezeichnung }} – {{ k.verein_name }}{% if k.quelle != 'Planung' %} (schon im Kalender){% endif %}</div>
+    {% endfor %}
+    {% if r.status == 'offen' %}
+    <div class="aktionen">
+      <form method="post" action="{{ url_for('raum_verein_termin', token=v.token, tid=t._pid) }}" style="display:flex;gap:6px;flex-wrap:wrap">{{ csrf()|safe }}
+        {% if t.status != 'bestaetigt' and t.status != 'neu' %}<button class="btn klein" name="aktion" value="bestaetigt">Bestätigen</button>{% endif %}
+        {% if t.status != 'verworfen' %}<button class="btn sek klein" name="aktion" value="verworfen">Verwerfen</button>
+        {% else %}<button class="btn sek klein" name="aktion" value="vorschlag">Wiederherstellen</button>{% endif %}
+      </form>
+    </div>
+    <details class="bearbeiten"><summary>Ändern</summary>
+      <form method="post" action="{{ url_for('raum_verein_termin', token=v.token, tid=t._pid) }}">{{ csrf()|safe }}
+        <div class="zeile">
+          <div><label>Datum</label><input type="date" name="datum" value="{{ t.datum }}" required></div>
+          <div><label>Uhrzeit</label><input type="time" name="uhrzeit" value="{{ t.uhrzeit }}"></div>
+          <div><label>bis</label><input type="time" name="uhrzeit_bis" value="{{ t.uhrzeit_bis }}"></div>
+        </div>
+        <label>Bezeichnung</label><input name="bezeichnung" value="{{ t.bezeichnung }}" maxlength="200" required>
+        <label>Ort</label><input name="ort" value="{{ t.ort }}" maxlength="200">
+        <div class="aktionen"><button class="btn klein">Speichern und bestätigen</button></div>
+      </form>
+    </details>
+    {% endif %}
+  </div>
+  {% endfor %}
+{% else %}
+  <p class="hint">Noch keine Termine – unten ergänzen.</p>
+{% endfor %}
+
+{% if r.status == 'offen' %}
+<h2 id="neu">Neuen Termin ergänzen</h2>
+<form class="card" method="post" action="{{ url_for('raum_verein_neu', token=v.token) }}">{{ csrf()|safe }}
+  <div class="zeile">
+    <div><label>Datum *</label><input type="date" name="datum" required min="{{ r.jahr }}-01-01" max="{{ r.jahr }}-12-31"></div>
+    <div><label>Uhrzeit</label><input type="time" name="uhrzeit"></div>
+    <div><label>bis</label><input type="time" name="uhrzeit_bis"></div>
+  </div>
+  <label>Bezeichnung *</label><input name="bezeichnung" maxlength="200" required placeholder="z.B. Starkbierfest">
+  <label>Ort</label><input name="ort" maxlength="200">
+  <div class="aktionen"><button class="btn">Termin ergänzen</button></div>
+</form>
+{% endif %}
+
+<h2>Eure Termine herunterladen</h2>
+<div class="exporte">
+  {% for f, (name_f, _) in FORMATE.items() %}<a class="btn sek klein" href="{{ url_for('raum_verein_export', token=v.token, fmt=f) }}">{{ name_f }}</a>{% endfor %}
+</div>
+<p class="hint">Enthält alle nicht verworfenen Termine. Die Kalenderdatei lässt sich direkt in Outlook, Google oder Apple Kalender importieren.</p>
+{% endblock %}
