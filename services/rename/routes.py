@@ -27,11 +27,40 @@ _RECHNUNGEN_API = "http://127.0.0.1:5003/api/rechnungen"
 _RECHNUNGEN_API_TOKEN = os.environ.get("RECHNUNGEN_API_TOKEN", "")
 
 
-def _notify_rechnungen_api(new_name: str, steuer_kategorie: str | None) -> None:
-    """Neuen Rechnungseintrag per API an den Rechnungen-Service senden (fire-and-forget)."""
+# Dokumentarten, die nicht in die Rechnungen-App gehören (#431: Pfarrbriefe landeten dort)
+_KEINE_RECHNUNG_MUSTER = ("pfarrbrief", "jahreskalender", "veranstaltungskalender")
+_KEINE_RECHNUNG_KATEGORIEN = {"kontakt", "kontoauszug"}
+
+
+def _ist_rechnungsrelevant(new_name: str, kategorie: str | None) -> bool:
+    name = new_name.lower()
+    if any(m in name for m in _KEINE_RECHNUNG_MUSTER):
+        return False
+    if not kategorie:
+        teile = Path(new_name).stem.split("_")
+        kategorie = teile[1] if len(teile) > 1 else ""
+    return kategorie.strip().lower() not in _KEINE_RECHNUNG_KATEGORIEN
+
+
+def _notify_rechnungen_api(new_name: str, steuer_kategorie: str | None, felder: dict | None = None) -> None:
+    """Neuen Rechnungseintrag per API an den Rechnungen-Service senden (fire-and-forget).
+
+    felder: Einzelwerte aus demselben Haiku-Aufruf (datum, kategorie_rename, firma, schlagwort,
+    betrag_raw, roga_kuerzel) – die Rechnungen-App muss das Dokument dann nicht erneut auslesen.
+    Fehlen sie, ergänzt die App sie aus dem Dateinamen.
+    """
+    felder = felder or {}
+    if not _ist_rechnungsrelevant(new_name, felder.get("kategorie_rename")):
+        return
     try:
         import urllib.request
-        payload = json.dumps({"dateiname": new_name, "steuer_kategorie": steuer_kategorie or "Allgemeines"}).encode()
+        body = {k: str(v).strip() for k, v in felder.items() if v not in (None, "")}
+        body.update({
+            "dateiname": new_name,
+            "steuer_kategorie": steuer_kategorie or "Allgemeines",
+            "eingang_datum": datetime.now().strftime("%Y-%m-%d"),
+        })
+        payload = json.dumps(body).encode()
         req = urllib.request.Request(
             _RECHNUNGEN_API,
             data=payload,
@@ -117,7 +146,12 @@ def rename_via_claude(dbx: dropbox.Dropbox, dropbox_path: str) -> None:
         media_type = MEDIA_TYPES.get(suffix, "application/octet-stream")
 
         prompt = f"""Analysiere dieses Dokument und antworte ausschließlich mit einem JSON-Objekt (kein Markdown, keine Erklärung):
-{{"dateiname": "<neuer Dateiname>", "steuer_kategorie": "<Kategorie>"}}
+{{"dateiname": "<neuer Dateiname>", "steuer_kategorie": "<Kategorie>",
+  "datum": "YYYY-MM-DD", "kategorie_rename": "<Kategorie aus dem Dateinamen>",
+  "firma": "<Firma lesbar, mit Leerzeichen>", "schlagwort": "<kurze Beschreibung, lesbar>",
+  "betrag_raw": "<Betrag wie im Dateinamen, z.B. -70.00€, sonst leer>", "roga_kuerzel": "<z.B. RoGa18A, sonst leer>"}}
+Die Einzelfelder müssen inhaltlich zum Dateinamen passen; nur Firma und Schlagwort dürfen
+lesbar mit Leerzeichen statt zusammengezogen geschrieben sein.
 
 Wähle steuer_kategorie aus dieser Liste (exakt so schreiben):
 Allgemeines, Forst- und Landwirtschaft, Gehaltsabrechnungen, Haus und Hof,
@@ -190,11 +224,12 @@ Regeln:
         client  = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
         new_name = None
         steuer_kategorie = None
+        felder = {}
         for attempt in range(1, 4):
             try:
                 message = client.messages.create(
                     model=MODEL,
-                    max_tokens=256,
+                    max_tokens=512,
                     messages=[{"role": "user", "content": content}]
                 )
                 raw = message.content[0].text.strip()
@@ -204,6 +239,8 @@ Regeln:
                     parsed = json.loads(raw)
                     new_name = parsed["dateiname"].strip().strip('"').strip("'")
                     steuer_kategorie = parsed.get("steuer_kategorie")
+                    felder = {k: parsed.get(k) for k in ("datum", "kategorie_rename", "firma",
+                              "schlagwort", "betrag_raw", "roga_kuerzel")}
                 except (json.JSONDecodeError, KeyError):
                     new_name = raw.strip('"').strip("'")
                 break
@@ -237,7 +274,7 @@ Regeln:
         dbx.files_move_v2(dropbox_path, new_path, autorename=False)
         log(f"✅  {filename}  →  {new_name}")
 
-        _notify_rechnungen_api(new_name, steuer_kategorie)
+        _notify_rechnungen_api(new_name, steuer_kategorie, felder)
 
     finally:
         Path(tmp_path).unlink(missing_ok=True)
