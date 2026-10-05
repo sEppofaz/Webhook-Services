@@ -107,3 +107,14 @@ def vereine_der_gemeinde(gemeinde: str, landkreis: str) -> list[tuple[str, str]]
 
 def vereine() -> list[tuple[str, str]]:
     return sorted(daten()["labels"].items(), key=lambda x: x[1].lower())
+
+
+def vereine_gruppiert() -> list[dict]:
+    """Vereine nach Gemeinde des Sitzes, für Auswahllisten: [{gemeinde, landkreis, vereine:[(key, Name)]}].
+    Ohne bekannte Gemeinde am Ende unter „Ohne Gemeinde“."""
+    gruppen: dict = {}
+    for k, name in vereine():
+        g, lk = sitz(k)
+        gruppen.setdefault((g or "", lk if g else ""), []).append((k, name))
+    reihenfolge = sorted(gruppen, key=lambda x: (not x[0], x[0].lower(), x[1]))
+    return [{"gemeinde": g or "Ohne Gemeinde", "landkreis": lk, "vereine": gruppen[(g, lk)]} for g, lk in reihenfolge]

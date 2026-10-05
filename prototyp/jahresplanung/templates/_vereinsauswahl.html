@@ -1,0 +1,44 @@
+{# Durchsuchbare Vereinsauswahl, nach Gemeinde des Sitzes gruppiert (Josef 2026-10-05).
+   gruppen: [{gemeinde, landkreis, vereine:[(key, Name)]}]; name: Formularfeld der Checkboxen. #}
+{% macro vereinsauswahl(gruppen, name, id) %}
+<div class="vauswahl" id="{{ id }}">
+  <input type="search" class="vauswahl-suche" placeholder="Verein oder Gemeinde suchen …" aria-label="Vereine durchsuchen">
+  <div class="vauswahl-liste">
+    {% for g in gruppen %}
+    <fieldset class="vauswahl-gruppe" data-gemeinde="{{ g.gemeinde|lower }}">
+      <legend>{{ g.gemeinde }}{% if g.landkreis %} <span class="hint">· {{ g.landkreis }}</span>{% endif %}</legend>
+      {% for k, n in g.vereine %}
+      <label class="vauswahl-eintrag" data-text="{{ n|lower }}"><input type="checkbox" name="{{ name }}" value="{{ k }}"> {{ n }}</label>
+      {% endfor %}
+    </fieldset>
+    {% endfor %}
+  </div>
+  <div class="hint vauswahl-zahl"></div>
+</div>
+<script>
+(function () {
+  const box = document.getElementById("{{ id }}");
+  const suche = box.querySelector(".vauswahl-suche"), zahl = box.querySelector(".vauswahl-zahl");
+  function zaehlen() {
+    const n = box.querySelectorAll("input[type=checkbox]:checked").length;
+    zahl.textContent = n ? `${n} ausgewählt` : "";
+  }
+  suche.addEventListener("input", () => {
+    const q = suche.value.trim().toLowerCase();
+    for (const g of box.querySelectorAll(".vauswahl-gruppe")) {
+      const gemTreffer = !q || g.dataset.gemeinde.includes(q);
+      let sichtbar = 0;
+      for (const e of g.querySelectorAll(".vauswahl-eintrag")) {
+        const zeigen = gemTreffer || e.dataset.text.includes(q);
+        e.style.display = zeigen ? "" : "none";
+        sichtbar += zeigen;
+      }
+      g.style.display = sichtbar ? "" : "none";
+    }
+  });
+  box.addEventListener("change", zaehlen);
+  box.zaehlen = zaehlen;
+  zaehlen();
+})();
+</script>
+{% endmacro %}

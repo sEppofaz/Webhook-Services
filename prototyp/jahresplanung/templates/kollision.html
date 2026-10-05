@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_vereinsauswahl.html" import vereinsauswahl %}
 {% block titel %}Kollisionswarnung{% endblock %}
 {% block inhalt %}
 <h1>Kollisionswarnung</h1>
@@ -17,7 +18,12 @@ Geprüft wird die Gemeinde des Veranstaltungsorts und des Vereinssitzes. Pfarrbr
   <label>Uhrzeit</label><input id="uhrzeit" type="time">
   <label>Bezeichnung *</label><input type="text" placeholder="z.B. Sommerfest">
   <label>Ort / Veranstaltungsort</label><input id="ort" type="text" placeholder="z.B. Gasthaus zur Post">
-  <label style="display:flex;gap:8px;align-items:center;color:var(--text)"><input id="we" type="checkbox" style="width:auto"> auch das ganze Wochenende prüfen (Fr–So)</label>
+  <label style="display:flex;gap:8px;align-items:center;color:var(--text)"><input id="we" type="checkbox"> auch das ganze Wochenende prüfen (Fr–So)</label>
+  <details id="nachbarn-box" style="margin-top:12px">
+    <summary>Weitere Vereine einbeziehen (Nachbarschaft) <span id="nachbarn-zahl"></span></summary>
+    <p class="hint">Automatisch geprüft wird nur die eigene Gemeinde. Hier Vereine aus der direkten Nachbarschaft dazunehmen – ihre Termine zählen dann immer, egal wo. Die Auswahl merkt sich der Browser je Verein (live: im Vereinsprofil).</p>
+    {{ vereinsauswahl(gruppen, "nachbar", "nachbarn") }}
+  </details>
   <div id="hinweis" aria-live="polite"></div>
   <button class="btn" type="button" disabled title="Prototyp – speichert nichts">Termin speichern</button>
 </div>
@@ -35,15 +41,16 @@ Geprüft wird die Gemeinde des Veranstaltungsorts und des Vereinssitzes. Pfarrbr
     div.className = "warn";
     const kopf = document.createElement("b");
     kopf.textContent = tag.length
-      ? "Am selben Tag in deiner Gemeinde schon geplant:"
-      : "Am selben Wochenende in deiner Gemeinde:";
+      ? "Am selben Tag in deiner Gemeinde oder Nachbarschaft schon geplant:"
+      : "Am selben Wochenende in deiner Gemeinde oder Nachbarschaft:";
     div.append(kopf);
     const ul = document.createElement("ul");
     ul.style.margin = "6px 0 0"; ul.style.paddingLeft = "18px";
     for (const x of liste) {
       const li = document.createElement("li");
       li.textContent = `${x.datum_text}${x.uhrzeit ? ", " + x.uhrzeit : ""} – ${x.bezeichnung} (${x.verein_name})`
-        + (x.stufe !== "gleicher Tag" ? " · gleiches Wochenende" : "");
+        + (x.stufe !== "gleicher Tag" ? " · gleiches Wochenende" : "")
+        + (x.nachbar ? " · Nachbarschaft" : "");
       ul.append(li);
     }
     div.append(ul);
@@ -58,7 +65,8 @@ Geprüft wird die Gemeinde des Veranstaltungsorts und des Vereinssitzes. Pfarrbr
     const von = $("von").value;
     if (!von) { zeige([]); return; }
     const q = new URLSearchParams({ verein: $("verein").value, von, bis: $("bis").value || von,
-      ort: $("ort").value, uhrzeit: $("uhrzeit").value, wochenende: $("we").checked ? "1" : "0" });
+      ort: $("ort").value, uhrzeit: $("uhrzeit").value, wochenende: $("we").checked ? "1" : "0",
+      mit: nachbarn().join(",") });
     const nr = ++laufend;
     try {
       const r = await fetch("{{ url_for('api_kollisionen') }}?" + q);
@@ -66,9 +74,31 @@ Geprüft wird die Gemeinde des Veranstaltungsorts und des Vereinssitzes. Pfarrbr
       if (nr === laufend) zeige(liste);   // nur die neueste Antwort zeigen
     } catch (e) { /* Hinweis ist optional – Fehler still */ }
   }
+  // Nachbar-Auswahl je Verein merken (nur Komfort – ohne Speicher geht es genauso)
+  const box = $("nachbarn");
+  const schluessel = () => "jp_nachbarn_" + $("verein").value;
+  function nachbarn() { return [...box.querySelectorAll("input[name=nachbar]:checked")].map(x => x.value); }
+  function nachbarnLaden() {
+    let gemerkt = [];
+    try { gemerkt = JSON.parse(localStorage.getItem(schluessel()) || "[]"); } catch (e) {}
+    for (const c of box.querySelectorAll("input[name=nachbar]")) c.checked = gemerkt.includes(c.value);
+    zahlZeigen();
+  }
+  function zahlZeigen() {
+    const n = nachbarn().length;
+    $("nachbarn-zahl").textContent = n ? `(${n})` : "";
+    box.zaehlen && box.zaehlen();
+  }
+  box.addEventListener("change", () => {
+    try { localStorage.setItem(schluessel(), JSON.stringify(nachbarn())); } catch (e) {}
+    zahlZeigen();
+    pruefen();
+  });
+  $("verein").addEventListener("change", nachbarnLaden);
   for (const id of ["verein", "von", "bis", "uhrzeit", "ort", "we"]) {
     $(id).addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(pruefen, 400); });
   }
+  nachbarnLaden();
   pruefen();
 })();
 </script>

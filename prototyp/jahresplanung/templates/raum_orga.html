@@ -1,9 +1,10 @@
 {% extends "base.html" %}
+{% from "_vereinsauswahl.html" import vereinsauswahl %}
 {% block titel %}{{ r.titel }}{% endblock %}
 {% block css %}
 {% if treffen %}body{font-size:18px}th,td{font-size:17px;padding:10px}.konf{font-size:15px}main{max-width:1400px}{% endif %}
-.verschieben{display:flex;gap:4px;align-items:center}.verschieben input{width:auto;padding:4px 6px}
-.links input{font-size:12px;padding:5px 8px}
+.verschieben{display:flex;gap:4px;align-items:center}.verschieben input{width:auto}
+.links input{font-size:12px}
 {% endblock %}
 {% block inhalt %}
 <div class="zeile" style="align-items:center">
@@ -36,21 +37,41 @@
 </div>
 
 {% if not treffen %}
-<h2>Vereine und ihre Links ({{ vereine|length }})</h2>
-<p class="hint">Jeder Verein bekommt seinen eigenen Link – ohne Konto. Damit prüft er seine Vorschläge und trägt neue Termine ein. Link per Mail oder WhatsApp weitergeben.</p>
-<div class="card tabelle-wrap links"><table>
-  <tr><th>Verein</th><th>Termine</th><th>offen</th><th>fertig</th><th class="optional">Link</th></tr>
+{% set aktive = vereine|selectattr("aktiv")|list %}
+<h2 id="vereine">Vereine und ihre Links ({{ aktive|length }})</h2>
+<p class="hint">Jeder Verein bekommt seinen eigenen Link – ohne Konto. Damit prüft er seine Vorschläge und trägt neue Termine ein. Link per Mail oder WhatsApp weitergeben.
+Abwählen löscht nichts: die Termine zählen nur nicht mehr mit, und der Link ist gesperrt, bis der Verein wieder aufgenommen wird.</p>
+<div class="card tabelle-wrap links kompakt"><table>
+  <tr><th>Verein</th><th>Termine</th><th>offen</th><th>fertig</th><th class="optional">Link</th><th></th></tr>
   {% for v in vereine %}
-  <tr>
-    <td><span class="vfarbe f{{ farben[v.verein_key] }}"></span><a href="{{ url_for('raum_verein', token=v.token) }}" target="_blank">{{ v.verein_name }}</a></td>
-    <td>{{ v.termine }}</td>
-    <td>{% if v.offen %}<span class="chip vorschlag">{{ v.offen }}</span>{% else %}–{% endif %}</td>
-    <td>{% if v.fertig_am %}<span class="chip bestaetigt">fertig</span>{% else %}–{% endif %}</td>
-    <td class="optional"><div style="display:flex;gap:4px"><input readonly value="{{ basis }}{{ url_for('raum_verein', token=v.token) }}" onfocus="this.select()">
-      <button class="btn sek klein" type="button" onclick="navigator.clipboard.writeText(this.previousElementSibling.value);this.textContent='kopiert'">Kopieren</button></div></td>
+  <tr class="{{ '' if v.aktiv else 'abgewaehlt' }}">
+    <td><span class="vfarbe f{{ farben[v.verein_key] }}"></span>{% if v.aktiv %}<a href="{{ url_for('raum_verein', token=v.token) }}" target="_blank">{{ v.verein_name }}</a>{% else %}{{ v.verein_name }}{% endif %}
+      {% if v.verein_key in nachbarn %}<span class="chip nachbar">Nachbar</span>{% endif %}
+      {% if not v.aktiv %}<span class="chip">abgewählt</span>{% endif %}</td>
+    <td>{{ v.termine if v.aktiv else '–' }}</td>
+    <td>{% if v.aktiv and v.offen %}<span class="chip vorschlag">{{ v.offen }}</span>{% else %}–{% endif %}</td>
+    <td>{% if v.aktiv and v.fertig_am %}<span class="chip bestaetigt">fertig</span>{% else %}–{% endif %}</td>
+    <td class="optional">{% if v.aktiv %}<div style="display:flex;gap:4px"><input readonly value="{{ basis }}{{ url_for('raum_verein', token=v.token) }}" onfocus="this.select()">
+      <button class="btn sek klein" type="button" onclick="navigator.clipboard.writeText(this.previousElementSibling.value);this.textContent='kopiert'">Kopieren</button></div>{% endif %}</td>
+    <td>{% if r.status == 'offen' %}
+      <form method="post" action="{{ url_for('raum_orga_verein', token=r.token, vid=v.id) }}">{{ csrf()|safe }}
+        {% if v.aktiv %}<button class="btn sek klein" name="aktiv" value="0">Abwählen</button>
+        {% else %}<button class="btn klein" name="aktiv" value="1">Wieder aufnehmen</button>{% endif %}
+      </form>{% endif %}</td>
   </tr>
   {% endfor %}
 </table></div>
+
+{% if r.status == 'offen' %}
+<details class="card" id="dazuholen">
+  <summary style="font-size:15px;font-weight:600">Vereine dazuholen – z. B. aus der Nachbargemeinde</summary>
+  <p class="hint">Dazugeholte Vereine bekommen einen eigenen Link und ihre Vorjahres-Vorlage. Ihre Termine zählen bei den Konflikten immer mit, auch wenn sie in einer anderen Gemeinde sitzen.</p>
+  <form method="post" action="{{ url_for('raum_orga_dazuholen', token=r.token) }}">{{ csrf()|safe }}
+    {{ vereinsauswahl(gruppen, "verein", "dazu") }}
+    <button class="btn" style="margin-top:10px">Ausgewählte dazuholen</button>
+  </form>
+</details>
+{% endif %}
 {% endif %}
 
 <h2>Konflikte am gleichen Tag ({{ paare|length }})</h2>
@@ -84,7 +105,7 @@
       <td class="optional"><span class="vfarbe f{{ farben.get(t.verein, 0) }}"></span>{{ labels.get(t.verein, t.verein) }}</td>
       <td><span class="chip {{ t.status }}">{{ STATUS[t.status] }}</span></td>
       <td class="optional">{% if r.status == 'offen' %}
-        <form class="verschieben" method="post" action="{{ url_for('raum_orga_termin', token=r.token, tid=t._pid, ansicht='treffen' if treffen else None) }}">{{ csrf()|safe }}
+        <form class="verschieben kompakt" method="post" action="{{ url_for('raum_orga_termin', token=r.token, tid=t._pid, ansicht='treffen' if treffen else None) }}">{{ csrf()|safe }}
           <input type="date" name="datum" value="{{ t.datum }}"><button class="btn klein">OK</button></form>{% endif %}</td>
     </tr>
     {% endfor %}

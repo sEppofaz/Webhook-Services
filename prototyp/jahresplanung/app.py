@@ -29,6 +29,7 @@ from shared.wiederholung import MONATE
 
 app = Flask(__name__)
 app.secret_key = os.urandom(32)   # Prototyp: Sitzungen gelten bis zum Neustart
+app.config["TEMPLATES_AUTO_RELOAD"] = True   # Vorlagen-Änderungen ohne Neustart sichtbar (zum Basteln)
 
 TEXT_MAX = 200
 
@@ -74,7 +75,7 @@ def _kalender_im_jahr(jahr: int) -> list[dict]:
     return [t for t in D.daten()["termine"] if t.get("datum", "")[:4] == str(jahr)]
 
 
-def _mit_konflikten(eigene: list[dict], andere: list[dict]) -> list[dict]:
+def _mit_konflikten(eigene: list[dict], andere: list[dict], zusatz: set | None = None) -> list[dict]:
     """Jedem Termin seine Kollisionen anhängen (`_konflikte`), Quelle Planung/Kalender markiert."""
     d = D.daten()
     for t in eigene:
@@ -82,7 +83,7 @@ def _mit_konflikten(eigene: list[dict], andere: list[dict]) -> list[dict]:
             t["_konflikte"] = []
             continue
         k = kollisionen(andere, d["meta"], d["labels"], t, d["rubriken"], wochenende=True,
-                        ausser_ids={t.get("id")})
+                        ausser_ids={t.get("id")}, zusatz_vereine=zusatz)
         for x in k:
             x["quelle"] = "Planung" if str(x.get("id", "")).startswith("p") else "Kalender"
         t["_konflikte"] = k
@@ -131,7 +132,8 @@ def daten_holen():
 
 @app.get("/kollision")
 def kollision_seite():
-    return render_template("kollision.html", vereine=D.vereine(), heute=date.today().isoformat())
+    return render_template("kollision.html", vereine=D.vereine(), gruppen=D.vereine_gruppiert(),
+                           heute=date.today().isoformat())
 
 
 @app.get("/api/kollisionen")
@@ -148,8 +150,9 @@ def api_kollisionen():
     d = D.daten()
     entwurf = {"verein": request.args.get("verein", ""), "tage": tage,
                "ort": request.args.get("ort", "")[:TEXT_MAX], "uhrzeit": request.args.get("uhrzeit", "")[:5]}
+    mit = {x for x in request.args.get("mit", "").split(",") if x in d["labels"]}
     k = kollisionen(d["termine"], d["meta"], d["labels"], entwurf, d["rubriken"],
-                    wochenende=request.args.get("wochenende") == "1")
+                    wochenende=request.args.get("wochenende") == "1", zusatz_vereine=mit)
     return jsonify([{**x, "datum_text": datum_text(x)} for x in k])
 
 
@@ -220,7 +223,9 @@ def _raum_konflikte(r, eigene_key: str | None = None) -> tuple[list[dict], list[
     aktive = [t for t in alle if t["status"] != "verworfen"]
     andere = aktive + _kalender_im_jahr(r["jahr"])
     eigene = [t for t in alle if not eigene_key or t["verein"] == eigene_key]
-    _mit_konflikten(eigene, andere)
+    # Wer im Raum ist, zählt immer – auch dazugeholte Nachbarn aus einer anderen Gemeinde
+    im_raum = {v["verein_key"] for v in db.vereine_im_raum(r["id"]) if v["aktiv"]}
+    _mit_konflikten(eigene, andere, zusatz=im_raum)
     paare, gesehen = [], set()
     for t in eigene:
         for k in t.get("_konflikte", []):
@@ -242,7 +247,12 @@ def raum_orga(token):
     labels = D.daten()["labels"]
     vereine = db.vereine_im_raum(r["id"])
     farben = {v["verein_key"]: i % 8 for i, v in enumerate(vereine)}
+    im_raum = {v["verein_key"] for v in vereine if v["aktiv"]}
+    gruppen = [{**g, "vereine": [x for x in g["vereine"] if x[0] not in im_raum]} for g in D.vereine_gruppiert()]
     return render_template("raum_orga.html", r=r, vereine=vereine, paare=paare, labels=labels, farben=farben,
+                           gruppen=[g for g in gruppen if g["vereine"]],
+                           nachbarn={v["verein_key"] for v in vereine
+                                     if D.sitz(v["verein_key"]) != (r["gemeinde"], r["landkreis"])},
                            monate=_nach_monat([t for t in termine if t["status"] != "verworfen"]),
                            treffen=request.args.get("ansicht") == "treffen",
                            basis=request.host_url.rstrip("/"))
@@ -267,6 +277,25 @@ def raum_orga_status(token):
     return redirect(url_for("raum_orga", token=token))
 
 
+@app.post("/p/<token>/verein/<int:vid>")
+def raum_orga_verein(token, vid):
+    """Verein abwählen oder wieder aufnehmen."""
+    r = _raum_oder_404(token)
+    db.verein_aktiv(r["id"], vid, request.form.get("aktiv") == "1")
+    return redirect(url_for("raum_orga", token=token) + "#vereine")
+
+
+@app.post("/p/<token>/dazuholen")
+def raum_orga_dazuholen(token):
+    """Verein aus einer anderen (Nachbar-)Gemeinde oder einen abgewählten wieder dazuholen."""
+    r = _raum_oder_404(token)
+    labels = D.daten()["labels"]
+    for key in request.form.getlist("verein")[:50]:
+        if key in labels:
+            db.verein_dazuholen(r["id"], key, labels[key], D.vorschlaege(r["jahr"]))
+    return redirect(url_for("raum_orga", token=token) + "#vereine")
+
+
 @app.get("/p/<token>/export.<fmt>")
 def raum_orga_export(token, fmt):
     r = _raum_oder_404(token)
@@ -277,6 +306,8 @@ def _verein_oder_404(token):
     v = db.verein_per_token(token)
     if not v:
         abort(404)
+    if not v["aktiv"]:
+        abort(403, "Euer Verein ist in dieser Planung nicht (mehr) dabei. Bitte bei der Organisatorin melden.")
     return v, db.raum(v["raum_id"])
 
 

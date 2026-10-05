@@ -133,6 +133,14 @@ pruefe(k == [], "eigener Termin beim Bearbeiten ausgenommen")
 k = kollisionen(TERMINE, META, LABELS, {"verein": "d", "datum": "2026-07-11", "_geo": geo("Andersort")}, RUBRIKEN)
 pruefe(k == [], "andere Gemeinde kollidiert nicht")
 pruefe(kollisionen(TERMINE, META, LABELS, {"verein": "a", "datum": "kaputt"}, RUBRIKEN) == [], "kaputtes Datum")
+k = kollisionen(TERMINE, META, LABELS, {"verein": "a", "datum": "2026-07-11", "_geo": geo("Testdorf")}, RUBRIKEN,
+                zusatz_vereine={"d"})
+pruefe(sorted((x["id"], x["nachbar"]) for x in k) == [("1", False), ("2", True)], "Nachbarverein aus anderer Gemeinde zählt")
+k = kollisionen(TERMINE, META, LABELS, {"verein": "a", "datum": "2026-07-11", "_geo": geo("Testdorf")}, RUBRIKEN,
+                zusatz_vereine={"b"})
+pruefe([x["nachbar"] for x in k] == [False], "Zusatzverein aus eigener Gemeinde ist kein Nachbar")
+k = kollisionen(TERMINE, META, LABELS, {"verein": "x", "datum": "2026-07-11"}, RUBRIKEN, zusatz_vereine={"d"})
+pruefe([x["id"] for x in k] == ["2"], "ohne bekannte Gemeinde nur die gewählten Vereine")
 
 # ── 3. Export ────────────────────────────────────────────────────────────────
 print("3. Export")
@@ -196,6 +204,10 @@ else:
            "POST ohne CSRF abgelehnt")
     j = c.get("/api/kollisionen?verein=a&von=2026-07-11&ort=Testdorf").get_json()
     pruefe([x["bezeichnung"] for x in j] == ["Grillfest"], f"API-Kollisionen, war {j}")
+    j = c.get("/api/kollisionen?verein=a&von=2026-07-11&mit=d,gibtsnicht").get_json()
+    pruefe(sorted(x["bezeichnung"] for x in j) == ["Fremdfest", "Grillfest"], f"API mit Nachbarn, war {j}")
+    s = c.get("/kollision")
+    pruefe(b"Weitere Vereine einbeziehen" in s.data and b'value="d"' in s.data, "Nachbar-Auswahl auf der Seite")
     s = c.get("/vorlage?verein=b&jahr=2027")
     pruefe(b"Karfreitag" in s.data and b"Sommerfest" in s.data, "Vorlage zeigt Regel und Konflikt")
     pruefe(c.get("/vorlage/export.ics?verein=b&jahr=2027").data.count(b"BEGIN:VEVENT") == 2, "Vorlage-Export")
@@ -239,6 +251,23 @@ else:
     pruefe(c.get(f"{orga}/export.docx").status_code == 200, "Gemeinde-Export")
     pruefe(c.get(f"{orga}/export.exe").status_code == 404, "unbekanntes Format 404")
     pruefe(c.get("/p/falsch").status_code == 404 and c.get("/v/falsch").status_code == 404, "falscher Token 404")
+    # Verein abwählen: Termine zählen nicht mehr, Link gesperrt; wieder aufnehmen stellt alles her
+    vid_b = DB.verein_per_token(links[[i for i, l in enumerate(links) if l.decode() != link_a
+                                        and b"Grillfest" in c.get(l.decode()).data][0]].decode()[3:])["id"]
+    link_b = next(l.decode() for l in links if DB.verein_per_token(l.decode()[3:])["id"] == vid_b)
+    c.post(f"{orga}/verein/{vid_b}", data={"_csrf": tok, "aktiv": "0"})
+    pruefe(c.get(link_b).status_code == 403, "abgewählter Verein: Link gesperrt")
+    pruefe(all(t["verein"] != "b" for t in DB.termine_im_raum(1)), "abgewählter Verein: Termine zählen nicht")
+    pruefe(b"abgew\xc3\xa4hlt" in c.get(orga).data, "abgewählt in der Liste sichtbar")
+    c.post(f"{orga}/dazuholen", data={"_csrf": tok, "verein": ["b"]})
+    pruefe(c.get(link_b).status_code == 200 and any(t["verein"] == "b" for t in DB.termine_im_raum(1)),
+           "wieder aufgenommen mit alten Terminen und altem Link")
+    # Nachbarverein dazuholen: eigener Link, Vorlage, Konflikt über die Gemeindegrenze
+    c.post(f"{orga}/dazuholen", data={"_csrf": tok, "verein": ["d", "gibtsnicht"]})
+    s = c.get(orga)
+    pruefe(b"Nachbar</span>" in s.data and b"Fremdfest" in s.data, "Nachbarverein dazugeholt mit Vorlage")
+    pruefe(DB.termine_im_raum(1, "d")[0]["datum"] == "2027-07-10", "Vorlage des Nachbarn übertragen")
+    pruefe(b"Konflikte am gleichen Tag (1)" in s.data, "Konflikt mit Nachbar zählt (Grillfest/Fremdfest)")
     # Abschließen sperrt Vereine
     c.post(f"{orga}/status", data={"_csrf": tok, "aktion": "abschliessen"})
     pruefe(c.post(f"{link_a}/neu", data={"_csrf": tok, "datum": "2027-05-02", "bezeichnung": "Spät"}).status_code == 403,

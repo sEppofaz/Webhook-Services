@@ -58,14 +58,17 @@ def _wochenende(d: date) -> date | None:
 
 def kollisionen(termine: list[dict], meta: dict, labels: dict, entwurf: dict,
                 rubriken: dict | None = None, zuordnung: list | None = None,
-                wochenende: bool = False, ausser_ids: set | None = None) -> list[dict]:
+                wochenende: bool = False, ausser_ids: set | None = None,
+                zusatz_vereine: set | None = None) -> list[dict]:
     """Kollisionen für einen Entwurf.
 
     entwurf: `verein` (Pflicht), `ort`, `uhrzeit` und entweder `datum` oder `tage` (Liste ISO-Daten,
     mehrtägig). wochenende=True meldet zusätzlich Termine am selben Wochenende (Fr–So) als
     schwächere Stufe – fürs Planungstreffen. ausser_ids: Termin-IDs, die nicht zählen (der
-    Termin selbst beim Bearbeiten).
-    Rückgabe sortiert: {id, datum, uhrzeit, bezeichnung, verein, verein_name, ort, stufe, entwurf_datum}.
+    Termin selbst beim Bearbeiten). zusatz_vereine: Vereine, die unabhängig von der Gemeinde
+    zählen – aktiv gewählte Nachbarn jenseits der Gemeindegrenze (Josef 2026-10-05).
+    Rückgabe sortiert: {id, datum, uhrzeit, bezeichnung, verein, verein_name, ort, stufe, entwurf_datum,
+    nachbar (True = nur über zusatz_vereine gefunden)}.
     """
     eigener = entwurf.get("verein", "")
     tage = entwurf.get("tage") or ([entwurf["datum"]] if entwurf.get("datum") else [])
@@ -76,7 +79,8 @@ def kollisionen(termine: list[dict], meta: dict, labels: dict, entwurf: dict,
     if not tage_d:
         return []
     meine = gemeinden_von({**entwurf, "datum": tage[0]}, meta, labels, rubriken, zuordnung)
-    if not meine:
+    zusatz = set(zusatz_vereine or ())
+    if not meine and not zusatz:
         return []
 
     nach_tag = {d.isoformat(): d.isoformat() for d in tage_d}
@@ -100,14 +104,17 @@ def kollisionen(termine: list[dict], meta: dict, labels: dict, entwurf: dict,
             continue
         if ist_regelgottesdienst(t, meta.get(vkey)):
             continue
-        if not (gemeinden_von(t, meta, labels, rubriken, zuordnung) & meine):
+        in_gemeinde = bool(meine and gemeinden_von(t, meta, labels, rubriken, zuordnung) & meine)
+        if not in_gemeinde and vkey not in zusatz:
             continue
+        nachbar = not in_gemeinde
         treffer.append({
             "id": t.get("id", ""),
             "datum": tag, "uhrzeit": t.get("uhrzeit", ""), "bezeichnung": t.get("bezeichnung", ""),
             "verein": vkey, "verein_name": labels.get(vkey, vkey), "ort": t.get("ort", ""),
             "stufe": STUFE_TAG if tag in nach_tag else STUFE_WOCHENENDE,
             "entwurf_datum": nach_tag.get(tag) or nach_we[tag],
+            "nachbar": nachbar,
         })
     treffer.sort(key=lambda x: (x["stufe"] != STUFE_TAG, x["datum"], x["uhrzeit"]))
     return treffer

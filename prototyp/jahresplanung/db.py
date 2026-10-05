@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS planung_verein (
     verein_name TEXT NOT NULL,
     token       TEXT NOT NULL UNIQUE,      -- Link des Vereins (ohne Konto)
     fertig_am   TEXT,                      -- Verein hat „fertig“ gemeldet
+    aktiv       INTEGER NOT NULL DEFAULT 1, -- 0 = von der Organisatorin abgewählt (Termine bleiben erhalten)
     UNIQUE (raum_id, verein_key)
 );
 CREATE TABLE IF NOT EXISTS planung_termin (
@@ -73,6 +74,10 @@ def conn():
 def init():
     with conn() as c:
         c.executescript(_SCHEMA)
+        # Migration für Räume von vor dem Abwählen (2026-10-05)
+        spalten = {r["name"] for r in c.execute("PRAGMA table_info(planung_verein)")}
+        if "aktiv" not in spalten:
+            c.execute("ALTER TABLE planung_verein ADD COLUMN aktiv INTEGER NOT NULL DEFAULT 1")
 
 
 def jetzt() -> str:
@@ -88,25 +93,45 @@ def neuer_raum(gemeinde: str, landkreis: str, jahr: int, vereine: list[tuple[str
                         "VALUES (?,?,?,?,?,?)",
                         (token, gemeinde, landkreis, jahr, f"Jahresplanung {jahr} – {gemeinde}", jetzt()))
         raum_id = cur.lastrowid
-        keys = {k for k, _ in vereine}
         for k, name in vereine:
-            c.execute("INSERT INTO planung_verein (raum_id, verein_key, verein_name, token) VALUES (?,?,?,?)",
-                      (raum_id, k, name, secrets.token_urlsafe(16)))
-        for v in vorschlaege:
-            if v.get("verein") in keys:
-                c.execute("INSERT INTO planung_termin (raum_id, verein_key, datum, uhrzeit, uhrzeit_bis, bezeichnung, "
-                          "ort, status, regel, datum_vorjahr, geo_json, geaendert_am) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-                          (raum_id, v["verein"], v["datum"], v.get("uhrzeit", ""), v.get("uhrzeit_bis", ""),
-                           v["bezeichnung"], v.get("ort", ""), "vorschlag", v.get("regel", ""),
-                           v.get("datum_vorjahr", ""), json.dumps(v["_geo"], ensure_ascii=False) if v.get("_geo") else None,
-                           jetzt()))
+            _verein_einfuegen(c, raum_id, k, name, vorschlaege)
     return token
+
+
+def _verein_einfuegen(c, raum_id: int, key: str, name: str, vorschlaege: list[dict]) -> None:
+    c.execute("INSERT INTO planung_verein (raum_id, verein_key, verein_name, token) VALUES (?,?,?,?)",
+              (raum_id, key, name, secrets.token_urlsafe(16)))
+    for v in vorschlaege:
+        if v.get("verein") == key:
+            c.execute("INSERT INTO planung_termin (raum_id, verein_key, datum, uhrzeit, uhrzeit_bis, bezeichnung, "
+                      "ort, status, regel, datum_vorjahr, geo_json, geaendert_am) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                      (raum_id, key, v["datum"], v.get("uhrzeit", ""), v.get("uhrzeit_bis", ""),
+                       v["bezeichnung"], v.get("ort", ""), "vorschlag", v.get("regel", ""),
+                       v.get("datum_vorjahr", ""), json.dumps(v["_geo"], ensure_ascii=False) if v.get("_geo") else None,
+                       jetzt()))
+
+
+def verein_dazuholen(raum_id: int, key: str, name: str, vorschlaege: list[dict]) -> None:
+    """Verein in den Raum holen: war er schon da (abgewählt), wird er wieder aktiv – mit seinen
+    bisherigen Terminen. Sonst neu mit Link und seiner Vorjahres-Vorlage."""
+    with conn() as c:
+        if c.execute("SELECT 1 FROM planung_verein WHERE raum_id = ? AND verein_key = ?", (raum_id, key)).fetchone():
+            c.execute("UPDATE planung_verein SET aktiv = 1 WHERE raum_id = ? AND verein_key = ?", (raum_id, key))
+        else:
+            _verein_einfuegen(c, raum_id, key, name, vorschlaege)
+
+
+def verein_aktiv(raum_id: int, verein_id: int, aktiv: bool) -> None:
+    """Abwählen löscht nichts: Termine bleiben, zählen aber nicht mehr, und der Link sperrt."""
+    with conn() as c:
+        c.execute("UPDATE planung_verein SET aktiv = ? WHERE id = ? AND raum_id = ?", (1 if aktiv else 0, verein_id, raum_id))
 
 
 def raeume() -> list[sqlite3.Row]:
     with conn() as c:
         return c.execute("SELECT r.*, (SELECT COUNT(*) FROM planung_termin t WHERE t.raum_id = r.id "
-                         "AND t.status != 'verworfen') AS termine FROM planung_raum r ORDER BY r.id DESC").fetchall()
+                         "AND t.status != 'verworfen' AND t.verein_key IN (SELECT verein_key FROM planung_verein v "
+                         "WHERE v.raum_id = r.id AND v.aktiv = 1)) AS termine FROM planung_raum r ORDER BY r.id DESC").fetchall()
 
 
 def raum_per_token(token: str):
@@ -133,11 +158,13 @@ def vereine_im_raum(raum_id: int) -> list[sqlite3.Row]:
             " AND t.status != 'verworfen') AS termine, "
             "(SELECT COUNT(*) FROM planung_termin t WHERE t.raum_id = v.raum_id AND t.verein_key = v.verein_key "
             " AND t.status = 'vorschlag') AS offen "
-            "FROM planung_verein v WHERE v.raum_id = ? ORDER BY lower(v.verein_name)", (raum_id,)).fetchall()
+            "FROM planung_verein v WHERE v.raum_id = ? ORDER BY v.aktiv DESC, lower(v.verein_name)", (raum_id,)).fetchall()
 
 
 def termine_im_raum(raum_id: int, verein_key: str | None = None, ohne_verworfen: bool = False) -> list[dict]:
-    sql = "SELECT * FROM planung_termin WHERE raum_id = ?"
+    # Nur Termine aktiver Vereine – abgewählte bleiben gespeichert, zählen aber nirgends mit
+    sql = ("SELECT * FROM planung_termin WHERE raum_id = ? AND verein_key IN "
+           "(SELECT verein_key FROM planung_verein WHERE raum_id = planung_termin.raum_id AND aktiv = 1)")
     args: list = [raum_id]
     if verein_key:
         sql += " AND verein_key = ?"
