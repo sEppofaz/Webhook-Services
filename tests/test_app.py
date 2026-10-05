@@ -655,11 +655,63 @@ def test_abo_mischregel():
     (TMP / "gottesdienste.json").unlink()
 
 
+# ── 20: heimat-Import schreibt keine Gemeinde als Ortschaft (Todo #417) ─────
+def test_import_ortschaft():
+    print("\n20 · heimat-Import: Ortschaft nicht aus dem Seitennamen")
+    import heimat_import as hi
+    hi.PENDING_DIR = TMP / "imports"
+    hi.LOG_FILE = str(TMP / "heimat.log")
+    hi.LAST_IMPORT_FILE = TMP / "last_import.json"
+    ev = {"_verein_key": "ff_greils", "_label": "FF Greilsberg", "_gemeinde": "Bayerbach",
+          "_gemeinde_amtlich": "Bayerbach", "datum": "2099-08-01", "uhrzeit": "", "bezeichnung": "Gartenfest Test",
+          "ort": "GH FF Greilsberg", "_neu": True}
+    (hi.PENDING_DIR / "heimat_pending_ort417.json").write_text(json.dumps({"uid": "ort417", "events": [ev]}))
+    hi.do_import("ort417")
+    d = daten()
+    t = [x for x in d.get("ff_greils", []) if x["bezeichnung"] == "Gartenfest Test"]
+    pruefe(t and not t[0].get("ortschaft"), "Feld ortschaft leer statt „Bayerbach“", t)
+    pruefe(d.get("_ortschaften", {}).get("gemeinde_map", {}).get("Bayerbach") == "Bayerbach",
+           "gemeinde_map lernt weiter über den Seitennamen", d.get("_ortschaften"))
+
+
+# ── 21: Register prüfen + offene Admin-Aufgaben (Todo #417) ─────────────────
+def test_register_pruefen():
+    print("\n21 · Register prüfen, offene Admin-Aufgaben für den 20-Uhr-Bericht")
+    from shared.admin_aufgaben import register_pruefung, offene_aufgaben, aufgaben_text
+    c = app.test_client()
+    pruefe(c.get("/api/admin/register").status_code == 401, "ohne Token 401")
+    vorher = c.get("/api/admin/register", headers=ADMIN).get_json()
+    pruefe(len(vorher["offen"]) > 0, "unbestätigte Register-Einträge gelistet", len(vorher["offen"]))
+    e = vorher["offen"][0]
+    r = c.post("/api/admin/register", headers=ADMIN, json={"ort": e["ort"], "gemeinde": e["gemeinde"], "ok": True})
+    nachher = c.get("/api/admin/register", headers=ADMIN).get_json()
+    pruefe(r.status_code == 200 and len(nachher["offen"]) == len(vorher["offen"]) - 1 and nachher["bestaetigt"] == 1,
+           "„Stimmt“ nimmt den Eintrag aus der Liste", nachher["bestaetigt"])
+    pruefe("_orte_geprueft" in daten(), "Urteil steht in vereinstermine.json, nicht in orte.json")
+    e2 = nachher["offen"][0]
+    r = c.post("/api/admin/register", headers=ADMIN, json={"ort": e2["ort"], "gemeinde": e2["gemeinde"], "ok": False})
+    pruefe(r.status_code == 400, "„Falsch“ ohne Notiz abgelehnt")
+    c.post("/api/admin/register", headers=ADMIN, json={"ort": e2["ort"], "gemeinde": e2["gemeinde"], "ok": False,
+                                                      "notiz": "gehört zu Postau"})
+    d = c.get("/api/admin/register", headers=ADMIN).get_json()
+    pruefe(len(d["falsch"]) == 1 and d["falsch"][0]["notiz"] == "gehört zu Postau", "„Falsch“ mit Notiz gemeldet", d["falsch"])
+    r = c.post("/api/admin/register", headers=ADMIN, json={"ort": "Gibtsnicht", "gemeinde": "Nirgends", "ok": True})
+    pruefe(r.status_code == 400, "unbekannter Eintrag abgelehnt")
+    c.delete("/api/admin/register", headers=ADMIN, json={"ort": e2["ort"], "gemeinde": e2["gemeinde"]})
+    pruefe(not c.get("/api/admin/register", headers=ADMIN).get_json()["falsch"], "Zurücknehmen löscht das Urteil")
+    a = offene_aufgaben(daten(), TMP / "imports", vk_db.DB_FILE)
+    pruefe(a["register"] == len(d["offen"]) + 1 and isinstance(a["vereine"], int), "Zähler für den Bericht", a)
+    pruefe(aufgaben_text({"importe": 0, "vereine": 0, "orte": 0, "register": 0, "register_falsch": 3}) == "",
+           "nichts für Josef offen → kein Abschnitt")
+    pruefe(aufgaben_text({"importe": 1, "vereine": 2, "orte": 0, "register": 19}) ==
+           "1 Import bestätigen · 2 Vereine freigeben · 19 Register-Einträge prüfen", "Text im Bericht")
+
+
 TESTS = [test_xss, test_telegram_secret, test_vereine_api_lock, test_erinnerung, test_sessions,
          test_admin_loeschen, test_admin_verein_meta, test_verknuepfen,
          test_ical_uids, test_registrierung_key, test_fremde_endpunkte,
          test_pending_atomar, test_import_vergangenheit, test_stats_zeit, test_cookies,
-         test_freigabe_nachricht, test_store_mehrprozess, test_bot_tastatur, test_abo_mischregel]
+         test_freigabe_nachricht, test_store_mehrprozess, test_bot_tastatur, test_abo_mischregel, test_import_ortschaft, test_register_pruefen]
 
 if __name__ == "__main__":
     for t in TESTS:

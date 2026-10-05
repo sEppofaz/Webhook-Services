@@ -400,9 +400,12 @@ def do_import(uid: str, verein_keys: list | None = None,
                 }
             if e.get("_rubrik") and not meta_[key].get("rubrik"):
                 meta_[key]["rubrik"] = e["_rubrik"]
-            ortschaft = e.get("ortschaft", "") or e["_gemeinde"]
-            if ortschaft and ortschaft not in gemeinde_map and verein_gemeinde:
-                gemeinde_map[ortschaft] = verein_gemeinde
+            # Ortschaft nur, wenn eine erkannt wurde – nie den Namen der heimat-Seite (= Gemeinde) einsetzen
+            # (Todo #417): sonst zeigte die Kartenmarke „Bayerbach“ für Greilsberg. Die Zuordnung zur Ortschaft
+            # macht geo_fuer_termin() aus dem Ortstext. gemeinde_map lernt weiter über den Seitennamen.
+            ortschaft = e.get("ortschaft", "")
+            if verein_gemeinde and e["_gemeinde"] not in gemeinde_map:
+                gemeinde_map[e["_gemeinde"]] = verein_gemeinde
             termin = {
                 "datum":        e["datum"],
                 "uhrzeit":      e["uhrzeit"],

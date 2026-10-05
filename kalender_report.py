@@ -19,6 +19,7 @@ SECRETS_FILE        = Path("/etc/pka/secrets.env")
 VEREINSTERMINE_FILE = Path("/opt/rename-webhook/vereinstermine.json")
 LAST_IMPORT_FILE    = Path("/opt/rename-webhook/last_import.json")
 DB_PATH             = Path("/opt/rename-webhook/vk_accounts.db")
+PENDING_DIR         = Path("/opt/rename-webhook/imports")
 TZ_LOCAL            = ZoneInfo("Europe/Berlin")
 
 
@@ -227,6 +228,19 @@ def main():
         f" | 7 Tage: <b>{act['neu_7d']} neu</b> · <b>{act['geaendert_7d']} geändert</b>\n"
         f"📥 Letzter Import: <b>{letzter_import}</b>"
     )
+
+    # 20:00-Lauf: offene Admin-Aufgaben anhängen, täglich solange etwas offen ist (Josef, 2026-10-05).
+    # Ein Fehler hier darf den Bericht nie verhindern.
+    if jetzt_dt.hour >= 12:
+        try:
+            from shared.admin_aufgaben import offene_aufgaben, aufgaben_text
+            raw = json.loads(VEREINSTERMINE_FILE.read_text())
+            offen = aufgaben_text(offene_aufgaben(raw, PENDING_DIR, DB_PATH))
+            if offen:
+                text += (f"\n\n🗂 <b>Offen im Admin:</b> {offen}\n"
+                         f"→ https://vereinskalender.online/admin")
+        except Exception as e:
+            print(f"⚠️  Admin-Aufgaben nicht ermittelt: {e}")
 
     send_telegram(secrets["TOKEN"], secrets["CHAT_ID"], text)
     print(f"✅ Bericht gesendet ({jetzt})")

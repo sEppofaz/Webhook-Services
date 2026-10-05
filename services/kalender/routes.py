@@ -12,6 +12,7 @@ from pathlib import Path
 
 from flask import Blueprint, Response, request
 
+from shared.admin_aufgaben import offene_orte, register_pruefung
 from shared.geo import geo_fuer_termin, termin_orte_misch, abo_treffer, eintrag_fuer, _lade as _geo_register, _gem_norm, _ort_norm, ORTE_FREI_FILE
 from shared.flyer_store import upload_flyer, delete_flyer
 from shared.termin_felder import BESCHREIBUNG_MAX, DATUM_RE, zeit_fehler
@@ -1642,37 +1643,8 @@ def api_admin_orte():
         return _json_antwort({"error": "Nicht autorisiert"}, 401)
     raw    = json.loads(VEREINSTERMINE_FILE.read_text()) if VEREINSTERMINE_FILE.exists() else {}
     labels = raw.get("_labels", {})
-    meta   = raw.get("_meta", {})
     zu     = raw.get("_orte_zuordnung", [])
-    heute  = date.today().isoformat()
-    gruppen: dict = {}
-    ohne_ortsangabe = 0
-    for key, items in raw.items():
-        if key.startswith("_") or not isinstance(items, list):
-            continue
-        m = meta.get(key, {})
-        for t in items:
-            if not isinstance(t, dict) or t.get("geloescht") or t.get("deleted") or t.get("datum", "") < heute:
-                continue
-            g = geo_fuer_termin({**t, "verein": key}, m, labels.get(key, ""), zu)
-            if g is None:
-                continue
-            ort = re.sub(r"\s+", " ", str(t.get("ort") or "")).strip()
-            if not ort:
-                if not g["orte"]:
-                    ohne_ortsangabe += 1
-                continue
-            if g.get("quelle") in ("ort", "zuordnung", "ausflug"):
-                continue
-            gk = (_ort_norm(ort), _gem_norm(m.get("gemeinde", "")).casefold())
-            grp = gruppen.setdefault(gk, {
-                "ort": ort, "gemeinde": _gem_norm(m.get("gemeinde", "")), "landkreis": m.get("landkreis", ""),
-                "termine": 0, "vereine": {}, "aktuell": g["orte"], "quelle": g.get("quelle", "")})
-            grp["termine"] += 1
-            grp["vereine"][key] = labels.get(key, key)
-    liste = sorted(gruppen.values(), key=lambda x: (bool(x["aktuell"]), x["gemeinde"], -x["termine"], x["ort"].lower()))
-    for x in liste:
-        x["vereine"] = [{"key": k, "label": v} for k, v in sorted(x["vereine"].items(), key=lambda kv: kv[1].lower())]
+    liste, ohne_ortsangabe = offene_orte(raw)   # gemeinsam mit dem 20-Uhr-Bericht (shared/admin_aufgaben.py)
     register, _ = _geo_register()
     try:
         fest = json.loads(ORTE_FREI_FILE.read_text())
@@ -1737,6 +1709,47 @@ def api_admin_orte_zuordnung():
     ziel_text = "Ausflugsziel" if ausflug else ziel["ort"]
     log(f"🗺  Ort-Zuordnung: {ort!r} → {ziel_text} ({verein or gemeinde})")
     return _json_antwort({"ok": True, "ortschaft": "" if ausflug else ziel["ort"], "ausflug": ausflug})
+
+
+@kalender_bp.route("/api/admin/register", methods=["GET", "POST", "DELETE"])
+def api_admin_register():
+    """Register prüfen (Todo #417): unbestätigte Einträge aus orte.json listen und Josefs Urteil
+    speichern – in vereinstermine.json `_orte_geprueft`, nie in orte.json (liegt im Git)."""
+    if not _admin_ok():
+        return _json_antwort({"error": "Nicht autorisiert"}, 401)
+    from shared.kalender_store import KalenderStore
+    if request.method == "GET":
+        raw = json.loads(VEREINSTERMINE_FILE.read_text()) if VEREINSTERMINE_FILE.exists() else {}
+        return _json_antwort(register_pruefung(raw))
+    body     = request.get_json(silent=True) or {}
+    ort      = str(body.get("ort") or "").strip()
+    gemeinde = _gem_norm(str(body.get("gemeinde") or ""))
+    if not ort or len(ort) > 100 or len(gemeinde) > 100:
+        return _json_antwort({"error": "Ort fehlt oder ist zu lang"}, 400)
+    register, _ = _geo_register()
+    if not any(e.get("ort") == ort and _gem_norm(e.get("gemeinde", "")).casefold() == gemeinde.casefold()
+               for e in register or []):
+        return _json_antwort({"error": "Kein solcher Register-Eintrag"}, 400)
+    gleich = lambda u: (str(u.get("ort", "")).casefold() == ort.casefold()
+                        and _gem_norm(u.get("gemeinde", "")).casefold() == gemeinde.casefold())
+    if request.method == "DELETE":
+        KalenderStore.update(lambda d: d.__setitem__(
+            "_orte_geprueft", [u for u in d.get("_orte_geprueft", []) if not gleich(u)]))
+        log(f"🗺  Register-Urteil zurückgenommen: {ort} ({gemeinde})")
+        return _json_antwort({"ok": True})
+    ok    = bool(body.get("ok"))
+    notiz = re.sub(r"\s+", " ", str(body.get("notiz") or "")).strip()[:300]
+    if not ok and not notiz:
+        return _json_antwort({"error": "Bitte kurz notieren, was nicht stimmt"}, 400)
+
+    def _setzen(d):
+        liste = [u for u in d.get("_orte_geprueft", []) if not gleich(u)]
+        liste.append({"ort": ort, "gemeinde": gemeinde, "ok": ok, "notiz": "" if ok else notiz,
+                      "am": datetime.now().isoformat(timespec="seconds")})
+        d["_orte_geprueft"] = liste
+    KalenderStore.update(_setzen)
+    log(f"🗺  Register {'bestätigt' if ok else 'FALSCH'}: {ort} ({gemeinde}){'' if ok else ' – ' + notiz}")
+    return _json_antwort({"ok": True})
 
 
 @kalender_bp.route("/api/admin/importe/status", methods=["GET"])

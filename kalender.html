@@ -2141,7 +2141,10 @@ function render(){
     const ort=t.ort?`<div class="ev-meta">${icon("mapPin",14)}<span class="ev-meta-txt">${escHtml(t.ort)}</span></div>`:"";
     const veranstLabel=escHtml(t.veranstalter||labels[t.verein]||t.verein);
     const veranst=`<div class="ev-meta"><span class="ev-dot" style="background:${col}"></span><span class="ev-meta-txt">${veranstLabel}</span></div>`;
-    const ortBadgeTxt=(t.ortschaft&&t.ortschaft.trim())?escHtml(t.ortschaft.trim()):null;
+    // Marke = wo der Termin stattfindet (Zuordnung aus dem Ortstext, ohne Vereinssitz); Feld ortschaft nur als Rückfall –
+    // der heimat-Import schrieb dort den Gemeindenamen (69 von 167 Karten ungenau, Todo #417, v1.62)
+    const geoOrte=((t._geo||{}).orte||[]);
+    const ortBadgeTxt=geoOrte.length?escHtml(geoOrte.join(", ")):(t.ortschaft&&t.ortschaft.trim())?escHtml(t.ortschaft.trim()):null;
     const lk=(meta[t.verein]||{}).landkreis||"Landkreis Landshut";
     const lkLabel=escHtml(lk.replace(/^Landkreis\s+/,""));
     const safeQuelleUrl=(t.quelle_url&&/^https?:\/\//i.test(t.quelle_url))?t.quelle_url:null;
@@ -2485,8 +2488,85 @@ async function loadOrte(){
     ${d.ohne_ortsangabe?`<div style="font-size:12px;color:var(--text3);margin:4px 0 16px">${d.ohne_ortsangabe} ${d.ohne_ortsangabe===1?"Termin hat":"Termine haben"} gar keine Ortsangabe und keinen Heimatort – dort hilft nur ein Heimatort beim Verein (Tab „Vereine“).</div>`:""}
     <div style="font-weight:600;font-size:15px;color:var(--text);margin:18px 0 4px">Zuordnungen</div>
     ${zu}
-    ${fest?`<div style="font-weight:600;font-size:13px;color:var(--text2);margin:16px 0 4px">Fest eingetragen (orte_frei.json)</div>${fest}`:""}`;
+    ${fest?`<div style="font-weight:600;font-size:13px;color:var(--text2);margin:16px 0 4px">Fest eingetragen (orte_frei.json)</div>${fest}`:""}
+    <div id="reg-pruefen" style="margin-top:22px"></div>`;
+  loadRegister();
 }
+
+/* ── Register prüfen (v1.62, Todo #417) ──
+   Unbestätigte Ortschaften aus orte.json. Urteil landet in vereinstermine.json `_orte_geprueft` (orte.json liegt im Git);
+   „Falsch“ wird zur Aufgabe für die Pflege von orte.json. Der BayernAtlas nimmt keine Suche per URL an –
+   der Knopf kopiert den Suchtext und öffnet die Karte. */
+let _regDaten=null;
+async function loadRegister(){
+  const el=document.getElementById("reg-pruefen");
+  if(!el)return;
+  const token=localStorage.getItem("ut")||"";
+  try{
+    const r=await fetch("/api/admin/register",{headers:{"X-Upload-Token":token}});
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    _regDaten=await r.json();
+  }catch(e){el.innerHTML='<div style="color:#ff3b30;padding:8px 0">Register: '+escHtml(String(e))+'</div>';return;}
+  const d=_regDaten,gruppen={};
+  d.offen.forEach((e,i)=>{(gruppen[e.gemeinde]=gruppen[e.gemeinde]||[]).push([e,i]);});
+  const btn="height:38px;padding:0 12px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit";
+  const zeile=([e,i])=>`<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div style="flex:1 1 140px;min-width:0"><strong style="font-size:14px;color:var(--text)">${escHtml(e.ort)}</strong>
+          <span style="font-size:12px;color:var(--text3)"> · ${escHtml(e.plz)} ${escHtml(e.gemeinde)}</span></div>
+        <button onclick="regAtlas(${i})" style="${btn};border:1.5px solid var(--border2);background:var(--bg);color:var(--text2);display:flex;align-items:center;gap:5px">${icon("map",14)} BayernAtlas</button>
+        <button onclick="regUrteil(${i},true)" style="${btn};border:none;background:var(--accent);color:#fff">Stimmt</button>
+        <button onclick="regFalschZeigen(${i})" style="${btn};border:1.5px solid #ff3b30;background:var(--bg);color:#ff3b30">Falsch</button>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:3px">Quelle: ${escHtml(e.quelle)}</div>
+      <div id="reg-falsch-${i}" style="display:none;gap:6px;margin-top:6px;flex-wrap:wrap">
+        <input id="reg-notiz-${i}" class="ve-sel" maxlength="300" placeholder="Was stimmt nicht? (z. B. gehört zu Postau)" style="flex:1 1 200px;min-width:0">
+        <button onclick="regUrteil(${i},false)" style="${btn};border:none;background:#ff3b30;color:#fff">Melden</button>
+      </div>
+      <div id="reg-msg-${i}" style="font-size:12px;margin-top:4px"></div>
+    </div>`;
+  const offen=Object.entries(gruppen).map(([g,l])=>`<details${l.length<=20?" open":""} style="margin-bottom:8px">
+      <summary style="cursor:pointer;font-weight:600;font-size:14px;color:var(--text);padding:6px 0">${escHtml(g||"Gemeinde unbekannt")} (${l.length})</summary>
+      ${l.map(zeile).join("")}</details>`).join("");
+  const falsch=d.falsch.map((e,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="flex:1;min-width:0;font-size:13px;color:var(--text)"><strong>${escHtml(e.ort)}</strong> (${escHtml(e.gemeinde)}) – ${escHtml(e.notiz)}</div>
+      <button onclick="regZuruecknehmen(${i})" style="${btn};border:1.5px solid var(--border2);background:var(--bg);color:var(--text2)">Zurücknehmen</button>
+    </div>`).join("");
+  el.innerHTML=`
+    <div style="font-weight:600;font-size:15px;color:var(--text);margin-bottom:4px">Register prüfen: ${d.offen.length} offen${d.bestaetigt?` <span style="font-size:12px;font-weight:400;color:var(--text3)">(${d.bestaetigt} bestätigt)</span>`:""}</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:10px;line-height:1.5">Ortschaften im Register, deren Gemeinde und PLZ noch niemand bestätigt hat. „BayernAtlas“ kopiert den Suchtext und öffnet die Karte – dort ins Suchfeld einfügen. „Falsch“ mit kurzer Notiz meldet den Eintrag zur Korrektur.</div>
+    ${offen||'<div style="font-size:13px;color:var(--text3);padding:6px 0">Alles bestätigt.</div>'}
+    ${falsch?`<div style="font-weight:600;font-size:13px;color:var(--text2);margin:14px 0 4px">Als falsch gemeldet – wartet auf Korrektur</div>${falsch}`:""}`;
+}
+function regAtlas(i){
+  const e=_regDaten.offen[i];
+  try{navigator.clipboard.writeText(e.ort+" "+e.gemeinde);}catch(_){}
+  window.open("https://atlas.bayern.de/","_blank","noopener");
+  const m=document.getElementById("reg-msg-"+i);m.style.color="var(--text3)";m.textContent="Suchtext „"+e.ort+" "+e.gemeinde+"“ kopiert – im BayernAtlas ins Suchfeld einfügen.";
+}
+function regFalschZeigen(i){
+  const f=document.getElementById("reg-falsch-"+i);
+  f.style.display=f.style.display==="flex"?"none":"flex";
+  if(f.style.display==="flex")document.getElementById("reg-notiz-"+i).focus();
+}
+async function _regSenden(methode,e,body,msgEl){
+  const token=localStorage.getItem("ut")||"";
+  try{
+    const r=await fetch("/api/admin/register",{method:methode,headers:{"Content-Type":"application/json","X-Upload-Token":token},
+      body:JSON.stringify({ort:e.ort,gemeinde:e.gemeinde,...body})});
+    const d=await r.json();
+    if(d.ok){loadRegister();return;}
+    if(msgEl){msgEl.style.color="#ff3b30";msgEl.textContent=d.error||"Fehler";}
+  }catch(_){if(msgEl){msgEl.style.color="#ff3b30";msgEl.textContent="Netzwerkfehler";}}
+}
+function regUrteil(i,ok){
+  const e=_regDaten.offen[i],m=document.getElementById("reg-msg-"+i);
+  const notiz=ok?"":document.getElementById("reg-notiz-"+i).value.trim();
+  if(!ok&&!notiz){m.style.color="var(--text3)";m.textContent="Bitte kurz notieren, was nicht stimmt.";return;}
+  m.style.color="var(--text3)";m.textContent="Speichere…";
+  _regSenden("POST",e,{ok,notiz},m);
+}
+function regZuruecknehmen(i){_regSenden("DELETE",_regDaten.falsch[i],{},null);}
 
 function _ortZeile(o,i){
   const gemNorm=s=>(s||"").replace(/^(Gemeinde|Markt|Stadt)\s+/i,"").replace(/\s+(bei|b\.)\s+.+$/i,"").trim().toLowerCase();
@@ -4161,7 +4241,7 @@ function showInfoModal(){
         <span class="help-icon">${icon("scale",20)}</span>
         <div><strong>Impressum</strong><span>Josef Fischer &middot; H&ouml;lskofen 13 &middot; 84092 Bayerbach b. Ergoldsbach<br><a href="mailto:Vereinskalender@icloud.com" style="color:var(--accent);text-decoration:none">Vereinskalender@icloud.com</a></span></div>
       </div>
-      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.61 &middot; 2026-10-05 &middot; a sEpp-App</p>
+      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.62 &middot; 2026-10-05 &middot; a sEpp-App</p>
       <button onclick="document.getElementById('info-modal').remove()" style="width:100%;margin-top:16px;padding:12px;background:none;border:1.5px solid var(--border2);border-radius:12px;font-size:14px;color:var(--text2);cursor:pointer">Schlie&szlig;en</button>
     </div>`;
   document.body.appendChild(m);
