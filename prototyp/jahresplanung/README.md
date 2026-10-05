@@ -19,7 +19,9 @@ Tests: `~/.venvs/vko-jahresplanung/bin/python tests/test_jahresplanung.py`
 ## Ablauf (ADR-026)
 
 1. **Organisatorin** legt unter „Planungstreffen“ einen Raum für ihre Gemeinde an und verschickt die Einladungen.
-2. **Verein** nimmt die Einladung an (Konto sofort freigegeben), erzeugt Entwürfe aus dem Vorjahr, ergänzt, ändert.
+2. **Verein** nimmt die Einladung an (= Registrierung), erzeugt Entwürfe aus dem Vorjahr, ergänzt, ändert.
+   **Josef prüft und gibt das Konto frei** (live: App oder Telegram; hier `/anmelden` → „Freigeben (VKO)“).
+   Vorher keine Sicht auf fremde Entwürfe und kein Veröffentlichen.
 3. **Treffen**: Organisatorin sieht alle Entwürfe mit Konflikten (Beamer-Ansicht) und schlägt Verschiebungen vor.
 4. **Verein** übernimmt oder lehnt Vorschläge ab und **veröffentlicht selbst** – einzeln oder alle auf einmal.
 

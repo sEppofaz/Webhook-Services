@@ -5,9 +5,10 @@ Modell (Josef 2026-10-05):
   ändert sie und veröffentlicht einzeln oder alle auf einmal. Niemand sonst veröffentlicht.
 - **Ein Planungsraum ist nur eine Sicht** auf die Entwürfe seiner aktiven Vereine im Planungsjahr.
   Die Organisatorin verschiebt nicht selbst, sie macht Verschiebe-Vorschläge; der Verein übernimmt sie.
-- **Jeder Verein braucht ein Konto.** Die Einladung aus einem Planungsraum führt zur Registrierung und
-  gibt das Konto automatisch frei (einmalig, mit Ablauf). Andere Registrierungen warten wie bisher
-  auf die Freigabe durch VKO – bis dahin Entwürfe ja, Veröffentlichen nein.
+- **Jeder Verein braucht ein Konto, und Josef gibt jedes neue Konto persönlich frei** (App oder Telegram,
+  wie heute). Die Einladung aus einem Planungsraum führt nur zur Registrierung und wird als Hinweis
+  mitgegeben – sie ersetzt die Prüfung nicht (Josef 2026-10-05). Bis zur Freigabe: eigene Entwürfe ja,
+  Entwürfe anderer Vereine sehen nein, Veröffentlichen nein.
 
 Entwürfe liegen bewusst **nicht** in `vereinstermine.json`: `/api/termine` gibt jedes Feld nach außen,
 das nicht auf der Sperrliste steht. Schema so angelegt, dass es in `shared/vk_db.py` übernommen werden kann.
@@ -26,13 +27,14 @@ DB_FILE = DATEN_DIR / "planung.sqlite"
 EINLADUNG_TAGE = 60
 
 STATUS = {"entwurf": "Entwurf", "veroeffentlicht": "Veröffentlicht"}
-FREIGABE = {"einladung": "freigegeben (Einladung)", "vko": "freigegeben (VKO)", "ausstehend": "Freigabe durch VKO ausstehend"}
+FREIGABE = {"vko": "freigegeben", "ausstehend": "wartet auf Freigabe durch VKO"}
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS konto (            -- im Prototyp: simulierte Vereinskonten (live: vereine_accounts)
     verein_key   TEXT PRIMARY KEY,
     verein_name  TEXT NOT NULL,
-    freigabe     TEXT NOT NULL,                -- einladung | vko | ausstehend
+    freigabe     TEXT NOT NULL,                -- ausstehend | vko (Freigabe nur durch Josef)
+    eingeladen_raum_id INTEGER,                -- Hinweis für die Prüfung: kam über diese Einladung
     angelegt_am  TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS entwurf (
@@ -97,6 +99,10 @@ def init():
             # Altes Modell (Termine im Raum) – Prototyp, keine Migration: neu anlegen
             c.executescript("DROP TABLE planung_termin; DROP TABLE IF EXISTS planung_verein; DROP TABLE IF EXISTS planung_raum;")
         c.executescript(_SCHEMA)
+        # Prototyp-Stand mit automatischer Freigabe (bis 2026-10-05 abends) nachziehen
+        if "eingeladen_raum_id" not in {r["name"] for r in c.execute("PRAGMA table_info(konto)")}:
+            c.execute("ALTER TABLE konto ADD COLUMN eingeladen_raum_id INTEGER")
+        c.execute("UPDATE konto SET freigabe = 'vko' WHERE freigabe = 'einladung'")
 
 
 def jetzt() -> str:
@@ -115,10 +121,11 @@ def konten() -> dict:
         return {r["verein_key"]: dict(r) for r in c.execute("SELECT * FROM konto")}
 
 
-def konto_anlegen(verein_key: str, verein_name: str, freigabe: str) -> None:
+def konto_anlegen(verein_key: str, verein_name: str, raum_id: int | None = None) -> None:
+    """Neues Konto wartet immer auf Josefs Freigabe – auch über eine Einladung (dann mit Hinweis auf den Raum)."""
     with conn() as c:
-        c.execute("INSERT OR IGNORE INTO konto (verein_key, verein_name, freigabe, angelegt_am) VALUES (?,?,?,?)",
-                  (verein_key, verein_name, freigabe, jetzt()))
+        c.execute("INSERT OR IGNORE INTO konto (verein_key, verein_name, freigabe, eingeladen_raum_id, angelegt_am) "
+                  "VALUES (?,?,'ausstehend',?,?)", (verein_key, verein_name, raum_id, jetzt()))
 
 
 def konto_freigeben(verein_key: str) -> None:
@@ -126,9 +133,12 @@ def konto_freigeben(verein_key: str) -> None:
         c.execute("UPDATE konto SET freigabe = 'vko' WHERE verein_key = ? AND freigabe = 'ausstehend'", (verein_key,))
 
 
-def darf_veroeffentlichen(verein_key: str) -> bool:
+def freigegeben(verein_key: str) -> bool:
     k = konto(verein_key)
-    return bool(k) and k["freigabe"] in ("einladung", "vko")
+    return bool(k) and k["freigabe"] == "vko"
+
+
+darf_veroeffentlichen = freigegeben
 
 
 # ── Entwürfe ─────────────────────────────────────────────────────────────────

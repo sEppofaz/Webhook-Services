@@ -22,13 +22,13 @@
 
 {% if fehler %}<div class="warn rot">{{ fehler }}</div>{% endif %}
 {% if meldung %}<div class="ok">{{ meldung }}</div>{% endif %}
-{% if not darf %}<div class="warn">Euer Konto ist noch nicht freigegeben. Entwürfe könnt ihr schon anlegen – veröffentlichen erst nach der Freigabe.</div>{% endif %}
+{% if not darf %}<div class="warn">VKO prüft eure Anmeldung noch. Eigene Entwürfe könnt ihr schon anlegen – veröffentlichen und die Entwürfe der anderen Vereine sehen erst nach der Freigabe.</div>{% endif %}
 
 {% for r in raeume %}
   <div class="card zeile" style="align-items:center">
     <div style="flex:3 1 260px"><b>{{ r.titel }}</b>
       <div class="hint">Ihr seid dabei. Dort seht ihr die Entwürfe der anderen Vereine und die Konflikte.{% if r.fertig_am %} Ihr habt „fertig“ gemeldet.{% endif %}</div></div>
-    <div style="flex:0 0 auto"><a class="btn sek" href="{{ url_for('raum_vereinssicht', raum_id=r.id) }}">Zum Planungstreffen</a></div>
+    <div style="flex:0 0 auto">{% if darf %}<a class="btn sek" href="{{ url_for('raum_vereinssicht', raum_id=r.id) }}">Zum Planungstreffen</a>{% else %}<span class="chip entwurf">nach Freigabe</span>{% endif %}</div>
   </div>
 {% endfor %}
 

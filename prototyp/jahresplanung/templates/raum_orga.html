@@ -38,7 +38,7 @@
 {% if not treffen %}
 {% set aktive = vereine|selectattr("aktiv")|list %}
 <h2 id="vereine">Vereine und Einladungen ({{ aktive|length }})</h2>
-<p class="hint">Jeder Verein braucht ein VKO-Konto. Die Einladung führt zur Registrierung – darüber angelegte Konten sind sofort freigegeben (einmalig, gültig {{ 60 }} Tage). Vereine mit Konto melden sich einfach an.
+<p class="hint">Jeder Verein braucht ein VKO-Konto. Die Einladung führt zur Registrierung (einmalig, 60 Tage gültig); VKO prüft und gibt jedes neue Konto frei. Vereine mit Konto melden sich einfach an.
 Abwählen löscht nichts: die Entwürfe zählen hier nur nicht mehr mit.</p>
 <div class="card tabelle-wrap links kompakt"><table>
   <tr><th>Verein</th><th>Konto</th><th>Entwürfe</th><th>veröff.</th><th>Vorschl.</th><th>fertig</th><th class="optional">Einladung</th><th></th></tr>
@@ -48,7 +48,7 @@ Abwählen löscht nichts: die Entwürfe zählen hier nur nicht mehr mit.</p>
     <td><span class="vfarbe f{{ farben[v.verein_key] }}"></span>{{ v.verein_name }}
       {% if v.verein_key in nachbarn %}<span class="chip nachbar">Nachbar</span>{% endif %}
       {% if not v.aktiv %}<span class="chip">abgewählt</span>{% endif %}</td>
-    <td>{% if not k %}<span class="chip">kein Konto</span>{% elif k.freigabe == 'ausstehend' %}<span class="chip entwurf">ausstehend</span>{% else %}<span class="chip veroeffentlicht">ja</span>{% endif %}</td>
+    <td>{% if not k %}<span class="chip">kein Konto</span>{% elif k.freigabe == 'ausstehend' %}<span class="chip entwurf">wartet auf Freigabe</span>{% else %}<span class="chip veroeffentlicht">ja</span>{% endif %}</td>
     <td>{{ a.entwurf if v.aktiv else '–' }}</td>
     <td>{{ a.veroeffentlicht if v.aktiv else '–' }}</td>
     <td>{% if v.aktiv and a.vorschlag %}<span class="chip vorschlag">{{ a.vorschlag }} offen</span>{% else %}–{% endif %}</td>

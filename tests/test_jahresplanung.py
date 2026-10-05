@@ -228,9 +228,15 @@ else:
     def als(key):
         c.post("/anmelden", data={"_csrf": tok, "verein": key})
 
-    # Verein A über Einladung: Konto automatisch freigegeben, Entwürfe aus dem Vorjahr
+    # Verein A über Einladung: Konto wartet trotzdem auf Josefs Freigabe (Hinweis auf den Raum)
     r = c.post(f"/einladung/{einladung_fuer('a')}", data={"_csrf": tok})
-    pruefe(r.status_code == 302 and DB.konto("a")["freigabe"] == "einladung", "Einladung legt freigegebenes Konto an")
+    ka = DB.konto("a")
+    pruefe(r.status_code == 302 and ka["freigabe"] == "ausstehend" and ka["eingeladen_raum_id"] == raum_id,
+           "Einladung legt Konto an, Freigabe ausstehend, mit Raum-Hinweis")
+    pruefe(b"eingeladen \xc3\xbcber Jahresplanung 2027" in c.get("/anmelden").data, "Hinweis auf Einladung bei der Freigabe")
+    pruefe(c.get(f"/treffen/{raum_id}").status_code == 403, "vor Freigabe keine Entwürfe anderer Vereine")
+    pruefe(c.post(f"/einladung/{einladung_fuer('a')}", data={"_csrf": tok}).status_code == 302
+           and DB.konto("a")["freigabe"] == "ausstehend", "zweiter Klick auf Einladung gibt nicht frei")
     c.post("/entwuerfe/aus-vorjahr?jahr=2027", data={"_csrf": tok, "jahr": "2027"})
     ea = DB.entwuerfe("a", 2027)
     pruefe([t["datum"] for t in ea] == ["2027-07-10"], f"Entwurf aus Vorjahr, war {[t['datum'] for t in ea]}")
@@ -255,9 +261,12 @@ else:
     # Fremden Entwurf anfassen → 404
     pruefe(c.post(f"/entwuerfe/{ea[0]['_eid']}", data={"_csrf": tok, "aktion": "loeschen"}).status_code == 404,
            "fremder Entwurf nicht änderbar")
-    # Einladung gibt B nachträglich frei
+    # Einladung gibt B nicht frei – das tut nur Josef
     c.post(f"/einladung/{einladung_fuer('b')}", data={"_csrf": tok})
-    pruefe(DB.konto("b")["freigabe"] == "vko", "Einladung ersetzt ausstehende Freigabe")
+    pruefe(DB.konto("b")["freigabe"] == "ausstehend", "Einladung ersetzt die Freigabe nicht")
+    for v in ("a", "b"):
+        c.post("/demo/freigeben", data={"_csrf": tok, "verein": v})
+    pruefe(DB.freigegeben("a") and DB.freigegeben("b"), "Freigabe durch VKO")
 
     # Treffen: Konflikt Sommerfest A / Grillfest B, Organisatorin schlägt Verschiebung vor
     s = c.get(orga)

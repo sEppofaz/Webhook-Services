@@ -7,11 +7,11 @@
   <p class="hint">Ihr legt eure Termine als Entwurf an – nichts davon ist öffentlich. Beim Treffen werden die Entwürfe aller Vereine verglichen und Konflikte besprochen. Danach veröffentlicht ihr eure Termine selbst im Vereinskalender.</p>
   {% if not gueltig %}
     <div class="warn rot">Diese Einladung ist nicht mehr gültig (abgelaufen, Planung abgeschlossen oder Verein abgewählt). Bitte bei der Organisatorin melden.</div>
-  {% elif konto and konto.freigabe != 'ausstehend' %}
+  {% elif konto %}
     <form method="post">{{ csrf()|safe }}<button class="btn">Anmelden und zu euren Entwürfen</button></form>
   {% else %}
     <form method="post">{{ csrf()|safe }}
-      <p class="hint">Live folgt hier die Registrierung (E-Mail, Passwort, Ansprechpartner) mit vorbelegtem Verein. Über diese Einladung wird das Konto <b>sofort freigegeben</b>.</p>
+      <p class="hint">Live folgt hier die Registrierung (E-Mail, Passwort, Ansprechpartner) mit vorbelegtem Verein. VKO prüft jede Anmeldung persönlich – bis zur Freigabe könnt ihr schon eure Entwürfe anlegen.</p>
       <button class="btn">Konto anlegen (simuliert)</button></form>
   {% endif %}
 </div>

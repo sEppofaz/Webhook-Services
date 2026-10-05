@@ -9,7 +9,7 @@ Bereiche:
 3. Entwürfe (Vereinsadmin, simuliertes Login) – anlegen, aus dem Vorjahr erzeugen, Verschiebe-
    Vorschläge übernehmen, einzeln oder alle veröffentlichen. Nur der Verein selbst veröffentlicht.
 4. Planungstreffen – Sicht der Organisatorin auf die Entwürfe der beteiligten Vereine: Konflikte,
-   Verschiebe-Vorschläge, Einladungen (= Registrierung mit automatischer Freigabe), Export.
+   Verschiebe-Vorschläge, Einladungen (führen zur Registrierung; freigeben tut Josef), Export.
 Schreibt nie in den Live-Kalender. Daten: Momentaufnahme der öffentlichen /api/termine.
 """
 from __future__ import annotations
@@ -204,6 +204,7 @@ def vorlage_export(fmt):
 @app.get("/anmelden")
 def anmelden():
     return render_template("anmelden.html", konten=db.konten(), gruppen=D.vereine_gruppiert(),
+                           raeume={r["id"]: r["titel"] for r in db.raeume()},
                            weiter=request.args.get("weiter", ""))
 
 
@@ -219,7 +220,7 @@ def anmelden_post():
         abort(400)
     if request.form.get("aktion") == "konto":
         # Registrierung ohne Einladung: wartet auf Freigabe durch VKO (wie heute)
-        db.konto_anlegen(key, labels[key], "ausstehend")
+        db.konto_anlegen(key, labels[key])
     if not db.konto(key):
         abort(403, "Dieser Verein hat noch kein Konto.")
     session["verein"], session["verein_name"] = key, labels[key]
@@ -235,7 +236,7 @@ def abmelden():
 
 @app.post("/demo/freigeben")
 def demo_freigeben():
-    """Simuliert Josefs Freigabe einer Registrierung ohne Einladung."""
+    """Simuliert Josefs Freigabe (live: Admin-App oder Telegram-Knopf, wie heute)."""
     db.konto_freigeben(request.form.get("verein", ""))
     return redirect(request.referrer or url_for("anmelden"))
 
@@ -251,9 +252,9 @@ def einladung(token):
 
 @app.post("/einladung/<token>")
 def einladung_annehmen(token):
-    """Registrierung über die Einladung: Konto wird automatisch freigegeben (die Organisatorin kennt
-    ihre Vereine). Einmalig – danach führt die Einladung nur noch zum Login. Live: Registrierungs-
-    formular (E-Mail, Passwort, Ansprechpartner) mit vorbelegtem Verein; hier simuliert."""
+    """Registrierung über die Einladung. Das Konto wartet wie jede Registrierung auf Josefs Freigabe;
+    die Einladung geht nur als Hinweis mit (Raum, Organisatorin). Einmalig – danach führt die Einladung
+    nur noch zum Login. Live: Registrierungsformular mit vorbelegtem Verein; hier simuliert."""
     e = db.einladung(token)
     if not e:
         abort(404)
@@ -263,10 +264,8 @@ def einladung_annehmen(token):
     if not k:
         if e["angenommen_am"]:
             abort(403, "Die Einladung wurde schon verwendet.")
-        db.konto_anlegen(e["verein_key"], e["verein_name"], "einladung")
+        db.konto_anlegen(e["verein_key"], e["verein_name"], e["raum_id"])
         db.einladung_angenommen(e["id"])
-    elif k["freigabe"] == "ausstehend":
-        db.konto_freigeben(e["verein_key"])   # Einladung ersetzt die Freigabe durch VKO
     session["verein"], session["verein_name"] = e["verein_key"], e["verein_name"]
     return redirect(url_for("entwuerfe_seite", jahr=db.raum(e["raum_id"])["jahr"]))
 
@@ -366,6 +365,9 @@ def raum_vereinssicht(key, raum_id):
     r = db.raum(raum_id)
     if not r or key not in db.aktive_keys(raum_id):
         abort(404)
+    if not db.freigegeben(key):
+        # Sonst könnte ein Fremder mit weitergeleiteter Einladung die Pläne aller Vereine lesen
+        abort(403, "Die Entwürfe der anderen Vereine seht ihr, sobald VKO euer Konto freigegeben hat.")
     termine, paare, farben = _raum_daten(r)
     return render_template("raum_sicht.html", r=r, key=key, paare=paare, farben=farben,
                            labels=D.daten()["labels"], monate=_nach_monat(termine),
