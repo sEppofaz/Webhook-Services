@@ -59,14 +59,15 @@ def _wochenende(d: date) -> date | None:
 def kollisionen(termine: list[dict], meta: dict, labels: dict, entwurf: dict,
                 rubriken: dict | None = None, zuordnung: list | None = None,
                 wochenende: bool = False, ausser_ids: set | None = None,
-                zusatz_vereine: set | None = None) -> list[dict]:
+                zusatz_vereine: set | None = None, ohne_vereine: set | None = None) -> list[dict]:
     """Kollisionen für einen Entwurf.
 
     entwurf: `verein` (Pflicht), `ort`, `uhrzeit` und entweder `datum` oder `tage` (Liste ISO-Daten,
     mehrtägig). wochenende=True meldet zusätzlich Termine am selben Wochenende (Fr–So) als
     schwächere Stufe – fürs Planungstreffen. ausser_ids: Termin-IDs, die nicht zählen (der
     Termin selbst beim Bearbeiten). zusatz_vereine: Vereine, die unabhängig von der Gemeinde
-    zählen – aktiv gewählte Nachbarn jenseits der Gemeindegrenze (Josef 2026-10-05).
+    zählen – aktiv gewählte Nachbarn jenseits der Gemeindegrenze (Josef 2026-10-05). ohne_vereine: Vereine, die nie
+    zählen – vom Verein in seinen Einstellungen ausgeschlossen (schlägt zusatz_vereine).
     Rückgabe sortiert: {id, datum, uhrzeit, bezeichnung, verein, verein_name, ort, stufe, entwurf_datum,
     nachbar (True = nur über zusatz_vereine gefunden)}.
     """
@@ -98,7 +99,7 @@ def kollisionen(termine: list[dict], meta: dict, labels: dict, entwurf: dict,
         if tag not in nach_tag and tag not in nach_we:
             continue
         vkey = t.get("verein", "")
-        if vkey == eigener or (ausser_ids and t.get("id") in ausser_ids):
+        if vkey == eigener or (ausser_ids and t.get("id") in ausser_ids) or (ohne_vereine and vkey in ohne_vereine):
             continue
         if t.get("geloescht") or t.get("deleted") or t.get("intern"):
             continue

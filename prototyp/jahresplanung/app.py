@@ -3,14 +3,12 @@
 Start:  ~/.venvs/vko-jahresplanung/bin/python prototyp/jahresplanung/app.py
 Dann:   http://localhost:5050
 
-Bereiche:
-1. Kollisionswarnung – wie sie später im Vereinsformular erscheint (nur veröffentlichte Termine).
-2. Vorjahres-Vorlage – Termine eines Vereins nach ihrem Schema ins Zieljahr übertragen.
-3. Entwürfe – jeder Verein plant in seinem Bereich: anlegen, aus dem Vorjahr erzeugen, bestätigen,
-   einzeln oder alle veröffentlichen. Nur der Verein selbst veröffentlicht. Login simuliert.
-4. Planungsrunden – jeder freigegebene Vereinsadmin startet eine (Organisator, ohne Josef) und lädt per Link
-   oder Code ein. Teilnehmer sehen alle Entwürfe mit Konflikten und ändern/bestätigen ihre eigenen (Mac/Handy).
-   Verlauf wird mitgeschrieben; beim Abschluss entsteht das Ergebnis (PDF) – bei der Runde unter „Planungsrunden“.
+Aufbau (Josef 2026-10-05):
+- Startseite nach dem Anmelden: „Termine“ – alle Termine des Vereins (im Kalender + Entwürfe). Neuer Termin mit
+  Kollisionswarnung beim Tippen; „Veröffentlichen“ oder „Als Entwurf speichern“. Vorjahres-Vorlage als Knopf.
+- „Einstellungen“: mit welchen Vereinen auf Überschneidungen geprüft wird (Gemeinde automatisch + dazu/ohne).
+- „Planungsrunden“: jeder freigegebene Vereinsadmin startet eine (Organisator) und lädt per Link oder Code ein;
+  Teilnehmer sehen alle Entwürfe mit Konflikten und ändern/bestätigen ihre eigenen. Verlauf + Ergebnis-PDF.
 Josef gibt jedes neue Konto persönlich frei (ADR-026). Schreibt nie in den Live-Kalender. Daten: Momentaufnahme der öffentlichen /api/termine.
 """
 from __future__ import annotations
@@ -84,13 +82,14 @@ def _kalender_im_jahr(jahr: int) -> list[dict]:
     return [t for t in _veroeffentlichte() if t.get("datum", "")[:4] == str(jahr)]
 
 
-def _mit_konflikten(eigene: list[dict], andere: list[dict], zusatz: set | None = None) -> list[dict]:
+def _mit_konflikten(eigene: list[dict], andere: list[dict], zusatz: set | None = None,
+                    ohne: set | None = None) -> list[dict]:
     """Jedem Termin seine Kollisionen anhängen (`_konflikte`); Quelle Entwurf/Kalender markiert."""
     d = D.daten()
     entwurf_ids = {x["id"] for x in andere if str(x.get("id", "")).startswith("e") and x.get("status") != "veroeffentlicht"}
     for t in eigene:
         k = kollisionen(andere, d["meta"], d["labels"], t, d["rubriken"], wochenende=True,
-                        ausser_ids={t.get("id")}, zusatz_vereine=zusatz)
+                        ausser_ids={t.get("id")}, zusatz_vereine=zusatz, ohne_vereine=ohne)
         for x in k:
             x["quelle"] = "Entwurf" if x.get("id") in entwurf_ids else "Kalender"
         t["_konflikte"] = k
@@ -122,6 +121,15 @@ def _zieljahr(feld: str = "jahr") -> int:
         return date.today().year + 1
 
 
+def _jahr_filter() -> int | None:
+    """Jahr-Filter der Termin-Seite: leer = „ab heute“ über alle Jahre."""
+    try:
+        j = int(request.values.get("jahr", ""))
+        return j if 2020 <= j <= 2040 else None
+    except ValueError:
+        return None
+
+
 def verein_login(f):
     """Simuliertes Vereins-Login (live: require_verein_login + Rolle admin)."""
     @wraps(f)
@@ -137,70 +145,32 @@ def verein_login(f):
 
 @app.get("/")
 def start():
-    return render_template("start.html", stand=D.stand())
+    """Angemeldet ist die Startseite „Termine“ (Josef 2026-10-05), sonst kurze Erklärung + Anmelden."""
+    if session.get("verein") and db.konto(session["verein"]):
+        return redirect(url_for("termine_seite"))
+    return render_template("start.html")
 
 
 @app.post("/daten-holen")
 def daten_holen():
     D.hole_daten()
-    return redirect(url_for("start"))
+    return redirect(request.referrer or url_for("start"))
 
 
-# ── 1. Kollisionswarnung (nur veröffentlichte Termine – Josef 2026-10-05) ───
+@app.context_processor
+def _datenstand():
+    return {"stand": D.stand()}
 
+
+# Frühere Tabs – jetzt in „Termine“ aufgegangen
 @app.get("/kollision")
-def kollision_seite():
-    return render_template("kollision.html", vereine=D.vereine(), gruppen=D.vereine_gruppiert(),
-                           heute=date.today().isoformat())
-
-
-@app.get("/api/kollisionen")
-def api_kollisionen():
-    """Wie später `GET /verein/kollisionen` – der Verein kommt dort aus der Sitzung, hier aus der Auswahl."""
-    von, bis = request.args.get("von", ""), request.args.get("bis", "") or request.args.get("von", "")
-    if not _datum_ok(von) or not _datum_ok(bis) or bis < von:
-        return jsonify([])
-    tage = []
-    d0, d1 = date.fromisoformat(von), date.fromisoformat(bis)
-    while d0 <= d1 and len(tage) < 16:
-        tage.append(d0.isoformat())
-        d0 = date.fromordinal(d0.toordinal() + 1)
-    d = D.daten()
-    entwurf = {"verein": request.args.get("verein", ""), "tage": tage,
-               "ort": request.args.get("ort", "")[:TEXT_MAX], "uhrzeit": request.args.get("uhrzeit", "")[:5]}
-    mit = {x for x in request.args.get("mit", "").split(",") if x in d["labels"]}
-    k = kollisionen(_veroeffentlichte(), d["meta"], d["labels"], entwurf, d["rubriken"],
-                    wochenende=request.args.get("wochenende") == "1", zusatz_vereine=mit)
-    return jsonify([{**x, "datum_text": datum_text(x)} for x in k])
-
-
-# ── 2. Vorjahres-Vorlage ─────────────────────────────────────────────────────
-
 @app.get("/vorlage")
-def vorlage_seite():
-    jahr = _zieljahr()
-    verein = request.args.get("verein", "")
-    eigene = []
-    if verein:
-        alle = D.vorschlaege(jahr)
-        eigene = [dict(v, id=f"v{i}") for i, v in enumerate(alle) if v.get("verein") == verein]
-        andere = [dict(v, id=f"x{i}") for i, v in enumerate(alle) if v.get("verein") != verein] \
-            + _kalender_im_jahr(jahr)
-        _mit_konflikten(eigene, andere)
-    return render_template("vorlage.html", vereine=D.vereine(), verein=verein, jahr=jahr,
-                           monate=_nach_monat(eigene), anzahl=len(eigene),
-                           name=D.daten()["labels"].get(verein, ""), daten_ab=D.daten_ab())
+@app.get("/entwuerfe")
+def alte_seiten():
+    return redirect(url_for("termine_seite", **({"jahr": request.args["jahr"]} if request.args.get("jahr") else {})))
 
 
-@app.get("/vorlage/export.<fmt>")
-def vorlage_export(fmt):
-    jahr, verein = _zieljahr(), request.args.get("verein", "")
-    zeilen = [v for v in D.vorschlaege(jahr) if v.get("verein") == verein]
-    name = D.daten()["labels"].get(verein, verein)
-    return _export(f"Terminvorschlag {jahr} – {name}", zeilen, fmt, mit_verein=False)
-
-
-# ── 3. Vereinskonto (simuliert) ──────────────────────────────────────────────
+# ── Vereinskonto (simuliert) ─────────────────────────────────────────────────
 
 @app.get("/anmelden")
 def anmelden():
@@ -209,7 +179,7 @@ def anmelden():
 
 
 def _sicheres_ziel(weiter: str) -> str:
-    return weiter if weiter.startswith("/") and not weiter.startswith("//") else url_for("entwuerfe_seite")
+    return weiter if weiter.startswith("/") and not weiter.startswith("//") else url_for("termine_seite")
 
 
 @app.post("/anmelden")
@@ -240,35 +210,86 @@ def demo_freigeben():
     return redirect(request.referrer or url_for("anmelden"))
 
 
-# ── 4. Entwürfe des Vereins (sein eigener Bereich) ───────────────────────────
+# ── Termine des Vereins (Startseite) ─────────────────────────────────────────
 
-@app.get("/entwuerfe")
+def _kalender_termine(key: str) -> list[dict]:
+    """Termine des Vereins, die schon im Kalender stehen (Momentaufnahme) – im Prototyp nur lesend."""
+    out = []
+    for t in D.daten()["termine"]:
+        if t.get("verein") == key and t.get("datum"):
+            out.append({**t, "status": "kalender", "_eid": f"k{t.get('id', '')}"})
+    return out
+
+
+def _pruefen(key: str, termine: list[dict]) -> list[dict]:
+    """Konflikte nach dem Prüfkreis des Vereins: Gemeinde automatisch + dazu − ohne. Nur veröffentlichte Termine."""
+    dazu, ohne = db.pruefkreis(key)
+    jahre = {t["datum"][:4] for t in termine}
+    andere = [t for t in _veroeffentlichte() if t.get("datum", "")[:4] in jahre]
+    return _mit_konflikten(termine, andere, zusatz=dazu, ohne=ohne)
+
+
+@app.get("/termine")
 @verein_login
-def entwuerfe_seite(key):
-    jahr = _zieljahr()
-    eigene = db.entwuerfe(key, jahr)
-    # Konflikte hier nur mit veröffentlichten Terminen – Entwürfe anderer Vereine sieht man in der Runde
-    _mit_konflikten(eigene, _kalender_im_jahr(jahr))
-    return render_template("entwuerfe.html", key=key, jahr=jahr, monate=_nach_monat(eigene),
-                           n_offen=sum(1 for t in eigene if t["status"] != "veroeffentlicht"),
-                           n_unbestaetigt=sum(1 for t in eigene if t["status"] == "entwurf"),
-                           vorlage_n=len(db.offene_vorlage(key, D.vorschlaege(jahr))), konto=db.konto(key),
-                           darf=db.freigegeben(key), runden=db.runden_des_vereins(key),
+def termine_seite(key):
+    jahr = _jahr_filter()
+    heute = date.today().isoformat()
+    alle = _kalender_termine(key) + db.entwuerfe(key)
+    sicht = [t for t in alle if (t["datum"][:4] == str(jahr) if jahr else t["datum"] >= heute)]
+    _pruefen(key, sicht)
+    eigene = [t for t in sicht if t["status"] in ("entwurf", "bestaetigt")]
+    vorlage_jahr = jahr or date.today().year + 1
+    jahre = sorted({int(t["datum"][:4]) for t in alle} | {date.today().year, date.today().year + 1})
+    return render_template("termine.html", key=key, jahr=jahr, jahre=jahre, monate=_nach_monat(sicht),
+                           n_offen=len(eigene), n_unbestaetigt=sum(1 for t in eigene if t["status"] == "entwurf"),
+                           vorlage_jahr=vorlage_jahr,
+                           vorlage_n=len(db.offene_vorlage(key, D.vorschlaege(vorlage_jahr))), konto=db.konto(key),
+                           darf=db.freigegeben(key), runden=[r for r in db.runden_des_vereins(key) if r["status"] == "offen"],
                            fehler=request.args.get("fehler", ""), meldung=request.args.get("meldung", ""),
-                           daten_ab=D.daten_ab())
+                           heute=heute, daten_ab=D.daten_ab())
 
 
-def _zurueck(jahr: int, anker: str = "", **kw):
-    """Zurück zur Runde, aus der die Aktion kam (Feld `runde`, nur wenn man dabei ist), sonst zu den Entwürfen."""
+@app.get("/api/kollisionen")
+def api_kollisionen():
+    """Warnung im Formular „Neuer Termin“/„Ändern“ (live: `GET /verein/kollisionen`). Verein aus der Sitzung,
+    Prüfkreis aus den Einstellungen, nur veröffentlichte Termine."""
+    key = session.get("verein")
+    if not key or not db.konto(key):
+        return jsonify({"fehler": "nicht angemeldet"}), 401
+    von, bis = request.args.get("von", ""), request.args.get("bis", "") or request.args.get("von", "")
+    if not _datum_ok(von) or not _datum_ok(bis) or bis < von:
+        return jsonify([])
+    tage = []
+    d0, d1 = date.fromisoformat(von), date.fromisoformat(bis)
+    while d0 <= d1 and len(tage) < 16:
+        tage.append(d0.isoformat())
+        d0 = date.fromordinal(d0.toordinal() + 1)
+    d = D.daten()
+    dazu, ohne = db.pruefkreis(key)
+    entwurf = {"verein": key, "tage": tage,
+               "ort": request.args.get("ort", "")[:TEXT_MAX], "uhrzeit": request.args.get("uhrzeit", "")[:5]}
+    ausser = {f"e{request.args['ohne_id']}"} if request.args.get("ohne_id", "").isdigit() else None
+    k = kollisionen(_veroeffentlichte(), d["meta"], d["labels"], entwurf, d["rubriken"],
+                    wochenende=request.args.get("wochenende") == "1", zusatz_vereine=dazu, ohne_vereine=ohne,
+                    ausser_ids=ausser)
+    return jsonify([{**x, "datum_text": datum_text(x)} for x in k])
+
+
+def _zurueck(jahr: int | None = None, anker: str = "", **kw):
+    """Zurück zur Runde, aus der die Aktion kam (Feld `runde`, nur wenn man dabei ist), sonst zu „Termine“
+    (mit dem Jahr-Filter, aus dem die Aktion kam – Feld `ansicht_jahr`)."""
     rid = request.form.get("runde", "")
     if rid.isdigit() and session.get("verein") in db.aktive_teilnehmer(int(rid)):
         return redirect(url_for("runde_seite", runde_id=int(rid), **kw) + (f"#{anker}" if anker else ""))
-    return redirect(url_for("entwuerfe_seite", jahr=jahr, **kw) + (f"#{anker}" if anker else ""))
+    ansicht = request.form.get("ansicht_jahr", "")
+    if ansicht.isdigit():
+        kw["jahr"] = ansicht
+    return redirect(url_for("termine_seite", **kw) + (f"#{anker}" if anker else ""))
 
 
 def _verlauf(key: str, jahr: int, aktion: str, details: str = "") -> None:
     """Terminänderungen im Verlauf aller offenen Runden des Vereins für dieses Jahr festhalten –
-    egal ob in der Runde oder auf der Entwurfsseite geändert."""
+    egal ob in der Runde oder auf der Termin-Seite geändert."""
     for rid in db.offene_runden(key, jahr):
         db.protokoll(rid, key, aktion, details)
 
@@ -284,19 +305,40 @@ def entwuerfe_aus_vorjahr(key):
     n = db.aus_vorlage(key, D.vorschlaege(jahr))
     if n:
         _verlauf(key, jahr, "Entwürfe aus dem Vorjahr erzeugt", f"{n} Termine")
-    return _zurueck(jahr, meldung=f"{n} Entwürfe aus dem Vorjahr angelegt." if n else "Keine neuen Vorschläge aus dem Vorjahr.")
+    return _zurueck(jahr, meldung=f"{n} Entwürfe für {jahr} aus dem Vorjahr angelegt." if n else "Keine neuen Vorschläge aus dem Vorjahr.")
+
+
+_MAX_TAGE = 16   # wie live (ADR-017)
 
 
 @app.post("/entwuerfe/neu")
 @verein_login
 def entwurf_neu(key):
+    """Neuer Termin: „Veröffentlichen“ (freigegebenes Konto) oder „Als Entwurf speichern“. Mehrtägig = je Tag ein Eintrag."""
     felder, fehler = _felder_aus_formular()
-    jahr = int(felder["datum"][:4]) if _datum_ok(felder["datum"]) else _zieljahr()
+    bis = request.form.get("datum_bis", "").strip()
+    tage = [felder["datum"]]
+    if not fehler and bis:
+        if not _datum_ok(bis) or bis < felder["datum"]:
+            fehler = "Das bis-Datum ist ungültig oder liegt vor dem Startdatum."
+        else:
+            d0, d1 = date.fromisoformat(felder["datum"]), date.fromisoformat(bis)
+            if (d1 - d0).days + 1 > _MAX_TAGE:
+                fehler = f"Höchstens {_MAX_TAGE} Tage auf einmal."
+            tage = [date.fromordinal(d0.toordinal() + i).isoformat() for i in range((d1 - d0).days + 1)]
     if fehler:
-        return _zurueck(jahr, "neu", fehler=fehler)
-    db.entwurf_neu(key, felder)
-    _verlauf(key, jahr, "Termin ergänzt", f"{felder['bezeichnung']}: {_kurz(felder['datum'])}")
-    return _zurueck(jahr)
+        return _zurueck(None, "neu", fehler=fehler)
+    sofort = request.form.get("aktion") == "veroeffentlichen"
+    if sofort and not db.freigegeben(key):
+        abort(403, "Veröffentlichen erst nach Freigabe des Kontos – als Entwurf speichern geht schon.")
+    ids = [db.entwurf_neu(key, {**felder, "datum": tag}) for tag in tage]
+    if sofort:
+        db.veroeffentlichen(key, ids)
+    jahr = int(felder["datum"][:4])
+    _verlauf(key, jahr, "Termin veröffentlicht" if sofort else "Termin ergänzt",
+             f"{felder['bezeichnung']}: {_kurz(tage[0])}" + (f" bis {_kurz(tage[-1])}" if len(tage) > 1 else ""))
+    wort = "veröffentlicht (Prototyp: nur markiert)" if sofort else "als Entwurf gespeichert"
+    return _zurueck(None, f"t{ids[0]}", meldung=f"{felder['bezeichnung']}: {len(tage)} {'Tag' if len(tage) == 1 else 'Tage'} {wort}.")
 
 
 @app.post("/entwuerfe/<int:eid>")
@@ -333,7 +375,6 @@ def entwurf_aktion(key, eid):
             if felder["ort"] != t["ort"]:
                 aenderung.append("Ort geändert")
             _verlauf(key, jahr, "Termin geändert", f"{name}: " + (", ".join(aenderung) or "ohne Änderung"))
-            # Neues Jahr: auch dort festhalten
             if int(felder["datum"][:4]) != jahr:
                 _verlauf(key, int(felder["datum"][:4]), "Termin ergänzt (aus anderem Jahr verschoben)", name)
         jahr = int(felder["datum"][:4])
@@ -345,27 +386,56 @@ def entwurf_aktion(key, eid):
 @app.post("/entwuerfe/alle")
 @verein_login
 def entwuerfe_alle(key):
-    """Alle eigenen Entwürfe eines Jahres bestätigen oder veröffentlichen."""
-    jahr = _zieljahr()
-    offen = [t["_eid"] for t in db.entwuerfe(key, jahr) if t["status"] != "veroeffentlicht"]
+    """Alle eigenen Entwürfe bestätigen oder veröffentlichen – eines Jahres (Feld `jahr`) oder, ohne Jahr,
+    alle ab heute (Standardansicht von „Termine“)."""
+    jahr = _jahr_filter()
+    heute = date.today().isoformat()
+    offen = [t for t in db.entwuerfe(key, jahr) if t["status"] != "veroeffentlicht" and (jahr or t["datum"] >= heute)]
+    jahre = {int(t["datum"][:4]) for t in offen}
     if request.form.get("aktion") == "veroeffentlichen":
         if not db.freigegeben(key):
             abort(403, "Veröffentlichen erst nach Freigabe des Kontos.")
-        n = db.veroeffentlichen(key, offen)
-        if n:
-            _verlauf(key, jahr, "alle veröffentlicht", f"{n} Termine")
+        n = db.veroeffentlichen(key, [t["_eid"] for t in offen])
+        for j in jahre:
+            _verlauf(key, j, "alle veröffentlicht", f"{sum(1 for t in offen if t['datum'][:4] == str(j))} Termine")
         return _zurueck(jahr, meldung=f"{n} Termine veröffentlicht (Prototyp: nur markiert).")
-    n = db.bestaetigen(key, [t["_eid"] for t in db.entwuerfe(key, jahr) if t["status"] == "entwurf"])
-    if n:
-        _verlauf(key, jahr, "alle bestätigt", f"{n} Termine")
+    unbest = [t for t in offen if t["status"] == "entwurf"]
+    n = db.bestaetigen(key, [t["_eid"] for t in unbest])
+    for j in {int(t["datum"][:4]) for t in unbest}:
+        _verlauf(key, j, "alle bestätigt", f"{sum(1 for t in unbest if t['datum'][:4] == str(j))} Termine")
     return _zurueck(jahr, meldung=f"{n} Termine bestätigt.")
 
 
-@app.get("/entwuerfe/export.<fmt>")
+@app.get("/termine/export.<fmt>")
 @verein_login
-def entwuerfe_export(key, fmt):
-    jahr = _zieljahr()
-    return _export(f"Termine {jahr} – {session.get('verein_name', key)}", db.entwuerfe(key, jahr), fmt, mit_verein=False)
+def termine_export(key, fmt):
+    jahr = _jahr_filter()
+    heute = date.today().isoformat()
+    alle = _kalender_termine(key) + db.entwuerfe(key)
+    zeilen = [t for t in alle if (t["datum"][:4] == str(jahr) if jahr else t["datum"] >= heute)]
+    return _export(f"Termine {jahr or 'ab ' + date.today().strftime('%d.%m.%Y')} – {session.get('verein_name', key)}",
+                   zeilen, fmt, mit_verein=False)
+
+
+# ── Einstellungen: Überschneidungen prüfen mit … ─────────────────────────────
+
+@app.route("/einstellungen", methods=["GET", "POST"])
+@verein_login
+def einstellungen(key):
+    labels = D.daten()["labels"]
+    gem, lk = D.sitz(key)
+    eigene_gemeinde = [(k, n) for k, n in D.vereine_der_gemeinde(gem, lk) if k != key] if gem else []
+    if request.method == "POST":
+        dazu = {k for k in request.form.getlist("dazu") if k in labels}
+        ohne = {k for k in request.form.getlist("ohne") if k in {x for x, _ in eigene_gemeinde}}
+        db.pruefkreis_setzen(key, dazu, ohne)
+        return redirect(url_for("einstellungen", meldung="Gespeichert. Gilt ab sofort für alle Warnungen."))
+    dazu, ohne = db.pruefkreis(key)
+    gruppen = [{**g, "vereine": [x for x in g["vereine"] if x[0] != key and x[0] not in {k for k, _ in eigene_gemeinde}]}
+               for g in D.vereine_gruppiert()]
+    return render_template("einstellungen.html", gemeinde=gem, landkreis=lk, eigene_gemeinde=eigene_gemeinde,
+                           gruppen=[g for g in gruppen if g["vereine"]], dazu=dazu, ohne=ohne, labels=labels,
+                           meldung=request.args.get("meldung", ""))
 
 
 # ── 5. Planungsrunden ────────────────────────────────────────────────────────

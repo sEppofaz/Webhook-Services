@@ -113,7 +113,7 @@
 
 {% if offen %}
 <h2 id="neu">Termin ergänzen</h2>
-{{ neuer_termin(csrf, r.jahr, runde_id=r.id) }}
+{{ neuer_termin(csrf, r.jahr, runde_id=r.id, darf=True) }}
 {% endif %}
 
 <h2>Herunterladen</h2>

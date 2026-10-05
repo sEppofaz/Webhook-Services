@@ -18,15 +18,23 @@ Tests: `~/.venvs/vko-jahresplanung/bin/python tests/test_jahresplanung.py`
 
 ## Ablauf (ADR-026)
 
-1. **Jeder Verein plant in seinem Bereich** („Entwürfe“): anlegen, aus dem Vorjahr erzeugen, ändern.
-2. **Ein Vereinsadmin startet eine Planungsrunde** („Planungsrunden“) und lädt die anderen per **Link** (WhatsApp/Mail)
-   oder **Code** (z. B. beim Treffen am Beamer) ein.
-3. **Die anderen melden sich an und treten aktiv bei.** In der Runde sieht jeder die Entwürfe aller Teilnehmer mit den
-   Konflikten, ändert seine eigenen (Mac/Handy) und **bestätigt** sie („steht so“).
-4. **Jeder Verein veröffentlicht selbst** – einzeln oder alle auf einmal.
-5. **Organisator schließt die Runde ab** → das Ergebnis (Teilnehmer, Termine mit Status, offene Konflikte, Verlauf)
-   wird eingefroren und steht als **PDF bei der Runde** unter „Planungsrunden“ – für jeden beim Abschluss beteiligten Verein, auch nach einem Austritt. Erneut abschließen
-   = neue Version, alte bleibt. Der Verlauf (wer hat wann was geändert) wird ab Start mitgeschrieben.
+1. **Anmelden als Verein → Startseite „Termine“**: alle Termine des Vereins – die schon im Kalender stehen
+   (Momentaufnahme, nur lesend) und die eigenen Entwürfe. Filter „ab heute“ oder Jahr.
+2. **Neuer Termin**: beim Tippen von Datum/Ort erscheint die **Kollisionswarnung** (blockiert nie). Zwei Knöpfe:
+   „Veröffentlichen“ oder „Als Entwurf speichern“; mehrtägig = je Tag ein Termin. Gleiche Warnung beim „Ändern“.
+   Für die Jahresplanung: „Entwürfe aus dem Vorjahr erzeugen“.
+3. **Einstellungen**: mit welchen Vereinen auf Überschneidungen geprüft wird – eigene Gemeinde automatisch,
+   einzelne ausschließen, weitere (Nachbarn) dazunehmen. Gilt für Warnung und Markierungen.
+4. **Planungsrunde**: ein Vereinsadmin startet sie (Organisator) und lädt per **Link** oder **Code** ein; die anderen
+   treten angemeldet und aktiv bei, sehen alle Entwürfe mit Konflikten, ändern und **bestätigen** ihre eigenen.
+5. **Jeder Verein veröffentlicht selbst** – einzeln oder alle auf einmal.
+6. **Organisator schließt die Runde ab** → Ergebnis (Teilnehmer, Termine mit Status, offene Konflikte, Verlauf)
+   wird eingefroren und steht als **PDF bei der Runde** unter „Planungsrunden“ – für jeden beim Abschluss beteiligten
+   Verein, auch nach einem Austritt. Erneut abschließen = neue Version, alte bleibt.
+
+**Josef gibt jedes neue Konto persönlich frei** (live: App/Telegram; hier `/anmelden` → „Freigeben (VKO)“). Vorher:
+Entwürfe ja, Runden und Veröffentlichen nein. Anmeldung ist simuliert (Verein wählen); Veröffentlichen setzt im
+Prototyp nur einen Zeitstempel.
 
 **Netz-Hinweis:** Banner bei Verbindungsabbruch (Formulare werden dann nicht abgeschickt, Eingaben bleiben) und bei
 langsamer Verbindung; „Wird gespeichert …“ im Knopf, kein Doppel-Absenden; in der Runde alle 15 s Abfrage

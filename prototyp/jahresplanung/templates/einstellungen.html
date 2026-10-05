@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% from "_vereinsauswahl.html" import vereinsauswahl %}
+{% block titel %}Einstellungen{% endblock %}
+{% block inhalt %}
+<h1>Einstellungen</h1>
+{% if meldung %}<div class="ok">{{ meldung }}</div>{% endif %}
+
+<form method="post">{{ csrf()|safe }}
+<h2>Überschneidungen prüfen mit …</h2>
+<div class="card">
+  <p style="margin-top:0"><b>Automatisch:</b> alle Vereine {% if gemeinde %}der Gemeinde <b>{{ gemeinde }}</b>{% else %}eurer Gemeinde{% endif %} – nach Ort des Termins und Vereinssitz, auch Vereine, die später dazukommen.</p>
+  <p class="hint">Gilt für die Warnung beim Anlegen und Ändern und für die Markierungen in „Termine“. In Planungsrunden zählen immer alle Teilnehmer.</p>
+</div>
+
+{% if eigene_gemeinde %}
+<details class="card"{% if ohne %} open{% endif %}>
+  <summary style="font-size:15px;font-weight:600">Vereine der eigenen Gemeinde ausschließen {% if ohne %}({{ ohne|length }}){% endif %}</summary>
+  <p class="hint">Haken = wird <b>nicht</b> geprüft (z. B. ein Verein, dessen Termine euch nie betreffen).</p>
+  <div class="vauswahl-liste">
+    {% for k, n in eigene_gemeinde %}
+    <label class="vauswahl-eintrag"><input type="checkbox" name="ohne" value="{{ k }}"{% if k in ohne %} checked{% endif %}> {{ n }}</label>
+    {% endfor %}
+  </div>
+</details>
+{% endif %}
+
+<details class="card" open>
+  <summary style="font-size:15px;font-weight:600">Weitere Vereine dazunehmen – z. B. aus der Nachbarschaft {% if dazu %}({{ dazu|length }}){% endif %}</summary>
+  <p class="hint">Diese Vereine werden immer geprüft, egal wo ihr Termin stattfindet.</p>
+  {% if dazu %}<p class="hint">Aktuell: {% for k in dazu|sort %}{{ labels.get(k, k) }}{{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
+  {{ vereinsauswahl(gruppen, "dazu", "dazu-auswahl") }}
+</details>
+
+<div class="aktionen"><button class="btn">Speichern</button></div>
+</form>
+<script>
+  // Gespeicherte Auswahl in der Vereinsliste anhaken
+  (function () {
+    const gewaehlt = new Set({{ dazu|list|tojson }});
+    const box = document.getElementById("dazu-auswahl");
+    for (const c of box.querySelectorAll("input[name=dazu]")) c.checked = gewaehlt.has(c.value);
+    box.zaehlen && box.zaehlen();
+  })();
+</script>
+{% endblock %}

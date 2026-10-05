@@ -28,7 +28,8 @@ from daten import DATEN_DIR
 
 DB_FILE = DATEN_DIR / "planung.sqlite"
 
-STATUS = {"entwurf": "Entwurf", "bestaetigt": "Bestätigt", "veroeffentlicht": "Veröffentlicht"}
+STATUS = {"entwurf": "Entwurf", "bestaetigt": "Bestätigt", "veroeffentlicht": "Veröffentlicht",
+          "kalender": "Im Kalender"}   # kalender = steht schon live im Kalender (Momentaufnahme, nur lesend)
 FREIGABE = {"vko": "freigegeben", "ausstehend": "wartet auf Freigabe durch VKO"}
 # Code zum Beitreten: ohne leicht verwechselbare Zeichen (0/O, 1/I/L), angezeigt als „K7M-4QX“
 CODE_ZEICHEN = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
@@ -73,6 +74,12 @@ CREATE TABLE IF NOT EXISTS runde_teilnehmer (
     beigetreten_am TEXT NOT NULL,
     aktiv          INTEGER NOT NULL DEFAULT 1,      -- 1 dabei · 0 vom Organisator entfernt · 2 selbst verlassen
     PRIMARY KEY (runde_id, verein_key)
+);
+CREATE TABLE IF NOT EXISTS pruefkreis (         -- „Überschneidungen prüfen mit“: Gemeinde automatisch + Anpassungen
+    verein_key TEXT NOT NULL,
+    ziel_key   TEXT NOT NULL,
+    art        TEXT NOT NULL,                   -- dazu (immer prüfen) | ohne (nie prüfen)
+    PRIMARY KEY (verein_key, ziel_key)
 );
 CREATE TABLE IF NOT EXISTS runde_protokoll (    -- Verlauf: nur Vereinsnamen und Termine, keine Personendaten
     id         INTEGER PRIMARY KEY,
@@ -206,13 +213,13 @@ def entwurf(eid: int):
     return _als_termin(r) if r else None
 
 
-def entwurf_neu(verein_key: str, felder: dict, regel: str = "", datum_vorjahr: str = "", geo=None) -> None:
+def entwurf_neu(verein_key: str, felder: dict, regel: str = "", datum_vorjahr: str = "", geo=None) -> int:
     with conn() as c:
-        c.execute("INSERT INTO entwurf (verein_key, datum, uhrzeit, uhrzeit_bis, bezeichnung, ort, regel, datum_vorjahr, "
+        return c.execute("INSERT INTO entwurf (verein_key, datum, uhrzeit, uhrzeit_bis, bezeichnung, ort, regel, datum_vorjahr, "
                   "geo_json, geaendert_am) VALUES (?,?,?,?,?,?,?,?,?,?)",
                   (verein_key, felder["datum"], felder.get("uhrzeit", ""), felder.get("uhrzeit_bis", ""),
                    felder["bezeichnung"], felder.get("ort", ""), regel, datum_vorjahr,
-                   json.dumps(geo, ensure_ascii=False) if geo else None, jetzt()))
+                   json.dumps(geo, ensure_ascii=False) if geo else None, jetzt())).lastrowid
 
 
 def _vorlage_schluessel(t: dict) -> tuple:
@@ -463,3 +470,22 @@ def stand_version(runde_id: int, jahr: int) -> str:
         h.update(repr(tuple(z)).encode())
     h.update(f"|{','.join(sorted(keys))}|{st['status'] if st else ''}".encode())
     return h.hexdigest()[:16]
+
+
+# ── Prüfkreis für Überschneidungen ───────────────────────────────────────────
+
+def pruefkreis(verein_key: str) -> tuple[set, set]:
+    """(dazu, ohne) – zusätzlich geprüfte und ausgeschlossene Vereine. Die eigene Gemeinde gilt automatisch."""
+    with conn() as c:
+        rows = c.execute("SELECT ziel_key, art FROM pruefkreis WHERE verein_key = ?", (verein_key,)).fetchall()
+    return {r["ziel_key"] for r in rows if r["art"] == "dazu"}, {r["ziel_key"] for r in rows if r["art"] == "ohne"}
+
+
+def pruefkreis_setzen(verein_key: str, dazu: set, ohne: set) -> None:
+    """Ersetzt die Einstellungen des Vereins komplett. Ein Verein kann nicht zugleich dazu und ohne sein (ohne gewinnt)."""
+    dazu = set(dazu) - set(ohne) - {verein_key}
+    ohne = set(ohne) - {verein_key}
+    with conn() as c:
+        c.execute("DELETE FROM pruefkreis WHERE verein_key = ?", (verein_key,))
+        c.executemany("INSERT INTO pruefkreis (verein_key, ziel_key, art) VALUES (?,?,?)",
+                      [(verein_key, k, "dazu") for k in sorted(dazu)] + [(verein_key, k, "ohne") for k in sorted(ohne)])

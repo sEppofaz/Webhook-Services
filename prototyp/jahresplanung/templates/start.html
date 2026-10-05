@@ -1,40 +1,11 @@
 {% extends "base.html" %}
 {% block titel %}Start{% endblock %}
 {% block inhalt %}
-<h1>Jahresplanung für Vereine</h1>
-<p class="hint">So ist die Zusammenarbeit gedacht: <b>Jeder Verein plant in seinem eigenen Bereich</b> – seine Termine sind Entwürfe, nichts davon ist öffentlich.
-<b>Jeder Vereinsadmin kann eine Planungsrunde starten</b> und andere Vereine per Link oder Code einladen. Wer beitritt, sieht die Entwürfe aller Teilnehmer mit den Konflikten,
-ändert seine eigenen – am Mac oder Handy – und bestätigt sie. Danach <b>veröffentlicht jeder Verein selbst</b>, einzeln oder alle auf einmal.</p>
-
-<div class="kacheln">
-  <a class="card" href="{{ url_for('entwuerfe_seite') }}">
-    <b>Entwürfe – unser Bereich</b>
-    <p class="hint">Termine als Entwurf anlegen oder aus dem Vorjahr erzeugen, bestätigen, veröffentlichen. Anmeldung im Prototyp simuliert.</p>
-  </a>
-  <a class="card" href="{{ url_for('runden_seite') }}">
-    <b>Planungsrunden</b>
-    <p class="hint">Runde starten oder mit Link/Code beitreten. In der Runde: alle Entwürfe, Konflikte, eigene Termine ändern und bestätigen, Jahresprogramm exportieren.</p>
-  </a>
-  <a class="card" href="{{ url_for('kollision_seite') }}">
-    <b>Kollisionswarnung</b>
-    <p class="hint">Der Hinweis im Vereinsformular: „Am selben Tag in deiner Gemeinde schon …“. Kennt nur veröffentlichte Termine.</p>
-  </a>
-  <a class="card" href="{{ url_for('vorlage_seite') }}">
-    <b>Vorjahres-Vorlage</b>
-    <p class="hint">Was „Entwürfe aus dem Vorjahr erzeugen“ für einen Verein vorschlagen würde – mit Regel je Termin.</p>
-  </a>
-</div>
-
-<h2>Datenstand</h2>
-<div class="card">
-{% if stand.vorhanden %}
-  <p>{{ stand.anzahl }} Termine von {{ stand.vereine }} Vereinen, {{ stand.von|tm }}{{ stand.von[:4] }} bis {{ stand.bis|tm }}{{ stand.bis[:4] }} · geholt am {{ stand.geholt }}</p>
-  <p class="hint">Erfasst wird erst seit Mai 2026 – Januar bis April fehlen in der Vorlage für 2027. Live kann ein Verein dafür seinen alten Jahresplan hochladen (KI-Import, ca. 2 ct) oder die Excel-Vorlage ausfüllen.</p>
-{% else %}
-  <p>Noch keine Daten.</p>
-{% endif %}
-  <form method="post" action="{{ url_for('daten_holen') }}">{{ csrf()|safe }}
-    <button class="btn sek klein">Aktuelle Termine von vereinskalender.online holen</button>
-  </form>
+<h1>Vereinskalender – Termine planen</h1>
+<div class="card" style="max-width:720px">
+  <p style="margin-top:0">Als Verein angemeldet seht ihr hier <b>alle eure Termine</b>. Beim Anlegen eines Termins warnt der Vereinskalender,
+  wenn am selben Tag schon etwas in eurer Gemeinde geplant ist – mit welchen Vereinen geprüft wird, stellt ihr selbst ein.</p>
+  <p>Für die Jahresplanung legt ihr Termine als <b>Entwurf</b> an, startet eine <b>Planungsrunde</b> mit den anderen Vereinen und veröffentlicht danach selbst.</p>
+  <a class="btn" href="{{ url_for('anmelden') }}">Anmelden</a>
 </div>
 {% endblock %}

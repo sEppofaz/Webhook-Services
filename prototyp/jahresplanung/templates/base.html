@@ -42,7 +42,7 @@ input[type=checkbox]{width:18px;height:18px;margin:0;accent-color:var(--accent);
 .btn.klein{padding:0 10px;font-size:13px;white-space:nowrap}.btn.rot{background:var(--rot)}
 .chip{display:inline-block;font-size:12px;border-radius:999px;padding:2px 9px;background:var(--line);color:var(--text2);white-space:nowrap}
 .chip.entwurf,.chip.vorschlag{background:var(--gelb-bg);color:var(--gelb)}.chip.bestaetigt{background:#dbeafe;color:#1e40af}
-.chip.veroeffentlicht{background:var(--gruen-bg);color:var(--gruen)}
+.chip.veroeffentlicht,.chip.kalender{background:var(--gruen-bg);color:var(--gruen)}
 @media (prefers-color-scheme:dark){.chip.bestaetigt{background:#172554;color:#93c5fd}}
 .chip.verworfen{text-decoration:line-through}
 .warn{background:var(--gelb-bg);color:var(--gelb);border-radius:8px;padding:10px 12px;margin:10px 0;font-size:14px}
@@ -87,11 +87,11 @@ body.treffen{font-size:18px}body.treffen .code{font-size:44px}body.treffen main{
 <body class="{% block body_klasse %}{% endblock %}">
 <header>
   <span class="titel">Vereinskalender · Jahresplanung</span>
-  <a href="{{ url_for('start') }}">Start</a>
-  <a href="{{ url_for('kollision_seite') }}">Kollisionswarnung</a>
-  <a href="{{ url_for('vorlage_seite') }}">Vorjahres-Vorlage</a>
-  <a href="{{ url_for('entwuerfe_seite') }}">Entwürfe</a>
+  {% if angemeldet %}
+  <a href="{{ url_for('termine_seite') }}">Termine</a>
   <a href="{{ url_for('runden_seite') }}">Planungsrunden</a>
+  <a href="{{ url_for('einstellungen') }}">Einstellungen</a>
+  {% endif %}
   {% if angemeldet %}
     <form method="post" action="{{ url_for('abmelden') }}" style="display:flex;align-items:center;gap:8px;margin:0">{{ csrf()|safe }}
       <span style="opacity:.85;font-size:13px">{{ angemeldet_name }}</span>
@@ -102,6 +102,11 @@ body.treffen{font-size:18px}body.treffen .code{font-size:44px}body.treffen main{
 <main>
 {% block inhalt %}{% endblock %}
 </main>
+<footer style="max-width:1100px;margin:24px auto 0;padding:12px 16px 80px;border-top:1px solid var(--line)" class="hint">
+  <b>Prototyp:</b> {% if stand.vorhanden %}{{ stand.anzahl }} Termine von {{ stand.vereine }} Vereinen, Momentaufnahme vom {{ stand.geholt }}. {% endif %}
+  Erfasst seit Mai 2026 – Januar bis April fehlen in der Vorlage für 2027.
+  <form method="post" action="{{ url_for('daten_holen') }}" style="display:inline">{{ csrf()|safe }}<button class="btn sek klein">Termine neu holen</button></form>
+</footer>
 <div id="netz" class="netz" role="status" aria-live="polite" hidden></div>
 <script>
 /* Netz-Hinweis (Josef 2026-10-05): Teilnehmer sollen sich bei schlechtem WLAN/Netz nicht wundern.
@@ -159,6 +164,50 @@ body.treffen{font-size:18px}body.treffen .code{font-size:44px}body.treffen main{
     }
     setTimeout(() => zeige("speichert"), 4000);
   });
+  // Kollisionswarnung in jedem Formular mit Klasse „kollision-pruefen“ (Neuer Termin, Ändern) – Josef 2026-10-05:
+  // kein eigener Tab, der Hinweis kommt beim Anlegen. Blockiert nie; Prüfkreis aus den Einstellungen (serverseitig).
+  for (const form of document.querySelectorAll("form.kollision-pruefen")) {
+    const box = form.querySelector(".kollision-hinweis");
+    const feld = n => form.querySelector(`[name=${n}]`);
+    let timer = null, nr = 0;
+    async function pruefen() {
+      const von = feld("datum") && feld("datum").value;
+      if (!von) { box.replaceChildren(); return; }
+      const q = new URLSearchParams({ von, bis: (feld("datum_bis") && feld("datum_bis").value) || von,
+        ort: feld("ort") ? feld("ort").value : "", uhrzeit: feld("uhrzeit") ? feld("uhrzeit").value : "",
+        ohne_id: form.dataset.eid || "" });
+      const meine = ++nr;
+      const r = await window.vkoAbruf("{{ url_for('api_kollisionen') }}?" + q);
+      if (!r || !r.ok || meine !== nr) return;
+      const liste = await r.json();
+      box.replaceChildren();
+      if (!liste.length) return;
+      const div = document.createElement("div");
+      div.className = "warn";
+      const kopf = document.createElement("b");
+      kopf.textContent = "Am selben Tag schon geplant:";
+      const ul = document.createElement("ul");
+      ul.style.cssText = "margin:6px 0 0;padding-left:18px";
+      for (const x of liste) {   // nur textContent – Titel kommen von anderen Vereinen
+        const li = document.createElement("li");
+        li.textContent = `${x.datum_text}${x.uhrzeit ? ", " + x.uhrzeit : ""} – ${x.bezeichnung} (${x.verein_name})`
+          + (x.nachbar ? " · Nachbarschaft" : "");
+        ul.append(li);
+      }
+      const fuss = document.createElement("div");
+      fuss.className = "hint";
+      fuss.style.marginTop = "6px";
+      fuss.textContent = "Nur ein Hinweis – speichern geht trotzdem. Welche Vereine geprüft werden: Einstellungen.";
+      div.append(kopf, ul, fuss);
+      box.append(div);
+    }
+    form.addEventListener("input", (e) => {
+      if (!["datum", "datum_bis", "uhrzeit", "ort"].includes(e.target.name)) return;
+      clearTimeout(timer); timer = setTimeout(pruefen, 400);
+    });
+    if (form.dataset.eid) form.closest("details")?.addEventListener("toggle", pruefen, { once: true });
+  }
+
   // Zurück-Taste (bfcache): Knöpfe wieder freigeben
   window.addEventListener("pageshow", (e) => {
     if (!e.persisted) return;

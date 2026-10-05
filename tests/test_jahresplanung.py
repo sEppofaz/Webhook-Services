@@ -198,20 +198,15 @@ else:
         return m.group(1).decode() if m else ""
 
     s = c.get("/")
-    pruefe(s.status_code == 200 and b"Jahresplanung" in s.data, "Startseite")
+    pruefe(s.status_code == 200 and b"Anmelden" in s.data, "Startseite ohne Anmeldung")
     tok = csrf_von(s.data)
-    pruefe(c.post("/planung/neu", data={"gemeinde": "Testdorf|Landkreis Landshut", "jahr": "2027"}).status_code == 403,
-           "POST ohne CSRF abgelehnt")
-    j = c.get("/api/kollisionen?verein=a&von=2026-07-11&ort=Testdorf").get_json()
-    pruefe([x["bezeichnung"] for x in j] == ["Grillfest"], f"API-Kollisionen, war {j}")
-    j = c.get("/api/kollisionen?verein=a&von=2026-07-11&mit=d,gibtsnicht").get_json()
-    pruefe(sorted(x["bezeichnung"] for x in j) == ["Fremdfest", "Grillfest"], f"API mit Nachbarn, war {j}")
-    pruefe(b"Weitere Vereine einbeziehen" in c.get("/kollision").data, "Nachbar-Auswahl auf der Seite")
-    s = c.get("/vorlage?verein=b&jahr=2027")
-    pruefe(b"Karfreitag" in s.data and b"Sommerfest" in s.data, "Vorlage zeigt Regel und Konflikt")
+    pruefe(c.post("/runden/neu", data={"name": "X", "jahr": "2027"}).status_code == 403, "POST ohne CSRF abgelehnt")
+    pruefe(c.get("/api/kollisionen?von=2026-07-11").status_code == 401, "Kollisions-API nur angemeldet")
+    for alt in ("/kollision", "/vorlage", "/entwuerfe"):
+        pruefe(c.get(alt).status_code == 302, f"alte Seite {alt} leitet um")
 
-    # Ohne Anmeldung keine Entwürfe, keine Runden
-    pruefe(c.get("/entwuerfe").status_code == 302 and c.get("/runden").status_code == 302, "nur angemeldet")
+    # Ohne Anmeldung keine Termine, keine Runden, keine Einstellungen
+    pruefe(all(c.get(u).status_code == 302 for u in ("/termine", "/runden", "/einstellungen")), "nur angemeldet")
 
     def als(key, neu=False):
         c.post("/abmelden", data={"_csrf": tok})
@@ -228,12 +223,69 @@ else:
     pruefe([t["datum"] for t in DB.entwuerfe("a", 2027)] == ["2027-07-10"], "Entwürfe auch vor der Freigabe")
     pruefe(c.post(f"/entwuerfe/{DB.entwuerfe('a', 2027)[0]['_eid']}", data={"_csrf": tok, "aktion": "veroeffentlichen"}).status_code == 403,
            "ohne Freigabe kein Veröffentlichen")
+    pruefe(c.post("/entwuerfe/neu", data={"_csrf": tok, "datum": "2027-04-10", "bezeichnung": "X", "aktion": "veroeffentlichen"}).status_code == 403,
+           "neuer Termin: Veröffentlichen ohne Freigabe gesperrt")
+    s = c.get("/termine")
+    pruefe(b"Als Entwurf speichern" in s.data and b'value="veroeffentlichen">Ver' not in s.data,
+           "ohne Freigabe nur „Als Entwurf speichern“")
+
+    # Startseite „Termine“: Live-Termine des Vereins + Entwürfe, keine fremden
+    r = c.get("/")
+    pruefe(r.status_code == 302 and r.headers["Location"].endswith("/termine"), "angemeldet: Startseite = Termine")
+    s = c.get("/termine?jahr=2026")
+    pruefe(b"<span>Sommerfest</span>" in s.data and b'chip kalender">Im Kalender' in s.data, "Termine 2026: eigener Live-Termin")
+    pruefe(b"<span>Grillfest</span>" not in s.data, "keine fremden Termine als eigene")
+    pruefe(b"Grillfest" in s.data, "Konflikt-Hinweis mit Grillfest (eigene Gemeinde)")
+    s = c.get("/termine?jahr=2027")
+    pruefe(b"Sommerfest" in s.data and b"Entwurf" in s.data, "Termine 2027: Entwurf aus dem Vorjahr")
+    pruefe(b'class="card kollision-pruefen"' in s.data and b"kollision-hinweis" in s.data, "Formular mit Kollisionswarnung")
+
+    # Kollisions-API aus der Sitzung + Prüfkreis aus den Einstellungen
+    j = c.get("/api/kollisionen?verein=d&von=2026-07-11&ort=Testdorf").get_json()
+    pruefe([x["bezeichnung"] for x in j] == ["Grillfest"], f"API: Verein aus der Sitzung (Parameter ignoriert), war {j}")
+    s = c.get("/einstellungen")
+    pruefe(b"Testdorf" in s.data and b'name="ohne" value="b"' in s.data and b'name="dazu" value="d"' in s.data,
+           "Einstellungen: Gemeinde, ausschließen, dazunehmen")
+    c.post("/einstellungen", data={"_csrf": tok, "dazu": ["d", "gibtsnicht"], "ohne": ["b", "d"]})
+    pruefe(DB.pruefkreis("a") == ({"d"}, {"b"}), f"ohne nur für Vereine der eigenen Gemeinde, war {DB.pruefkreis('a')}")
+    c.post("/einstellungen", data={"_csrf": tok, "dazu": ["d"]})
+    j = c.get("/api/kollisionen?von=2026-07-11&ort=Testdorf").get_json()
+    pruefe(sorted((x["bezeichnung"], x["nachbar"]) for x in j) == [("Fremdfest", True), ("Grillfest", False)],
+           f"dazugenommener Nachbar wird gemeldet, war {j}")
+    c.post("/einstellungen", data={"_csrf": tok, "ohne": ["b"]})
+    j = c.get("/api/kollisionen?von=2026-07-11&ort=Testdorf").get_json()
+    pruefe(j == [], f"ausgeschlossener Verein der Gemeinde wird nicht gemeldet, war {j}")
+    pruefe(b"Grillfest" not in c.get("/termine?jahr=2026").data, "Prüfkreis gilt auch für die Markierungen in „Termine“")
+    c.post("/einstellungen", data={"_csrf": tok})
+    pruefe(DB.pruefkreis("a") == (set(), set()), "Einstellungen zurückgesetzt")
+    als("b")
+    pruefe(DB.pruefkreis("b") == (set(), set()), "Einstellungen gelten je Verein")
+    als("a")
     for v in ("a", "b", "d"):
         c.post("/demo/freigeben", data={"_csrf": tok, "verein": v})
     pruefe(DB.freigegeben("a") and not DB.freigegeben("c"), "Freigabe durch VKO (c bleibt ausstehend)")
     c.post("/entwuerfe/aus-vorjahr", data={"_csrf": tok, "jahr": "2027"})
     pruefe(len(DB.entwuerfe("a", 2027)) == 1, "Vorjahr zweimal erzeugen legt keine Doppel an")
-    pruefe(b"aus dem Vorjahr erzeugen" not in c.get("/entwuerfe?jahr=2027").data, "Vorjahr-Knopf weg, wenn alles übernommen")
+    pruefe(b"aus dem Vorjahr erzeugen" not in c.get("/termine?jahr=2027").data, "Vorjahr-Knopf weg, wenn alles übernommen")
+
+    # Neuer Termin: mehrtägig als Entwurf, einzeln sofort veröffentlicht
+    r = c.post("/entwuerfe/neu", data={"_csrf": tok, "datum": "2027-09-03", "datum_bis": "2027-09-05",
+                                       "bezeichnung": "Herbstfest", "aktion": "entwurf"})
+    herbst = [t for t in DB.entwuerfe("a", 2027) if t["bezeichnung"] == "Herbstfest"]
+    pruefe([t["datum"] for t in herbst] == ["2027-09-03", "2027-09-04", "2027-09-05"]
+           and all(t["status"] == "entwurf" for t in herbst), "mehrtägig: je Tag ein Entwurf")
+    pruefe("meldung=" in r.headers["Location"], "Rückmeldung nach dem Speichern")
+    c.post("/entwuerfe/neu", data={"_csrf": tok, "datum": "2027-10-02", "bezeichnung": "Kirta", "aktion": "veroeffentlichen"})
+    pruefe([t["status"] for t in DB.entwuerfe("a", 2027) if t["bezeichnung"] == "Kirta"] == ["veroeffentlicht"],
+           "„Veröffentlichen“ beim Anlegen")
+    pruefe("fehler=" in c.post("/entwuerfe/neu", data={"_csrf": tok, "datum": "2027-09-05", "datum_bis": "2027-09-03",
+                                                       "bezeichnung": "X"}).headers["Location"], "bis vor Start abgelehnt")
+    pruefe("fehler=" in c.post("/entwuerfe/neu", data={"_csrf": tok, "datum": "2027-01-01", "datum_bis": "2027-03-01",
+                                                       "bezeichnung": "X"}).headers["Location"], "mehr als 16 Tage abgelehnt")
+    for t in herbst + [t for t in DB.entwuerfe("a", 2027) if t["bezeichnung"] == "Kirta"]:
+        DB.zurueckziehen(t["_eid"], "a")
+        DB.entwurf_loeschen(t["_eid"], "a")
+    pruefe([t["bezeichnung"] for t in DB.entwuerfe("a", 2027)] == ["Sommerfest"], "Testtermine wieder entfernt")
     gleich = [{"verein": "a", "bezeichnung": "Gartenfest", "datum_vorjahr": "2026-08-15", "uhrzeit": u} for u in ("10:00", "10:30")]
     pruefe(len(DB.offene_vorlage("a", gleich)) == 2, "gleicher Titel/Tag, andere Uhrzeit: zwei Vorschläge")
 
@@ -301,7 +353,7 @@ else:
     c.post(f"/entwuerfe/{eid_a}", data={"_csrf": tok, "aktion": "bestaetigen"})
     als("d")
     pruefe(c.get(f"/runde/{rid}/stand").get_json()["stand"] != stand1, "Stand ändert sich, wenn ein anderer Verein bestätigt")
-    pruefe(b"vkoAbruf" in c.get(f"/runde/{rid}").data and b'id="netz"' in c.get("/").data, "Netz-Hinweis auf den Seiten")
+    pruefe(b"vkoAbruf" in c.get(f"/runde/{rid}").data and b'id="netz"' in c.get("/termine").data, "Netz-Hinweis auf den Seiten")
 
     # Organisator: erneuern, entfernen, abschließen
     als("a")
@@ -337,11 +389,13 @@ else:
     c.post("/entwuerfe/alle", data={"_csrf": tok, "jahr": "2027", "aktion": "veroeffentlichen"})
     pruefe(all(t["status"] == "veroeffentlicht" for t in DB.entwuerfe("b", 2027)), "alle eigenen veröffentlicht")
     pruefe(DB.entwuerfe("a", 2027)[0]["status"] != "veroeffentlicht", "fremde bleiben unveröffentlicht")
-    j = c.get("/api/kollisionen?verein=a&von=2027-07-18&ort=Testdorf").get_json()
+    pruefe(c.get("/termine/export.xlsx?jahr=2027").status_code == 200, "Vereins-Export")
+    als("a")
+    j = c.get("/api/kollisionen?von=2027-07-18&ort=Testdorf").get_json()
     pruefe([x["bezeichnung"] for x in j] == ["Grillfest"], "Veröffentlichtes zählt in der Formular-Warnung")
+    als("b")
 
     # Exporte, Abschluss
-    pruefe(c.get("/entwuerfe/export.xlsx?jahr=2027").status_code == 200, "Vereins-Export")
     pruefe(c.get(f"/runde/{rid}/export.docx").status_code == 200, "Runden-Export")
     pruefe(c.get(f"/runde/{rid}/export.exe").status_code == 404, "unbekanntes Format 404")
     pruefe(c.post("/anmelden", data={"_csrf": tok, "verein": "p"}).status_code == 403, "ohne Konto keine Anmeldung")
