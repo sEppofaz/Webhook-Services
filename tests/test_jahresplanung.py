@@ -210,125 +210,142 @@ else:
     s = c.get("/vorlage?verein=b&jahr=2027")
     pruefe(b"Karfreitag" in s.data and b"Sommerfest" in s.data, "Vorlage zeigt Regel und Konflikt")
 
-    # Ohne Anmeldung keine Entwürfe
-    pruefe(c.get("/entwuerfe").status_code == 302, "Entwürfe nur angemeldet")
+    # Ohne Anmeldung keine Entwürfe, keine Runden
+    pruefe(c.get("/entwuerfe").status_code == 302 and c.get("/runden").status_code == 302, "nur angemeldet")
 
-    # Planungsraum: Vereine der Gemeinde mit Einladung, noch keine Entwürfe
-    r = c.post("/planung/neu", data={"gemeinde": "Testdorf|Landkreis Landshut", "jahr": "2027", "_csrf": tok})
-    orga = r.headers["Location"]
-    s = c.get(orga)
-    einl = re.findall(rb'/einladung/([\w-]+)', s.data)
-    pruefe(len(set(einl)) == 4, f"vier Einladungen (A, B, C, Pfarrei), waren {len(set(einl))}")
-    pruefe(b"Noch keine Entw" in s.data, "Raum ohne Entwürfe")
-    raum_id = 1
+    def als(key, neu=False):
+        c.post("/abmelden", data={"_csrf": tok})
+        c.post("/anmelden", data={"_csrf": tok, "verein": key, **({"aktion": "konto"} if neu else {})})
 
-    def einladung_fuer(key):
-        return next(v["einladung"] for v in DB.vereine_im_raum(raum_id) if v["verein_key"] == key)
-
-    def als(key):
-        c.post("/anmelden", data={"_csrf": tok, "verein": key})
-
-    # Verein A über Einladung: Konto wartet trotzdem auf Josefs Freigabe (Hinweis auf den Raum)
-    r = c.post(f"/einladung/{einladung_fuer('a')}", data={"_csrf": tok})
-    ka = DB.konto("a")
-    pruefe(r.status_code == 302 and ka["freigabe"] == "ausstehend" and ka["eingeladen_raum_id"] == raum_id,
-           "Einladung legt Konto an, Freigabe ausstehend, mit Raum-Hinweis")
-    pruefe(b"eingeladen \xc3\xbcber Jahresplanung 2027" in c.get("/anmelden").data, "Hinweis auf Einladung bei der Freigabe")
-    pruefe(c.get(f"/treffen/{raum_id}").status_code == 403, "vor Freigabe keine Entwürfe anderer Vereine")
-    pruefe(c.post(f"/einladung/{einladung_fuer('a')}", data={"_csrf": tok}).status_code == 302
-           and DB.konto("a")["freigabe"] == "ausstehend", "zweiter Klick auf Einladung gibt nicht frei")
-    c.post("/entwuerfe/aus-vorjahr?jahr=2027", data={"_csrf": tok, "jahr": "2027"})
-    ea = DB.entwuerfe("a", 2027)
-    pruefe([t["datum"] for t in ea] == ["2027-07-10"], f"Entwurf aus Vorjahr, war {[t['datum'] for t in ea]}")
+    # Konten: jede Registrierung wartet auf Josef
+    for v in ("a", "b", "c", "d"):
+        als(v, neu=True)
+    pruefe(all(DB.konto(v)["freigabe"] == "ausstehend" for v in "abcd"), "neue Konten warten auf Freigabe")
+    als("a")
+    pruefe(c.post("/runden/neu", data={"_csrf": tok, "name": "X", "jahr": "2027"}).status_code == 403,
+           "ohne Freigabe keine Runde starten")
+    c.post("/entwuerfe/aus-vorjahr", data={"_csrf": tok, "jahr": "2027"})
+    pruefe([t["datum"] for t in DB.entwuerfe("a", 2027)] == ["2027-07-10"], "Entwürfe auch vor der Freigabe")
+    pruefe(c.post(f"/entwuerfe/{DB.entwuerfe('a', 2027)[0]['_eid']}", data={"_csrf": tok, "aktion": "veroeffentlichen"}).status_code == 403,
+           "ohne Freigabe kein Veröffentlichen")
+    for v in ("a", "b", "d"):
+        c.post("/demo/freigeben", data={"_csrf": tok, "verein": v})
+    pruefe(DB.freigegeben("a") and not DB.freigegeben("c"), "Freigabe durch VKO (c bleibt ausstehend)")
     c.post("/entwuerfe/aus-vorjahr", data={"_csrf": tok, "jahr": "2027"})
     pruefe(len(DB.entwuerfe("a", 2027)) == 1, "Vorjahr zweimal erzeugen legt keine Doppel an")
     pruefe(b"aus dem Vorjahr erzeugen" not in c.get("/entwuerfe?jahr=2027").data, "Vorjahr-Knopf weg, wenn alles übernommen")
     gleich = [{"verein": "a", "bezeichnung": "Gartenfest", "datum_vorjahr": "2026-08-15", "uhrzeit": u} for u in ("10:00", "10:30")]
     pruefe(len(DB.offene_vorlage("a", gleich)) == 2, "gleicher Titel/Tag, andere Uhrzeit: zwei Vorschläge")
-    s = c.get("/entwuerfe?jahr=2027")
-    pruefe(b"Sommerfest" in s.data and b"Grillfest" not in s.data, "Entwurfsseite: eigene, keine fremden Entwürfe")
+
+    # A startet eine Runde
+    r = c.post("/runden/neu", data={"_csrf": tok, "name": "Jahresplanung Testdorf", "jahr": "2027"})
+    rid = int(r.headers["Location"].rsplit("/", 1)[1])
+    runde = DB.runde(rid)
+    s = c.get(f"/runde/{rid}")
+    pruefe(s.status_code == 200 and DB.code_anzeige(runde["code"]).encode() in s.data, "Gastgeber sieht Code")
+    pruefe(all(ch in DB.CODE_ZEICHEN for ch in runde["code"]) and len(runde["code"]) == 6, "Code ohne Verwechsler")
+
+    # B tritt per Link bei – erst Bestätigungsseite, dann aktiver Klick
+    als("b")
+    c.post("/entwuerfe/aus-vorjahr", data={"_csrf": tok, "jahr": "2027"})
+    pruefe(c.get(f"/runde/{rid}").status_code == 404, "vor dem Beitritt keine Sicht auf die Runde")
+    s = c.get(f"/r/{runde['link']}")
+    pruefe(b"beitreten" in s.data and "b" not in DB.aktive_teilnehmer(rid), "Link zeigt Beitritt, tritt nicht automatisch bei")
+    pruefe(c.post(f"/runde/{rid}/beitreten", data={"_csrf": tok, "nachweis": "falsch"}).status_code == 403,
+           "Beitritt nur mit gültigem Link/Code")
+    c.post(f"/runde/{rid}/beitreten", data={"_csrf": tok, "nachweis": runde["link"]})
+    pruefe("b" in DB.aktive_teilnehmer(rid), "B ist beigetreten")
+    s = c.get(f"/runde/{rid}")
+    pruefe(b"Sommerfest" in s.data and b"Grillfest" in s.data and b"Konflikte am gleichen Tag (1)" in s.data,
+           "Runde zeigt Entwürfe aller mit Konflikt")
+    pruefe(b"betrifft euch" in s.data, "Konflikt als eigener markiert")
     pruefe(b"Sommerfest" not in c.get("/api/kollisionen?verein=b&von=2027-07-10").data, "Entwurf nicht in der Formular-Warnung")
 
-    # Verein B ohne Einladung registriert: Entwürfe ja, veröffentlichen nein
-    c.post("/abmelden", data={"_csrf": tok})
-    c.post("/anmelden", data={"_csrf": tok, "verein": "b", "aktion": "konto"})
-    pruefe(DB.konto("b")["freigabe"] == "ausstehend", "Registrierung ohne Einladung wartet auf Freigabe")
-    c.post("/entwuerfe/aus-vorjahr", data={"_csrf": tok, "jahr": "2027"})
-    eb = {t["bezeichnung"]: t for t in DB.entwuerfe("b", 2027)}
-    pruefe(set(eb) == {"Grillfest", "Fischessen"} and eb["Fischessen"]["datum"] == "2027-03-26", "B: Vorjahr inkl. Karfreitag")
-    pruefe(c.post(f"/entwuerfe/{eb['Grillfest']['_eid']}", data={"_csrf": tok, "aktion": "veroeffentlichen"}).status_code == 403,
-           "ohne Freigabe kein Veröffentlichen")
-    # Fremden Entwurf anfassen → 404
-    pruefe(c.post(f"/entwuerfe/{ea[0]['_eid']}", data={"_csrf": tok, "aktion": "loeschen"}).status_code == 404,
-           "fremder Entwurf nicht änderbar")
-    # Einladung gibt B nicht frei – das tut nur Josef
-    c.post(f"/einladung/{einladung_fuer('b')}", data={"_csrf": tok})
-    pruefe(DB.konto("b")["freigabe"] == "ausstehend", "Einladung ersetzt die Freigabe nicht")
-    for v in ("a", "b"):
-        c.post("/demo/freigeben", data={"_csrf": tok, "verein": v})
-    pruefe(DB.freigegeben("a") and DB.freigegeben("b"), "Freigabe durch VKO")
+    # B kann A's Termin nicht ändern; ändert und bestätigt seinen eigenen in der Runde
+    eid_a = DB.entwuerfe("a", 2027)[0]["_eid"]
+    pruefe(c.post(f"/entwuerfe/{eid_a}", data={"_csrf": tok, "aktion": "loeschen", "runde": rid}).status_code == 404,
+           "fremder Termin nicht änderbar")
+    eid_b = next(t["_eid"] for t in DB.entwuerfe("b", 2027) if t["bezeichnung"] == "Grillfest")
+    r = c.post(f"/entwuerfe/{eid_b}", data={"_csrf": tok, "aktion": "speichern", "runde": rid, "datum": "2027-07-17",
+                                            "uhrzeit": "19:00", "bezeichnung": "Grillfest", "ort": ""})
+    pruefe(r.headers["Location"].startswith(f"/runde/{rid}"), "Änderung aus der Runde springt zur Runde zurück")
+    pruefe(b"Konflikte am gleichen Tag (0)" in c.get(f"/runde/{rid}").data, "Konflikt nach eigener Änderung weg")
+    c.post("/entwuerfe/alle", data={"_csrf": tok, "jahr": "2027", "aktion": "bestaetigen", "runde": rid})
+    pruefe(all(t["status"] == "bestaetigt" for t in DB.entwuerfe("b", 2027)), "alle eigenen bestätigt")
+    c.post(f"/entwuerfe/{eid_b}", data={"_csrf": tok, "aktion": "speichern", "datum": "2027-07-18", "uhrzeit": "19:00",
+                                        "bezeichnung": "Grillfest", "ort": ""})
+    pruefe(DB.entwurf(eid_b)["status"] == "entwurf", "Änderung hebt Bestätigung auf")
 
-    # Treffen: Konflikt Sommerfest A / Grillfest B, Organisatorin schlägt Verschiebung vor
-    s = c.get(orga)
-    pruefe(b"Konflikte am gleichen Tag (1)" in s.data, "Konflikt zwischen Entwürfen im Treffen")
-    pruefe(c.post(f"{orga}/vorschlag/{ea[0]['_eid']}", data={"_csrf": tok, "datum": "2027-13-01"}).status_code == 400,
-           "ungültiges Vorschlagsdatum")
-    c.post(f"{orga}/vorschlag/{ea[0]['_eid']}", data={"_csrf": tok, "datum": "2027-07-17"})
-    pruefe(DB.entwurf(ea[0]["_eid"])["datum"] == "2027-07-10", "Vorschlag ändert den Entwurf nicht selbst")
-    pruefe(b"vorgeschlagen" in c.get(orga).data, "Vorschlag in der Organisator-Ansicht")
-    # B sieht im Treffen beide, A übernimmt den Vorschlag
-    s = c.get(f"/treffen/{raum_id}")
-    pruefe(b"Sommerfest" in s.data and b"betrifft euch" in s.data, "Vereinssicht im Treffen")
+    # C (nicht freigegeben) und D per Code
+    als("c")
+    pruefe(c.post(f"/runde/{rid}/beitreten", data={"_csrf": tok, "nachweis": runde["code"]}).status_code == 403,
+           "ohne Freigabe kein Beitritt")
+    als("d")
+    s = c.post("/runde/beitreten-code", data={"_csrf": tok, "code": DB.code_anzeige(runde["code"]).lower()})
+    pruefe(s.status_code == 200 and b"beitreten" in s.data, "Code: klein und mit Bindestrich geht")
+    c.post(f"/runde/{rid}/beitreten", data={"_csrf": tok, "nachweis": runde["code"]})
+    pruefe("d" in DB.aktive_teilnehmer(rid), "D per Code beigetreten (Nachbargemeinde)")
+    pruefe(b"Fremdfest" in c.get(f"/runde/{rid}").data or DB.entwuerfe("d", 2027) == [], "Runde sichtbar für D")
+    r = c.post("/runde/beitreten-code", data={"_csrf": tok, "code": "AAA-AAA"})
+    pruefe("fehler=" in r.headers["Location"], "falscher Code")
+    for _ in range(10):
+        c.post("/runde/beitreten-code", data={"_csrf": tok, "code": "BBB-BBB"})
+    pruefe(c.post("/runde/beitreten-code", data={"_csrf": tok, "code": DB.code_anzeige(runde["code"])}).status_code == 429,
+           "Versuchslimit gegen Durchprobieren")
+    pruefe(c.post(f"/runde/{rid}/erneuern", data={"_csrf": tok}).status_code == 403, "nur Gastgeber erneuert")
+
+    # Gastgeber: erneuern, entfernen, abschließen
     als("a")
-    s = c.get("/entwuerfe?jahr=2027")
-    pruefe(b"Vorschlag aus dem Planungstreffen" in s.data, "Verein sieht Vorschlag")
-    c.post(f"/entwuerfe/{ea[0]['_eid']}", data={"_csrf": tok, "aktion": "vorschlag_annehmen"})
-    pruefe(DB.entwurf(ea[0]["_eid"])["datum"] == "2027-07-17" and not DB.entwurf(ea[0]["_eid"])["vorschlag_datum"],
-           "Vorschlag übernommen")
-    pruefe(b"Konflikte am gleichen Tag (0)" in c.get(orga).data, "Konflikt nach Übernahme weg")
+    c.post(f"/runde/{rid}/erneuern", data={"_csrf": tok})
+    neu_r = DB.runde(rid)
+    pruefe(neu_r["link"] != runde["link"] and neu_r["code"] != runde["code"], "Link und Code erneuert")
+    pruefe(c.get(f"/r/{runde['link']}").status_code == 404, "alter Link ungültig")
+    pruefe("d" in DB.aktive_teilnehmer(rid), "wer drin ist, bleibt drin")
+    c.post(f"/runde/{rid}/teilnehmer", data={"_csrf": tok, "verein": "d", "aktiv": "0"})
+    pruefe("d" not in DB.aktive_teilnehmer(rid), "Gastgeber entfernt D")
+    als("d")
+    pruefe(c.get(f"/runde/{rid}").status_code == 404, "entfernter Verein sieht die Runde nicht")
+    pruefe(c.post(f"/runde/{rid}/beitreten", data={"_csrf": tok, "nachweis": neu_r["link"]}).status_code == 403,
+           "entfernter Verein kann nicht neu beitreten")
+    als("b")
+    c.post(f"/runde/{rid}/verlassen", data={"_csrf": tok})
+    pruefe("b" not in DB.aktive_teilnehmer(rid), "B verlässt die Runde")
+    c.post(f"/runde/{rid}/beitreten", data={"_csrf": tok, "nachweis": neu_r["code"]})
+    pruefe("b" in DB.aktive_teilnehmer(rid), "B kommt mit Code wieder")
 
     # Ungültige Eingaben, Maskierung
     r = c.post("/entwuerfe/neu", data={"_csrf": tok, "datum": "2027-02-30", "bezeichnung": "X"})
     pruefe("fehler=" in r.headers["Location"], "ungültiges Datum abgelehnt")
     c.post("/entwuerfe/neu", data={"_csrf": tok, "datum": "2027-05-01", "bezeichnung": "<script>alert(1)</script>"})
-    pruefe(b"<script>alert(1)</script>" not in c.get("/entwuerfe?jahr=2027").data, "Bezeichnung wird maskiert")
+    pruefe(b"<script>alert(1)</script>" not in c.get(f"/runde/{rid}").data, "Bezeichnung wird maskiert")
 
-    # Veröffentlichen: einzeln, dann alle
-    eid_mai = next(t["_eid"] for t in DB.entwuerfe("a", 2027) if t["datum"] == "2027-05-01")
+    # Veröffentlichen: einzeln, dann alle – nur eigene
+    eid_mai = next(t["_eid"] for t in DB.entwuerfe("b", 2027) if t["datum"] == "2027-05-01")
     c.post(f"/entwuerfe/{eid_mai}", data={"_csrf": tok, "aktion": "veroeffentlichen"})
-    pruefe([t["status"] for t in DB.entwuerfe("a", 2027)] == ["veroeffentlicht", "entwurf"], "einzeln veröffentlicht")
-    pruefe(c.post(f"/entwuerfe/{eid_mai}", data={"_csrf": tok, "aktion": "speichern", "datum": "2027-05-02",
-                                                "bezeichnung": "X"}).status_code == 302
-           and DB.entwurf(eid_mai)["datum"] == "2027-05-01", "Veröffentlichtes nicht über Entwurf änderbar")
-    c.post("/entwuerfe/alle-veroeffentlichen", data={"_csrf": tok, "jahr": "2027"})
-    pruefe(all(t["status"] == "veroeffentlicht" for t in DB.entwuerfe("a", 2027)), "alle veröffentlicht")
-    j = c.get("/api/kollisionen?verein=b&von=2027-07-17&ort=Testdorf").get_json()
-    pruefe([x["bezeichnung"] for x in j] == ["Sommerfest"], "Veröffentlichtes zählt in der Formular-Warnung")
+    pruefe(DB.entwurf(eid_mai)["status"] == "veroeffentlicht", "einzeln veröffentlicht")
+    c.post(f"/entwuerfe/{eid_mai}", data={"_csrf": tok, "aktion": "speichern", "datum": "2027-05-02", "bezeichnung": "X"})
+    pruefe(DB.entwurf(eid_mai)["datum"] == "2027-05-01", "Veröffentlichtes nicht über Entwurf änderbar")
+    c.post("/entwuerfe/alle", data={"_csrf": tok, "jahr": "2027", "aktion": "veroeffentlichen"})
+    pruefe(all(t["status"] == "veroeffentlicht" for t in DB.entwuerfe("b", 2027)), "alle eigenen veröffentlicht")
+    pruefe(DB.entwuerfe("a", 2027)[0]["status"] != "veroeffentlicht", "fremde bleiben unveröffentlicht")
+    j = c.get("/api/kollisionen?verein=a&von=2027-07-18&ort=Testdorf").get_json()
+    pruefe([x["bezeichnung"] for x in j] == ["Grillfest"], "Veröffentlichtes zählt in der Formular-Warnung")
 
-    # Abwählen / dazuholen
-    vid_b = next(v["id"] for v in DB.vereine_im_raum(raum_id) if v["verein_key"] == "b")
-    c.post(f"{orga}/verein/{vid_b}", data={"_csrf": tok, "aktiv": "0"})
-    pruefe(all(t["verein"] != "b" for t in DB.entwuerfe(jahr=2027, vereine=DB.aktive_keys(raum_id))), "abgewählt zählt nicht")
-    als("b")
-    pruefe(c.get(f"/treffen/{raum_id}").status_code == 404, "abgewählter Verein sieht das Treffen nicht")
-    pruefe(DB.entwuerfe("b", 2027) != [], "Entwürfe des abgewählten Vereins bleiben")
-    c.post(f"{orga}/dazuholen", data={"_csrf": tok, "verein": ["b", "d", "gibtsnicht"]})
-    pruefe(c.get(f"/treffen/{raum_id}").status_code == 200, "wieder aufgenommen")
-    pruefe(b"Nachbar</span>" in c.get(orga).data, "Nachbarverein dazugeholt")
-
-    # Exporte, falsche Tokens, abgeschlossene Planung
+    # Exporte, Abschluss
     pruefe(c.get("/entwuerfe/export.xlsx?jahr=2027").status_code == 200, "Vereins-Export")
-    pruefe(c.get(f"{orga}/export.docx").status_code == 200, "Raum-Export")
-    pruefe(c.get(f"{orga}/export.exe").status_code == 404, "unbekanntes Format 404")
-    pruefe(c.get("/p/falsch").status_code == 404 and c.get("/einladung/falsch").status_code == 404, "falscher Token 404")
-    pruefe(c.post("/anmelden", data={"_csrf": tok, "verein": "c"}).status_code == 403, "ohne Konto keine Anmeldung")
-    c.post(f"{orga}/status", data={"_csrf": tok, "aktion": "abschliessen"})
-    eid_b = DB.entwuerfe("b", 2027)[0]["_eid"]
-    pruefe(c.post(f"{orga}/vorschlag/{eid_b}", data={"_csrf": tok, "datum": "2027-08-01"}).status_code == 403,
-           "nach Abschluss keine Vorschläge")
-    pruefe(c.post(f"/einladung/{einladung_fuer('c')}", data={"_csrf": tok}).status_code == 403,
-           "nach Abschluss keine Registrierung per Einladung")
-    pruefe(c.get("/anmelden").status_code == 200 and c.get("/planung").status_code == 200, "Übersichtsseiten")
+    pruefe(c.get(f"/runde/{rid}/export.docx").status_code == 200, "Runden-Export")
+    pruefe(c.get(f"/runde/{rid}/export.exe").status_code == 404, "unbekanntes Format 404")
+    pruefe(c.post("/anmelden", data={"_csrf": tok, "verein": "p"}).status_code == 403, "ohne Konto keine Anmeldung")
+    als("a")
+    c.post(f"/runde/{rid}/status", data={"_csrf": tok, "aktion": "abschliessen"})
+    s = c.get(f"/runde/{rid}")
+    pruefe(b"abgeschlossen" in s.data and b'value="bestaetigen"' not in s.data, "abgeschlossen: Runde nur noch lesbar")
+    als("c")
+    c.post("/demo/freigeben", data={"_csrf": tok, "verein": "c"})
+    pruefe(c.post(f"/runde/{rid}/beitreten", data={"_csrf": tok, "nachweis": neu_r["link"]}).status_code == 403,
+           "nach Abschluss kein Beitritt")
+    pruefe(c.get("/anmelden").status_code == 200 and c.get("/runden").status_code == 200, "Übersichtsseiten")
+    pruefe(c.get("/planung").status_code == 302, "alte Adresse leitet um")
 
 print(f"\n{OK} Prüfungen ok, {len(FEHLER)} Fehler")
 sys.exit(1 if FEHLER else 0)

@@ -3,13 +3,13 @@
 {% block inhalt %}
 <h1>Als Verein anmelden <span class="chip">simuliert</span></h1>
 <p class="hint">Live ist das der normale Vereins-Login mit E-Mail und Passwort. Im Prototyp wählst du einfach den Verein.
-Jedes neue Konto – auch über die <b>Einladung</b> eines Planungsraums – wartet auf die <b>persönliche Freigabe durch VKO</b> (live: Admin-App oder Telegram, wie heute). Die Einladung wird dabei als Hinweis angezeigt.</p>
+Jedes neue Konto wartet auf die <b>persönliche Freigabe durch VKO</b> (live: Admin-App oder Telegram, wie heute).</p>
 
 <h2>Vereine mit Konto</h2>
 <div class="card tabelle-wrap kompakt"><table>
   <tr><th>Verein</th><th>Konto</th><th></th></tr>
   {% for key, k in konten.items()|sort(attribute='1.verein_name') %}
-  <tr><td>{{ k.verein_name }}{% if k.eingeladen_raum_id %}<div class="hint">eingeladen über {{ raeume.get(k.eingeladen_raum_id, 'einen Planungsraum') }}</div>{% endif %}</td>
+  <tr><td>{{ k.verein_name }}</td>
     <td><span class="chip {{ 'veroeffentlicht' if k.freigabe == 'vko' else 'entwurf' }}">{{ FREIGABE[k.freigabe] }}</span></td>
     <td style="display:flex;gap:6px;justify-content:flex-end">
       {% if k.freigabe == 'ausstehend' %}
@@ -29,7 +29,7 @@ Jedes neue Konto – auch über die <b>Einladung</b> eines Planungsraums – war
   <select name="verein">
     {% for g in gruppen %}<optgroup label="{{ g.gemeinde }}">{% for k, n in g.vereine %}{% if k not in konten %}<option value="{{ k }}">{{ n }}</option>{% endif %}{% endfor %}</optgroup>{% endfor %}
   </select>
-  <p class="hint">Bis zur Freigabe kann der Verein eigene Entwürfe anlegen – aber weder veröffentlichen noch die Entwürfe anderer Vereine sehen.</p>
+  <p class="hint">Bis zur Freigabe kann der Verein eigene Entwürfe anlegen – aber weder veröffentlichen noch an Planungsrunden teilnehmen.</p>
   <button class="btn">Konto anlegen und anmelden</button>
 </form>
 {% endblock %}

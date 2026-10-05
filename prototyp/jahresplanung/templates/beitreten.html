@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block titel %}Beitreten – {{ r.name }}{% endblock %}
+{% block inhalt %}
+<h1>{{ r.name }} {{ r.jahr }}</h1>
+<div class="card" style="max-width:620px">
+  <p style="margin-top:0">Gastgeber: <b>{{ gastgeber }}</b></p>
+  <p class="hint">Wenn ihr beitretet, sehen die anderen Teilnehmer eure Entwürfe für {{ r.jahr }} – und ihr ihre. Öffentlich wird dadurch nichts.</p>
+  {% if status == 1 %}
+    <p>Ihr seid schon dabei.</p><a class="btn" href="{{ url_for('runde_seite', runde_id=r.id) }}">Zur Planungsrunde</a>
+  {% elif status == 0 %}
+    <div class="warn rot">Der Gastgeber hat euch aus dieser Runde entfernt. Bitte bei ihm melden.</div>
+  {% elif not darf %}
+    <div class="warn">Beitreten geht erst, wenn VKO euer Konto freigegeben hat.</div>
+  {% elif r.status != 'offen' %}
+    <div class="warn">Diese Planungsrunde ist abgeschlossen.</div>
+  {% else %}
+    <form method="post" action="{{ url_for('runde_beitreten', runde_id=r.id) }}">{{ csrf()|safe }}
+      <input type="hidden" name="nachweis" value="{{ request.form.get('code') and r.code or r.link }}">
+      <button class="btn">Als {{ angemeldet_name }} beitreten</button></form>
+  {% endif %}
+</div>
+{% endblock %}

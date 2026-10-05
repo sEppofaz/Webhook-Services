@@ -2,18 +2,18 @@
 {% block titel %}Start{% endblock %}
 {% block inhalt %}
 <h1>Jahresplanung für Vereine</h1>
-<p class="hint">So ist die Zusammenarbeit gedacht: Jeder Verein legt seine Termine als <b>Entwurf</b> an – nichts davon ist öffentlich.
-Beim Planungstreffen der Gemeinde werden die Entwürfe aller Vereine nebeneinandergelegt, Konflikte besprochen und Verschiebungen vorgeschlagen.
-Danach veröffentlicht <b>jeder Vereinsadmin selbst</b> seine Termine – einzeln oder alle auf einmal.</p>
+<p class="hint">So ist die Zusammenarbeit gedacht: <b>Jeder Verein plant in seinem eigenen Bereich</b> – seine Termine sind Entwürfe, nichts davon ist öffentlich.
+<b>Jeder Vereinsadmin kann eine Planungsrunde starten</b> und andere Vereine per Link oder Code einladen. Wer beitritt, sieht die Entwürfe aller Teilnehmer mit den Konflikten,
+ändert seine eigenen – am Mac oder Handy – und bestätigt sie. Danach <b>veröffentlicht jeder Verein selbst</b>, einzeln oder alle auf einmal.</p>
 
 <div class="kacheln">
   <a class="card" href="{{ url_for('entwuerfe_seite') }}">
-    <b>Entwürfe (Verein)</b>
-    <p class="hint">Als Vereinsadmin: Termine als Entwurf anlegen oder aus dem Vorjahr erzeugen, Verschiebe-Vorschläge aus dem Treffen übernehmen, veröffentlichen. Im Prototyp ist die Anmeldung simuliert.</p>
+    <b>Entwürfe – unser Bereich</b>
+    <p class="hint">Termine als Entwurf anlegen oder aus dem Vorjahr erzeugen, bestätigen, veröffentlichen. Anmeldung im Prototyp simuliert.</p>
   </a>
-  <a class="card" href="{{ url_for('planung_liste') }}">
-    <b>Planungstreffen (Organisatorin)</b>
-    <p class="hint">Planungsraum je Gemeinde: Vereine einladen, ab- und dazuwählen, alle Entwürfe mit Konflikten sehen, Verschiebungen vorschlagen, Jahresprogramm exportieren.</p>
+  <a class="card" href="{{ url_for('runden_seite') }}">
+    <b>Planungsrunden</b>
+    <p class="hint">Runde starten oder mit Link/Code beitreten. In der Runde: alle Entwürfe, Konflikte, eigene Termine ändern und bestätigen, Jahresprogramm exportieren.</p>
   </a>
   <a class="card" href="{{ url_for('kollision_seite') }}">
     <b>Kollisionswarnung</b>

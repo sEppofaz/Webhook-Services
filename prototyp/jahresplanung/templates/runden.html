@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block titel %}Planungsrunden{% endblock %}
+{% block inhalt %}
+<h1>Planungsrunden</h1>
+<p class="hint">Eine Planungsrunde bringt die Entwürfe mehrerer Vereine zusammen – z. B. für das Jahresplanungstreffen der Gemeinde.
+Jeder Vereinsadmin kann eine starten und die anderen per Link oder Code einladen.</p>
+{% if fehler %}<div class="warn rot">{{ fehler }}</div>{% endif %}
+
+{% if not darf %}
+  <div class="warn">Planungsrunden starten und beitreten geht erst, wenn VKO euer Konto freigegeben hat.</div>
+{% else %}
+<div class="kacheln">
+  <form class="card" method="post" action="{{ url_for('runde_code') }}">{{ csrf()|safe }}
+    <b>Mit Code beitreten</b>
+    <label>Code vom Gastgeber</label>
+    <input name="code" value="{{ code }}" placeholder="z.B. K7M-4QX" maxlength="12" autocomplete="off" autocapitalize="characters" required>
+    <div class="aktionen"><button class="btn">Weiter</button></div>
+  </form>
+  <form class="card" method="post" action="{{ url_for('runde_neu') }}">{{ csrf()|safe }}
+    <b>Neue Planungsrunde starten</b>
+    <label>Name</label><input name="name" maxlength="200" required placeholder="z.B. Jahresplanung Ergoldsbach">
+    <label>Jahr</label><input name="jahr" type="number" value="{{ jahr }}" min="2026" max="2040" required>
+    <div class="aktionen"><button class="btn">Starten</button></div>
+  </form>
+</div>
+{% endif %}
+
+<h2>Eure Runden</h2>
+{% for r in runden %}
+  <div class="card zeile" style="align-items:center">
+    <div style="flex:3 1 260px"><b>{{ r.name }} {{ r.jahr }}</b>
+      <div class="hint">{{ r.anzahl }} Vereine · {{ 'Gastgeber: ihr' if r.gastgeber == angemeldet else 'ihr seid dabei' }}{{ ' · abgeschlossen' if r.status != 'offen' }}</div></div>
+    <div style="flex:0 0 auto"><a class="btn sek" href="{{ url_for('runde_seite', runde_id=r.id) }}">Öffnen</a></div>
+  </div>
+{% else %}
+  <p class="hint">Noch keine.</p>
+{% endfor %}
+{% endblock %}

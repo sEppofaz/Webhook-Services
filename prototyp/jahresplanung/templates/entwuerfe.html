@@ -1,34 +1,27 @@
 {% extends "base.html" %}
+{% from "_termin.html" import termin_karte, neuer_termin with context %}
 {% block titel %}Entwürfe {{ jahr }}{% endblock %}
-{% block css %}
-.termin{border-left:4px solid transparent}.termin.konflikt{border-left-color:var(--rot)}.termin.we{border-left-color:var(--gelb)}
-.termin.veroeffentlicht{border-left-color:var(--gruen)}
-.kopf{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}.kopf b{font-size:16px}
-.aktionen{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center}.aktionen form{margin:0}
-.vorschlag-box{background:#ede9fe;color:#5b21b6;border-radius:8px;padding:8px 10px;margin-top:8px;font-size:14px}
-@media (prefers-color-scheme:dark){.vorschlag-box{background:#2e1065;color:#ddd6fe}}
-{% endblock %}
 {% block inhalt %}
 <div class="zeile" style="align-items:end">
   <div style="flex:3 1 300px">
-    <h1>Eure Termine {{ jahr }}</h1>
+    <h1>Unsere Termine {{ jahr }}</h1>
     <p class="hint">{{ angemeldet_name }} · Konto: {{ FREIGABE[konto.freigabe] }}</p>
   </div>
   <form method="get" class="zeile" style="flex:0 1 260px;margin:0">
-    <div><label>Jahr</label><input type="number" name="jahr" value="{{ jahr }}" min="2026" max="2035"></div>
+    <div><label>Jahr</label><input type="number" name="jahr" value="{{ jahr }}" min="2026" max="2040"></div>
     <div style="align-self:end;flex:0 0 auto"><button class="btn sek">Wechseln</button></div>
   </form>
 </div>
 
 {% if fehler %}<div class="warn rot">{{ fehler }}</div>{% endif %}
 {% if meldung %}<div class="ok">{{ meldung }}</div>{% endif %}
-{% if not darf %}<div class="warn">VKO prüft eure Anmeldung noch. Eigene Entwürfe könnt ihr schon anlegen – veröffentlichen und die Entwürfe der anderen Vereine sehen erst nach der Freigabe.</div>{% endif %}
+{% if not darf %}<div class="warn">VKO prüft eure Anmeldung noch. Eigene Entwürfe könnt ihr schon anlegen – veröffentlichen und an Planungsrunden teilnehmen erst nach der Freigabe.</div>{% endif %}
 
-{% for r in raeume %}
+{% for r in runden if r.jahr == jahr %}
   <div class="card zeile" style="align-items:center">
-    <div style="flex:3 1 260px"><b>{{ r.titel }}</b>
-      <div class="hint">Ihr seid dabei. Dort seht ihr die Entwürfe der anderen Vereine und die Konflikte.{% if r.fertig_am %} Ihr habt „fertig“ gemeldet.{% endif %}</div></div>
-    <div style="flex:0 0 auto">{% if darf %}<a class="btn sek" href="{{ url_for('raum_vereinssicht', raum_id=r.id) }}">Zum Planungstreffen</a>{% else %}<span class="chip entwurf">nach Freigabe</span>{% endif %}</div>
+    <div style="flex:3 1 260px"><b>{{ r.name }} {{ r.jahr }}</b> <span class="hint">· {{ r.anzahl }} Vereine{{ ' · abgeschlossen' if r.status != 'offen' }}</span>
+      <div class="hint">Dort seht ihr die Entwürfe der anderen Vereine und die Konflikte.</div></div>
+    <div style="flex:0 0 auto"><a class="btn sek" href="{{ url_for('runde_seite', runde_id=r.id) }}">Zur Planungsrunde</a></div>
   </div>
 {% endfor %}
 
@@ -39,13 +32,17 @@
       <button class="btn sek">Entwürfe aus dem Vorjahr erzeugen ({{ vorlage_n }})</button></form>
     {% endif %}
     <a class="btn sek" href="#neu">Neuen Entwurf anlegen</a>
-    {% if darf and n_entwurf %}
-    <form method="post" action="{{ url_for('alle_veroeffentlichen', jahr=jahr) }}" onsubmit="return confirm('Alle {{ n_entwurf }} Entwürfe veröffentlichen? Sie erscheinen dann im Vereinskalender.')">{{ csrf()|safe }}
-      <button class="btn">Alle {{ n_entwurf }} Entwürfe veröffentlichen</button></form>
+    {% if n_unbestaetigt %}
+    <form method="post" action="{{ url_for('entwuerfe_alle', jahr=jahr) }}">{{ csrf()|safe }}
+      <button class="btn sek" name="aktion" value="bestaetigen">Alle {{ n_unbestaetigt }} bestätigen</button></form>
+    {% endif %}
+    {% if darf and n_offen %}
+    <form method="post" action="{{ url_for('entwuerfe_alle', jahr=jahr) }}" onsubmit="return confirm('Alle {{ n_offen }} Termine veröffentlichen? Sie erscheinen dann im Vereinskalender.')">{{ csrf()|safe }}
+      <button class="btn" name="aktion" value="veroeffentlichen">Alle {{ n_offen }} veröffentlichen</button></form>
     {% endif %}
   </div>
-  <p class="hint" style="margin-bottom:0">Entwürfe sind nicht öffentlich. Konflikte hier nur mit schon veröffentlichten Terminen – die Entwürfe anderer Vereine seht ihr im Planungstreffen.
-  {% if n_vorschlag %}<b>{{ n_vorschlag }} Verschiebe-{{ 'Vorschlag' if n_vorschlag == 1 else 'Vorschläge' }} aus dem Treffen offen.</b>{% endif %}</p>
+  <p class="hint" style="margin-bottom:0"><b>Entwurf</b> = noch in Planung · <b>Bestätigt</b> = steht so (die anderen Vereine sehen das in der Runde) · <b>Veröffentlicht</b> = im Vereinskalender.
+  Konflikte hier nur mit schon veröffentlichten Terminen – die Entwürfe der anderen seht ihr in der Planungsrunde.</p>
   {% if daten_ab and daten_ab.year == jahr - 1 and daten_ab.month > 1 %}
   <p class="hint">Hinweis: Termine von Januar bis April {{ jahr - 1 }} kennen wir nicht – bitte ergänzen (live auch per Upload eures alten Jahresplans).</p>
   {% endif %}
@@ -53,70 +50,17 @@
 
 {% for monat, liste in monate %}
   <h2>{{ monat }}</h2>
-  {% for t in liste %}
-  <div id="t{{ t._eid }}" class="card termin {{ t.status }} {{ 'konflikt' if t._konflikt_tag else ('we' if t._konflikte else '') }}">
-    <div class="kopf">
-      <b>{{ t.datum|wochentag_kurz }} {{ t.datum|tm }}{{ t.datum[:4] }}{% if t.uhrzeit %}, {{ zeit_text(t) }}{% endif %}</b>
-      <span>{{ t.bezeichnung }}</span>
-      <span class="chip {{ t.status }}">{{ STATUS[t.status] }}</span>
-    </div>
-    {% if t.ort %}<div class="hint">{{ t.ort }}</div>{% endif %}
-    {% if t.regel %}<div class="hint">{{ t.regel }}</div>{% endif %}
-    {% for k in t._konflikte %}
-      <div class="konf"><span class="{{ 'tag' if k.stufe == STUFE_TAG else 'we' }}">●</span>
-        {{ 'Gleicher Tag' if k.stufe == STUFE_TAG else 'Gleiches Wochenende' }}: {{ k.datum|wochentag_kurz }} {{ k.datum|tm }} {{ k.uhrzeit }} {{ k.bezeichnung }} – {{ k.verein_name }}</div>
-    {% endfor %}
-    {% if t.vorschlag_datum %}
-    <div class="vorschlag-box kompakt">Vorschlag aus dem Planungstreffen: verschieben auf <b>{{ t.vorschlag_datum|wochentag_kurz }} {{ t.vorschlag_datum|tm }}{{ t.vorschlag_datum[:4] }}</b>
-      <div class="aktionen">
-        <form method="post" action="{{ url_for('entwurf_aktion', eid=t._eid) }}">{{ csrf()|safe }}<button class="btn klein" name="aktion" value="vorschlag_annehmen">Übernehmen</button></form>
-        <form method="post" action="{{ url_for('entwurf_aktion', eid=t._eid) }}">{{ csrf()|safe }}<button class="btn sek klein" name="aktion" value="vorschlag_ablehnen">Ablehnen</button></form>
-      </div></div>
-    {% endif %}
-    <div class="aktionen kompakt">
-      {% if t.status == 'entwurf' %}
-        {% if darf %}<form method="post" action="{{ url_for('entwurf_aktion', eid=t._eid) }}">{{ csrf()|safe }}<button class="btn klein" name="aktion" value="veroeffentlichen">Veröffentlichen</button></form>{% endif %}
-        <form method="post" action="{{ url_for('entwurf_aktion', eid=t._eid) }}" onsubmit="return confirm('Entwurf löschen?')">{{ csrf()|safe }}<button class="btn sek klein" name="aktion" value="loeschen">Löschen</button></form>
-      {% else %}
-        <span class="hint">veröffentlicht am {{ t.veroeffentlicht_am[:10]|tm }}{{ t.veroeffentlicht_am[:4] }} – Änderungen live wie bisher über „Termin bearbeiten“.</span>
-        <form method="post" action="{{ url_for('entwurf_aktion', eid=t._eid) }}">{{ csrf()|safe }}<button class="btn sek klein" name="aktion" value="zurueckziehen" title="Nur im Prototyp">Zurück zu Entwurf (Prototyp)</button></form>
-      {% endif %}
-    </div>
-    {% if t.status == 'entwurf' %}
-    <details style="margin-top:8px"><summary>Ändern</summary>
-      <form method="post" action="{{ url_for('entwurf_aktion', eid=t._eid) }}">{{ csrf()|safe }}
-        <div class="zeile">
-          <div><label>Datum</label><input type="date" name="datum" value="{{ t.datum }}" required></div>
-          <div><label>Uhrzeit</label><input type="time" name="uhrzeit" value="{{ t.uhrzeit }}"></div>
-          <div><label>bis</label><input type="time" name="uhrzeit_bis" value="{{ t.uhrzeit_bis }}"></div>
-        </div>
-        <label>Bezeichnung</label><input name="bezeichnung" value="{{ t.bezeichnung }}" maxlength="200" required>
-        <label>Ort</label><input name="ort" value="{{ t.ort }}" maxlength="200">
-        <div class="aktionen"><button class="btn" name="aktion" value="speichern">Speichern</button></div>
-      </form>
-    </details>
-    {% endif %}
-  </div>
-  {% endfor %}
+  {% for t in liste %}{{ termin_karte(t, True, csrf, STATUS, STUFE_TAG, zeit_text, darf=darf) }}{% endfor %}
 {% else %}
   <p class="hint">Noch keine Termine für {{ jahr }}.{% if vorlage_n %} Tipp: „Entwürfe aus dem Vorjahr erzeugen“.{% endif %}</p>
 {% endfor %}
 
 <h2 id="neu">Neuen Entwurf anlegen</h2>
-<form class="card" method="post" action="{{ url_for('entwurf_neu') }}">{{ csrf()|safe }}
-  <div class="zeile">
-    <div><label>Datum *</label><input type="date" name="datum" required min="{{ jahr }}-01-01" max="{{ jahr }}-12-31"></div>
-    <div><label>Uhrzeit</label><input type="time" name="uhrzeit"></div>
-    <div><label>bis</label><input type="time" name="uhrzeit_bis"></div>
-  </div>
-  <label>Bezeichnung *</label><input name="bezeichnung" maxlength="200" required placeholder="z.B. Starkbierfest">
-  <label>Ort</label><input name="ort" maxlength="200">
-  <div class="aktionen"><button class="btn">Als Entwurf speichern</button></div>
-</form>
+{{ neuer_termin(csrf, jahr) }}
 
 <h2>Herunterladen</h2>
 <div class="exporte">
   {% for f, (name_f, _) in FORMATE.items() %}<a class="btn sek klein" href="{{ url_for('entwuerfe_export', fmt=f, jahr=jahr) }}">{{ name_f }}</a>{% endfor %}
 </div>
-<p class="hint">Alle Termine {{ jahr }} – Entwürfe und veröffentlichte.</p>
+<p class="hint">Alle Termine {{ jahr }} – Entwürfe, bestätigte und veröffentlichte.</p>
 {% endblock %}
