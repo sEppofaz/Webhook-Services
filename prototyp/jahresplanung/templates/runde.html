@@ -20,7 +20,7 @@
 <div id="geaendert" class="warn" hidden>Andere Vereine haben etwas geändert. <a href="" onclick="location.reload();return false">Neu laden</a></div>
 {% if ergebnisse %}
 <div class="card">
-  <b>Ergebnis</b> <span class="hint">– liegt im Archiv jedes beteiligten Vereins</span>
+  <b>Ergebnis</b> <span class="hint">– jeder beim Abschluss beteiligte Verein findet es unter „Planungsrunden“</span>
   {% for e in ergebnisse %}
   <div class="aktionen kompakt"><span>Version {{ e.version }} · {{ e.abgeschlossen_am[:10]|tm }}{{ e.abgeschlossen_am[:4] }}, {{ e.abgeschlossen_am[11:16] }} Uhr</span>
     {% if key in e.daten.teilnehmer|map(attribute='verein')|list %}<a class="btn klein" href="{{ url_for('archiv_ergebnis', eid=e.id, fmt='pdf') }}">Ergebnis als PDF</a>{% else %}<span class="hint">(ihr wart da nicht dabei)</span>{% endif %}</div>
@@ -39,7 +39,7 @@
   <div class="aktionen kompakt">
     <form method="post" action="{{ url_for('runde_erneuern', runde_id=r.id) }}" onsubmit="return confirm('Neuen Link und Code erzeugen? Die alten gelten dann nicht mehr – wer schon dabei ist, bleibt dabei.')">{{ csrf()|safe }}
       <button class="btn sek klein">Link und Code erneuern</button></form>
-    <form method="post" action="{{ url_for('runde_status', runde_id=r.id) }}" onsubmit="return confirm('Runde abschließen? Das Ergebnis wird festgehalten und liegt danach als PDF im Archiv jedes beteiligten Vereins. Danach kann niemand mehr beitreten oder hier ändern; veröffentlichen bleibt Sache jedes Vereins.')">{{ csrf()|safe }}
+    <form method="post" action="{{ url_for('runde_status', runde_id=r.id) }}" onsubmit="return confirm('Runde abschließen? Das Ergebnis wird festgehalten und steht danach als PDF bei jedem beteiligten Verein. Danach kann niemand mehr beitreten oder hier ändern; veröffentlichen bleibt Sache jedes Vereins.')">{{ csrf()|safe }}
       <button class="btn sek klein" name="aktion" value="abschliessen">Runde abschließen</button></form>
   </div>
 </div>

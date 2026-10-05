@@ -355,7 +355,7 @@ else:
     pruefe(("a", "entfernt", "Verein D") in verlauf and ("b", "ausgetreten", "") in verlauf, "Verlauf: entfernt/ausgetreten")
     pruefe(any(v[1] == "veröffentlicht" for v in verlauf), "Verlauf: veröffentlicht")
 
-    pruefe(c.get("/archiv").status_code == 200 and DB.ergebnisse_des_vereins("a") == [], "Archiv vor Abschluss leer")
+    pruefe(c.get("/archiv").status_code == 302 and DB.ergebnisse_des_vereins("a") == [], "alte Archiv-Adresse leitet um, vor Abschluss leer")
     r = c.post(f"/runde/{rid}/status", data={"_csrf": tok, "aktion": "abschliessen"})
     pruefe("Archiv" in r.headers["Location"] or "meldung=" in r.headers["Location"], "Abschluss meldet Archiv")
     s = c.get(f"/runde/{rid}")
@@ -370,12 +370,16 @@ else:
     pruefe(pdf1.status_code == 200 and pdf1.data[:4] == b"%PDF", "Ergebnis-PDF")
     pruefe(c.get(f"/archiv/ergebnis/{e1['id']}.pdf").data == pdf1.data, "gleicher Stand = gleiches PDF")
     pruefe(c.get(f"/archiv/ergebnis/{e1['id']}.xlsx").status_code == 200, "Ergebnis auch als Excel")
-    pruefe(b"Version 1" in c.get("/archiv").data, "Ergebnis im Archiv des Organisators")
+    pruefe(b"Ergebnis Version 1" in c.get("/runden").data, "Ergebnis bei der Runde (Organisator)")
     als("b")
-    pruefe(b"Version 1" in c.get("/archiv").data and c.get(f"/archiv/ergebnis/{e1['id']}.pdf").status_code == 200,
-           "Ergebnis im Archiv des Teilnehmers")
+    pruefe(b"Ergebnis Version 1" in c.get("/runden").data and c.get(f"/archiv/ergebnis/{e1['id']}.pdf").status_code == 200,
+           "Ergebnis bei der Runde (Teilnehmer)")
+    c.post(f"/runde/{rid}/verlassen", data={"_csrf": tok})
+    s = c.get("/runden")
+    pruefe(b"Fr\xc3\xbchere Runden" in s.data and b"Ergebnis Version 1" in s.data, "nach Austritt bleibt das Ergebnis")
+    c.post(f"/runde/{rid}/beitreten", data={"_csrf": tok, "nachweis": neu_r["code"]})
     als("d")
-    pruefe(c.get(f"/archiv/ergebnis/{e1['id']}.pdf").status_code == 404 and b"Version 1" not in c.get("/archiv").data,
+    pruefe(c.get(f"/archiv/ergebnis/{e1['id']}.pdf").status_code == 404 and b"Ergebnis Version" not in c.get("/runden").data,
            "entfernter Verein bekommt das Ergebnis nicht")
     # Wieder öffnen und erneut abschließen → Version 2, Version 1 bleibt
     als("a")

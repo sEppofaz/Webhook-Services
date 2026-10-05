@@ -92,7 +92,6 @@ body.treffen{font-size:18px}body.treffen .code{font-size:44px}body.treffen main{
   <a href="{{ url_for('vorlage_seite') }}">Vorjahres-Vorlage</a>
   <a href="{{ url_for('entwuerfe_seite') }}">Entwürfe</a>
   <a href="{{ url_for('runden_seite') }}">Planungsrunden</a>
-  <a href="{{ url_for('archiv') }}">Archiv</a>
   {% if angemeldet %}
     <form method="post" action="{{ url_for('abmelden') }}" style="display:flex;align-items:center;gap:8px;margin:0">{{ csrf()|safe }}
       <span style="opacity:.85;font-size:13px">{{ angemeldet_name }}</span>

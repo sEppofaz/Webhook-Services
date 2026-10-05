@@ -25,7 +25,7 @@ Tests: `~/.venvs/vko-jahresplanung/bin/python tests/test_jahresplanung.py`
    Konflikten, ändert seine eigenen (Mac/Handy) und **bestätigt** sie („steht so“).
 4. **Jeder Verein veröffentlicht selbst** – einzeln oder alle auf einmal.
 5. **Organisator schließt die Runde ab** → das Ergebnis (Teilnehmer, Termine mit Status, offene Konflikte, Verlauf)
-   wird eingefroren und liegt als **PDF im Archiv** jedes beteiligten Vereins (Menü „Archiv“). Erneut abschließen
+   wird eingefroren und steht als **PDF bei der Runde** unter „Planungsrunden“ – für jeden beim Abschluss beteiligten Verein, auch nach einem Austritt. Erneut abschließen
    = neue Version, alte bleibt. Der Verlauf (wer hat wann was geändert) wird ab Start mitgeschrieben.
 
 **Netz-Hinweis:** Banner bei Verbindungsabbruch (Formulare werden dann nicht abgeschickt, Eingaben bleiben) und bei

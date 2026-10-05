@@ -10,7 +10,7 @@ Bereiche:
    einzeln oder alle veröffentlichen. Nur der Verein selbst veröffentlicht. Login simuliert.
 4. Planungsrunden – jeder freigegebene Vereinsadmin startet eine (Organisator, ohne Josef) und lädt per Link
    oder Code ein. Teilnehmer sehen alle Entwürfe mit Konflikten und ändern/bestätigen ihre eigenen (Mac/Handy).
-   Verlauf wird mitgeschrieben; beim Abschluss entsteht das Ergebnis (PDF) im Archiv jedes beteiligten Vereins.
+   Verlauf wird mitgeschrieben; beim Abschluss entsteht das Ergebnis (PDF) – bei der Runde unter „Planungsrunden“.
 Josef gibt jedes neue Konto persönlich frei (ADR-026). Schreibt nie in den Live-Kalender. Daten: Momentaufnahme der öffentlichen /api/termine.
 """
 from __future__ import annotations
@@ -387,7 +387,15 @@ def planung_alt():
 @app.get("/runden")
 @verein_login
 def runden_seite(key):
-    return render_template("runden.html", runden=db.runden_des_vereins(key), darf=db.freigegeben(key),
+    # Ergebnisse gehören zur Runde (kein eigenes Archiv mehr, Josef 2026-10-05). Auch Runden, aus denen der Verein
+    # nach dem Abschluss ausgetreten ist, bleiben mit ihrem Ergebnis sichtbar.
+    ergebnisse = defaultdict(list)
+    for e in db.ergebnisse_des_vereins(key):
+        ergebnisse[e["runde_id"]].append(e)
+    aktiv = db.runden_des_vereins(key)
+    nur_ergebnis = [db.runde(rid) for rid in ergebnisse if rid not in {r["id"] for r in aktiv}]
+    return render_template("runden.html", runden=aktiv, nur_ergebnis=[r for r in nur_ergebnis if r],
+                           ergebnisse=ergebnisse, darf=db.freigegeben(key),
                            jahr=date.today().year + 1, fehler=request.args.get("fehler", ""),
                            code=request.args.get("code", ""))
 
@@ -553,7 +561,7 @@ def runde_status(key, runde_id):
         version = db.ergebnis_speichern(runde_id, key, _ergebnis_stand(r, key))
         db.runde_status(runde_id, "abgeschlossen")
         return redirect(url_for("runde_seite", runde_id=runde_id,
-                                meldung=f"Runde abgeschlossen. Das Ergebnis (Version {version}) liegt jetzt im Archiv jedes beteiligten Vereins."))
+                                meldung=f"Runde abgeschlossen. Das Ergebnis (Version {version}) steht jetzt bei jedem beteiligten Verein unter „Planungsrunden“."))
     if request.form.get("aktion") == "oeffnen" and r["status"] != "offen":
         db.runde_status(runde_id, "offen")
         db.protokoll(runde_id, key, "Runde wieder geöffnet")
@@ -587,9 +595,9 @@ def _ergebnis_stand(r, key) -> dict:
 # ── 6. Vereins-Archiv ────────────────────────────────────────────────────────
 
 @app.get("/archiv")
-@verein_login
-def archiv(key):
-    return render_template("archiv.html", ergebnisse=db.ergebnisse_des_vereins(key))
+def archiv():
+    """Früheres eigenes Archiv – die Ergebnisse stehen jetzt bei der Runde unter „Planungsrunden“."""
+    return redirect(url_for("runden_seite"))
 
 
 @app.get("/archiv/ergebnis/<int:eid>.<fmt>")
