@@ -617,11 +617,49 @@ def test_bot_tastatur():
            "Abo markiert, Weiter-Knopf vorhanden")
 
 
+# ── 19: Favoriten-Abo nach der Mischregel (ADR-025) ─────────────────────────
+def test_abo_mischregel():
+    print("\n19 · Favoriten-Abo: Ort des Termins + Vereinssitz, Pfarreien nur am Ort")
+    import shared.kalender_core as kc
+    d = daten()
+    d["_labels"]["kp"] = "Königstreue Patrioten Hölskofen"
+    d["_meta"]["kp"] = {"heimatort": "Hölskofen", "gemeinde": "Bayerbach", "landkreis": "Landkreis Landshut"}
+    d["kp"] = [{"datum": "2099-06-06", "uhrzeit": "19:30", "bezeichnung": "Monatsversammlung Test",
+                "ort": "Gasthaus Pritscher Paindlkofen"}]
+    schreibe(d)
+    (TMP / "gottesdienste.json").write_text(json.dumps({"hk": [
+        {"datum": "2099-06-07", "uhrzeit": "08:30", "ort": "Hölskofen", "art": "Messe Hoelskofen Test"}]}))
+    kc.GOTTESDIENSTE_FILE = TMP / "gottesdienste.json"
+
+    def titel(q):
+        ics = app.test_client().get("/api/ical/feed?" + q).get_data(as_text=True)
+        return set(re.findall(r"^SUMMARY:(.+?)\r?$", ics, re.M))
+    mv, messe = "Monatsversammlung Test", "Messe Hoelskofen Test"
+    t = titel("o=H%C3%B6lskofen%7CBayerbach")
+    pruefe(any(mv in x for x in t), "Ortschaft Hölskofen: Versammlung in Paindlkofen (Vereinssitz)", t)
+    pruefe(any(messe in x for x in t), "Ortschaft Hölskofen: Messe vor Ort", t)
+    t = titel("o=Postau%7CPostau")
+    pruefe(not any(messe in x for x in t), "Ortschaft Postau: keine Messe aus Hölskofen (Pfarrei nur am Ort)", t)
+    t = titel("o=Paindlkofen%7CErgoldsbach")
+    pruefe(any(mv in x for x in t), "Ortschaft Paindlkofen: Versammlung (Ort des Termins)", t)
+    t = titel("g=Ergoldsbach%7CLandkreis%20Landshut")
+    pruefe(any(mv in x for x in t) and not any(messe in x for x in t), "Gemeinde Ergoldsbach: Versammlung, keine Messe", t)
+    t = titel("r=Straubing-Bogen")
+    pruefe(not any(mv in x or messe in x for x in t), "Region Straubing-Bogen: nichts davon", t)
+    t = titel("v=kp")
+    pruefe(any(mv in x for x in t) and not any(messe in x for x in t), "nur Verein kp: unverändert Verein-basiert", t)
+    t = titel("ort=H%C3%B6lskofen")
+    pruefe(any(mv in x for x in t) and any(messe in x for x in t), "altes ?ort= folgt derselben Regel", t)
+    t = titel("v=kp&o=Postau%7CPostau")
+    pruefe(any(mv in x for x in t), "Verein ODER Ortschaft kombiniert", t)
+    (TMP / "gottesdienste.json").unlink()
+
+
 TESTS = [test_xss, test_telegram_secret, test_vereine_api_lock, test_erinnerung, test_sessions,
          test_admin_loeschen, test_admin_verein_meta, test_verknuepfen,
          test_ical_uids, test_registrierung_key, test_fremde_endpunkte,
          test_pending_atomar, test_import_vergangenheit, test_stats_zeit, test_cookies,
-         test_freigabe_nachricht, test_store_mehrprozess, test_bot_tastatur]
+         test_freigabe_nachricht, test_store_mehrprozess, test_bot_tastatur, test_abo_mischregel]
 
 if __name__ == "__main__":
     for t in TESTS:

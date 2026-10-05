@@ -298,6 +298,53 @@ def geo_fuer_termin(termin: dict, meta_eintrag: dict | None = None,
     }
 
 
+# ── Favoriten-Abo: Mischregel wie im Filter der App (ADR-025) ────────────────
+#
+# Ein Termin zählt für Ortschaft/Gemeinde/Region dort, wo er stattfindet, UND –
+# außer bei Pfarreien – am Sitz des veranstaltenden Vereins. Spiegelt
+# `_terminOrte()`/`_terminGems()`/`_terminRegionen()` in kalender.html; beide
+# Seiten zusammen ändern.
+
+def region_of(landkreis: str) -> str:
+    """Wie `_regionOf()` in kalender.html: „Landkreis Landshut" → „Landshut"."""
+    return re.sub(r"^(?:Landkreis|Stadt|Kreis)\s+", "", str(landkreis or ""), flags=re.I).strip()
+
+
+def termin_orte_misch(geo: dict | None, meta_eintrag: dict | None, label: str,
+                      ist_pfarrei: bool) -> list[tuple[str, str, str]]:
+    """(Ortschaft, Gemeinde ohne Präfix, Landkreis) eines Termins nach der Mischregel.
+
+    Gemeinde leer = beim Vereinssitz unbekannt (passt dann auf jede Gemeinde gleichen Namens).
+    """
+    out = [(o.get("ort", ""), _gem_norm(o.get("gemeinde", "")), o.get("landkreis") or "Landkreis Landshut")
+           for o in ((geo or {}).get("ortschaften") or [])]
+    if out and ist_pfarrei:
+        return out
+    m = meta_eintrag or {}
+    sitz = (heimatort_of(m, label), _gem_norm(m.get("ortschaft_gemeinde") or m.get("gemeinde") or ""),
+            m.get("landkreis") or "Landkreis Landshut")
+    if sitz not in out:
+        out.append(sitz)
+    return out
+
+
+def abo_treffer(orte: list[tuple[str, str, str]], ortschaften: set, gemeinden: set, regionen: set) -> bool:
+    """Passt einer der Orte auf eine Favoriten-Ortschaft, -Gemeinde oder -Region?
+
+    ortschaften: {(ort, gemeinde)} – gemeinde leer = egal; gemeinden: {(gemeinde, landkreis)};
+    regionen: {region}. Vergleich ohne Groß/Klein.
+    """
+    for ort, gem, lk in orte:
+        o, g, l, r = ort.lower(), gem.lower(), lk.lower(), region_of(lk).lower()
+        if o and any(o == fo and (not fg or not g or g == fg) for fo, fg in ortschaften):
+            return True
+        if g and (g, l) in gemeinden:
+            return True
+        if r and r in regionen:
+            return True
+    return False
+
+
 # ── Registrierung: PLZ → Gemeinde → Ortschaft (Todo #418, Baustein A) ─────────
 #
 # Zwei Schichten: `plz_gemeinden.json` (amtlich, bundesweit, aus OpenPLZ, ODbL)

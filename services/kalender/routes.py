@@ -12,7 +12,7 @@ from pathlib import Path
 
 from flask import Blueprint, Response, request
 
-from shared.geo import geo_fuer_termin, eintrag_fuer, _lade as _geo_register, _gem_norm, _ort_norm, ORTE_FREI_FILE
+from shared.geo import geo_fuer_termin, termin_orte_misch, abo_treffer, eintrag_fuer, _lade as _geo_register, _gem_norm, _ort_norm, ORTE_FREI_FILE
 from shared.flyer_store import upload_flyer, delete_flyer
 from shared.termin_felder import BESCHREIBUNG_MAX, DATUM_RE, zeit_fehler
 from shared.vk_db import db_conn
@@ -708,6 +708,36 @@ def api_confirm_import():
         return json.dumps({"error": str(e)}), 500, {"Content-Type": "application/json"}
 
 
+def _merged_meta(raw: dict) -> dict:
+    """Vereins-Meta wie die App sie sieht: DB (Vereinsadmin-Selbstverwaltung, Prio 2), JSON überschreibt
+    (Superadmin, Prio 1). Gemeinsam für /api/termine und das Favoriten-Abo, damit beide denselben
+    Vereinssitz kennen (Mischregel, ADR-025)."""
+    json_meta = raw.get("_meta", {})
+    try:
+        with db_conn() as conn:
+            db_rows = conn.execute(
+                """SELECT verein_key, rubrik, heimatort, plz, gemeinde, landkreis
+                   FROM vereine_accounts WHERE verein_key IS NOT NULL"""
+            ).fetchall()
+    except Exception:
+        db_rows = []
+    db_meta = {}
+    for row in db_rows:
+        entry = {}
+        for col in ("rubrik", "heimatort", "plz", "gemeinde", "landkreis"):
+            if row[col]:
+                entry[col] = row[col]
+        if entry:
+            db_meta[row["verein_key"]] = entry
+
+    merged_meta = {}
+    for key in set(list(json_meta.keys()) + list(db_meta.keys())):
+        m = {**db_meta.get(key, {}), **json_meta.get(key, {})}
+        if m:
+            merged_meta[key] = m
+    return merged_meta
+
+
 def _get_rubrik(key: str, name: str, meta_entry: dict) -> str:
     if "rubrik" in meta_entry:
         return meta_entry["rubrik"]
@@ -879,32 +909,7 @@ def api_termine():
         labels[vkey] = _PG_LABELS[vkey]
         termine.append({**t, "verein": vkey})
 
-    json_meta   = raw.get("_meta", {})
-
-    # DB-Meta laden (Vereinsadmin-Selbstverwaltung, Prio 2); JSON überschreibt (Superadmin, Prio 1)
-    try:
-        with db_conn() as conn:
-            db_rows = conn.execute(
-                """SELECT verein_key, rubrik, heimatort, plz, gemeinde, landkreis
-                   FROM vereine_accounts WHERE verein_key IS NOT NULL"""
-            ).fetchall()
-    except Exception:
-        db_rows = []
-    db_meta = {}
-    for row in db_rows:
-        entry = {}
-        for col in ("rubrik", "heimatort", "plz", "gemeinde", "landkreis"):
-            if row[col]:
-                entry[col] = row[col]
-        if entry:
-            db_meta[row["verein_key"]] = entry
-
-    merged_meta = {}
-    for key in set(list(json_meta.keys()) + list(db_meta.keys())):
-        m = {**db_meta.get(key, {}), **json_meta.get(key, {})}
-        if m:
-            merged_meta[key] = m
-
+    merged_meta = _merged_meta(raw)
     rubriken    = {k: _get_rubrik(k, v, merged_meta.get(k, {})) for k, v in labels.items()}
 
     # Geo-Zuordnung am Termin (ADR-014). Ein Fehler im Resolver darf die Terminliste nie kippen;
@@ -1202,10 +1207,31 @@ def _track_ical_request(filter_vereine: set | None = None):
 
 @kalender_bp.route("/api/ical/feed")
 def api_ical_feed():
-    """Abonnierbarer iCal-Feed aller bevorstehenden Termine (webcal://)."""
-    filter_vereine = {v.strip().lower() for v in request.args.get("v", "").split(",") if v.strip()}
+    """Abonnierbarer iCal-Feed aller bevorstehenden Termine (webcal://).
+
+    Favoriten-Abo (ADR-025): `v` = Vereine, `o` = Ortschaften („Ort|Gemeinde"), `g` = Gemeinden
+    („Gemeinde|Landkreis X"), `r` = Regionen – ein Termin ist drin, wenn er auf irgendeinen davon
+    passt; Orte/Gemeinden/Regionen nach der Mischregel wie im Filter der App. `ort` = altes
+    Einzel-Ortschaft-Abo, gleiche Regel. Ohne jeden Parameter: alle Termine.
+    """
+    def _liste(name: str) -> list[str]:
+        # nur vergleichen, nie ausführen – trotzdem Länge und Anzahl begrenzen
+        return [x.strip()[:100] for x in request.args.get(name, "").split(",") if x.strip()][:50]
+
+    filter_vereine = {v.lower() for v in _liste("v")}
     _track_ical_request(filter_vereine)
-    filter_ort     = request.args.get("ort", "").strip().lower()
+    f_orte = set()
+    for x in _liste("o") + ([request.args.get("ort", "").strip()[:100]] if request.args.get("ort", "").strip() else []):
+        ort, _, gem = x.partition("|")
+        f_orte.add((ort.strip().lower(), _gem_norm(gem).lower()))
+    f_gems = set()
+    for x in _liste("g"):
+        gem, _, lk = x.partition("|")
+        if gem.strip():
+            f_gems.add((_gem_norm(gem).lower(), (lk.strip() or "Landkreis Landshut").lower()))
+    f_regs = {x.lower() for x in _liste("r")}
+    nach_ort = bool(f_orte or f_gems or f_regs)
+    filtert  = bool(filter_vereine) or nach_ort
 
     try:
         raw = json.loads(VEREINSTERMINE_FILE.read_text())
@@ -1222,7 +1248,7 @@ def api_ical_feed():
     for key, events in raw.items():
         if key.startswith("_") or not isinstance(events, list):
             continue
-        if filter_vereine and key not in filter_vereine:
+        if filter_vereine and not nach_ort and key not in filter_vereine:
             continue
         for t in events:
             if t.get("geloescht") or t.get("deleted"):
@@ -1230,25 +1256,31 @@ def api_ical_feed():
             alle.append({**t, "_vkey": key})
 
     for vkey, t in gottesdienste_eintraege(raw):
-        if filter_vereine and vkey not in filter_vereine:
+        if filter_vereine and not nach_ort and vkey not in filter_vereine:
             continue
         alle.append({**t, "_vkey": vkey})
 
-    def _ort_passt(t):
-        if not filter_ort:
+    meta = _merged_meta(raw) if nach_ort else {}
+
+    def _passt(t):
+        if not filtert:
             return True
-        # Ortschaft des Termins laut Register (ADR-014), sonst wie bisher Substring auf ort/ortschaft
+        vkey = t.get("_vkey", "")
+        if vkey in filter_vereine:
+            return True
+        if not nach_ort:
+            return False
+        name = labels.get(vkey) or _PG_LABELS.get(vkey, "")
         try:
-            g = geo_fuer_termin(t, raw.get("_meta", {}).get(t.get("_vkey")), labels.get(t.get("_vkey"), ""),
-                                raw.get("_orte_zuordnung"))
+            g = geo_fuer_termin(t, meta.get(vkey), name, raw.get("_orte_zuordnung"))
         except Exception:
             g = None
-        if g and g.get("orte"):
-            return any(filter_ort == o.lower() for o in g["orte"]) or filter_ort in t.get("ort", "").lower()
-        return filter_ort in t.get("ort", "").lower() or filter_ort in t.get("ortschaft", "").lower()
+        orte = termin_orte_misch(g, meta.get(vkey), name, _get_rubrik(vkey, name, meta.get(vkey, {})) == "Pfarrei")
+        return abo_treffer(orte, f_orte, f_gems, f_regs)
 
+    heute_s = heute.strftime("%Y-%m-%d")
     kuenftige = sorted(
-        [t for t in alle if t.get("datum", "") >= heute.strftime("%Y-%m-%d") and _ort_passt(t)],
+        [t for t in alle if t.get("datum", "") >= heute_s and _passt(t)],
         key=lambda t: (t["datum"], t.get("uhrzeit", ""))
     )
 

@@ -916,19 +916,33 @@ let _scrollToToday=true;  // Sprung zum heutigen Datum nur beim ersten Laden / R
 /* ── Gemeinde-Identität: normalisierter Name + Landkreis (deutschlandweit eindeutig) ──
    Schlüssel z.B. "Postau|Landkreis Landshut". Anzeige = Name; Landkreis-Zusatz nur bei Namensgleichheit
    in mehreren Landkreisen. "Gemeinde/Markt/Stadt"-Präfix und "bei …"/"b. …"-Zusatz fallen weg. */
-let _gemOf={},_gemLks={};
+let _gemOf={},_gemLks={},_gemAlle=[];
 function _gemNormName(g){
   return String(g||"").replace(/^(?:Gemeinde|Markt|Stadt)\s+/i,"").replace(/\s+(?:bei|b\.)\s+.+$/i,"").trim();
 }
 function _prepareGemeinden(){
   _gemOf={};_gemLks={};
+  const alle=new Set();
   Object.entries(meta).forEach(([k,m])=>{
     const n=_gemNormName(m.gemeinde);
     if(!n)return;
     const lk=m.landkreis||"Landkreis Landshut";
     _gemOf[k]=n+"|"+lk;
+    alle.add(_gemOf[k]);
     (_gemLks[n]=_gemLks[n]||new Set()).add(lk);
   });
+  // Gemeinden der Termin-Orte (ADR-014 Stufe 3): auch Gemeinden ohne Vereinssitz werden Chips
+  allT.forEach(t=>{
+    delete t._gemL;delete t._regL;
+    ((t._geo||{}).ortschaften||[]).forEach(o=>{
+      const n=_gemNormName(o.gemeinde);
+      if(!n)return;
+      const lk=o.landkreis||"Landkreis Landshut";
+      alle.add(n+"|"+lk);
+      (_gemLks[n]=_gemLks[n]||new Set()).add(lk);
+    });
+  });
+  _gemAlle=[...alle];
 }
 function _gemLabel(key){
   const i=key.indexOf("|"),n=key.slice(0,i),lk=key.slice(i+1);
@@ -937,9 +951,9 @@ function _gemLabel(key){
 // Alte (nur-Name-)Einträge aus localStorage → aktuelle Schlüssel
 function _gemKeysForOld(g){
   const s=String(g);
-  if(s.includes("|"))return Object.values(_gemOf).includes(s)?[s]:[];
+  if(s.includes("|"))return _gemAlle.includes(s)?[s]:[];
   const n=_gemNormName(s);
-  return[...new Set(Object.values(_gemOf).filter(k=>k.slice(0,k.indexOf("|"))===n))];
+  return _gemAlle.filter(k=>k.slice(0,k.indexOf("|"))===n);
 }
 function _migrateGemFavorites(){
   let changed=false;
@@ -963,6 +977,12 @@ function _migrateGemFavorites(){
 function _regionOf(lk){return String(lk||"").replace(/^(?:Landkreis|Stadt|Kreis)\s+/i,"").trim();}
 function _regionForVerein(k){return _regionOf((meta[k]||{}).landkreis||"Landkreis Landshut");}
 function _gemRegion(g){return _regionOf(g.slice(g.indexOf("|")+1));}
+// Regionen der Vereinssitze und der Termin-Orte (ADR-014 Stufe 3)
+function _alleRegionen(){
+  const r=new Set(Object.keys(meta).map(_regionForVerein));
+  allT.forEach(t=>_terminRegionen(t).forEach(x=>r.add(x)));
+  return[...r].filter(Boolean).sort((a,b)=>a.localeCompare(b,"de"));
+}
 function _migrateRegionFavorites(){
   let changed=false;
   const out=[];
@@ -1000,7 +1020,7 @@ function _ortGemeindeOf(k){
   return _gemOf[k]||"";
 }
 function _prepareOrtschaften(){
-  _ortOf={};_ortBase={};_ortGem={};allOrteAll={};
+  _ortOf={};_ortBase={};_ortGem={};allOrteAll={};_kueCache=null;
   allT.forEach(t=>{delete t._ortL;});
   const byName={};  // Ortsname → {Gemeinde-Schlüssel: [verein_keys]}
   new Set([...Object.keys(labels),...Object.keys(meta)]).forEach(k=>{
@@ -1037,7 +1057,11 @@ function _prepareOrtschaften(){
     });
   });
 }
-/* Ortschaft-Labels eines Termins (ADR-014): der Ort des Termins, nicht der Heimatort des Vereins.
+/* Mischregel (ADR-025, Josef 2026-10-05): Ein Termin zählt für Ortschaft/Gemeinde/Region dort, wo er stattfindet,
+   UND – außer bei Pfarreien – am Sitz des veranstaltenden Vereins. Pfarreien feiern reihum in allen Kirchen des
+   Verbands; ihr Sitz würde z. B. „Postau“ mit Gottesdiensten aus anderen Dörfern füllen (3 → 27 Termine). */
+function _mitVereinssitz(t){return (rubriken[t.verein]||"Verein")!=="Pfarrei";}
+/* Ortschaft-Labels eines Termins (ADR-014): der Ort des Termins, plus Heimatort des Vereins (Mischregel, s. o.).
    Mehrere möglich (Kläranlage Bayerbach/Penk) – der Termin bleibt trotzdem ein Eintrag, der Filter greift bei jedem.
    Ohne `_geo` (orte.json fehlt = Kill-Switch) Rückfall auf den Heimatort des Vereins, also das alte Verhalten. */
 function _terminOrte(t){
@@ -1047,8 +1071,41 @@ function _terminOrte(t){
     const gn=_gemNormName(x.gemeinde);
     return _geoLbl[x.ort+"\u0001"+(gn?gn+"|"+(x.landkreis||"Landkreis Landshut"):"")];
   }).filter(Boolean);
-  if(!o.length&&_ortOf[t.verein])l=[_ortOf[t.verein]];
-  return t._ortL=l;
+  if(_ortOf[t.verein]&&(!o.length||_mitVereinssitz(t)))l.push(_ortOf[t.verein]);
+  return t._ortL=[...new Set(l)];
+}
+/* Gemeinde- und Region-Schlüssel eines Termins (ADR-014 Stufe 3) – Ort des Termins plus Vereinssitz (Mischregel),
+   wie _terminOrte(). Ohne `_geo`-Ortschaft nur der Sitz des Vereins. Cache wird in _prepareGemeinden() geleert. */
+function _terminGems(t){
+  if(t._gemL)return t._gemL;
+  const o=((t._geo||{}).ortschaften||[]);
+  let l=[...new Set(o.map(x=>{const n=_gemNormName(x.gemeinde);return n?n+"|"+(x.landkreis||"Landkreis Landshut"):"";}).filter(Boolean))];
+  if(_gemOf[t.verein]&&(!l.length||_mitVereinssitz(t))&&!l.includes(_gemOf[t.verein]))l.push(_gemOf[t.verein]);
+  return t._gemL=l;
+}
+/* Chips ohne künftige Termine ausblenden (v1.61, Josef): welche Ortschaften/Gemeinden/Regionen haben Termine ab heute?
+   Mit Mischregel; ein Termin von gestern mit Ende vor Beginn läuft über Mitternacht noch. */
+let _kueCache=null;
+function _kuenftig(){
+  if(_kueCache)return _kueCache;
+  const d=new Date(),f=x=>x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0");
+  const heute=f(d);d.setDate(d.getDate()-1);const gestern=f(d);
+  const k={ort:new Set(),gem:new Set(),reg:new Set()};
+  allT.forEach(t=>{
+    if(!(t.datum>=heute||(t.datum===gestern&&t.uhrzeit&&t.uhrzeit_bis&&t.uhrzeit_bis<t.uhrzeit)))return;
+    _terminOrte(t).forEach(x=>k.ort.add(x));
+    _terminGems(t).forEach(x=>k.gem.add(x));
+    _terminRegionen(t).forEach(x=>k.reg.add(x));
+  });
+  return _kueCache=k;
+}
+function _terminRegionen(t){
+  if(t._regL)return t._regL;
+  const o=((t._geo||{}).ortschaften||[]);
+  let l=[...new Set(o.map(x=>_regionOf(x.landkreis||"Landkreis Landshut")).filter(Boolean))];
+  const sitz=_regionForVerein(t.verein);
+  if(sitz&&(!l.length||_mitVereinssitz(t))&&!l.includes(sitz))l.push(sitz);
+  return t._regL=l;
 }
 // Alter Ortschaft-Name (localStorage) → aktuelle Labels (nur relevant, wenn ein Name inzwischen mehrdeutig ist)
 function _ortKeysForOld(o){
@@ -1118,7 +1175,7 @@ function loadState(){
       aktOrte=new Set(s.aktOrte.flatMap(_ortKeysForOld).filter(o=>alleOrte.has(o)));
     }
     if(s.aktLandkreis){
-      const regs=new Set(Object.keys(meta).map(_regionForVerein).filter(Boolean));
+      const regs=new Set(_alleRegionen().filter(x=>_kuenftig().reg.has(x)));
       const r=_regionOf(s.aktLandkreis);
       aktLandkreis=regs.has(r)?r:null;
     }
@@ -1297,7 +1354,7 @@ function toggleSection(id){
 function buildLandkreisFilter(){
   const section=document.getElementById("lk-section");
   const container=document.getElementById("lk-chips");
-  const landkreise=[...new Set(Object.keys(meta).map(_regionForVerein).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"de"));
+  const landkreise=_alleRegionen().filter(r=>_kuenftig().reg.has(r)||r===aktLandkreis);
   container.innerHTML="";
   const sel=document.getElementById("sel-region");
   if(sel){
@@ -1336,7 +1393,7 @@ function selectLandkreis(lk){
 function buildGemeindeFilter(){
   const section=document.getElementById("gem-section");
   const container=document.getElementById("gem-chips");
-  const gemeinden=[...new Set(Object.values(_gemOf))].sort((a,b)=>_gemLabel(a).localeCompare(_gemLabel(b),"de"));
+  const gemeinden=_gemAlle.slice().sort((a,b)=>_gemLabel(a).localeCompare(_gemLabel(b),"de"));
   if(!gemeinden.length){section.style.display="none";return;}
   section.style.display="";
   container.innerHTML='<span class="chip on" data-gem="alle">Alle</span><span class="chip" onclick="toggleGemeinde(\'alle\')">Keine</span>';
@@ -1487,14 +1544,15 @@ function _applyHierarchy(){
   // nicht mehr sichtbare Auswahlen der unteren Ebenen abwählen (sonst filtern sie unsichtbar weiter)
   if(aktLandkreis)aktGemeinden=new Set([...aktGemeinden].filter(_gemVisible));
   aktOrte=new Set([...aktOrte].filter(o=>!allOrteAll[o]||_ortVisible(o)));
+  const kue=_kuenftig();  // ohne künftige Termine ausblenden – außer gerade gewählt (zum Abwählen)
   document.querySelectorAll("[data-gem]:not([data-gem='alle'])").forEach(c=>{
-    c.style.display=_gemVisible(c.dataset.gem)?"":"none";
+    c.style.display=(_gemVisible(c.dataset.gem)&&(kue.gem.has(c.dataset.gem)||aktGemeinden.has(c.dataset.gem)))?"":"none";
     c.classList.toggle("on",aktGemeinden.has(c.dataset.gem));
   });
   const gemAlle=document.querySelector('[data-gem="alle"]');
   if(gemAlle)gemAlle.classList.toggle("on",aktGemeinden.size===0);
   document.querySelectorAll("[data-o]:not([data-o='alle'])").forEach(c=>{
-    c.style.display=_ortVisible(c.dataset.o)?"":"none";
+    c.style.display=(_ortVisible(c.dataset.o)&&(kue.ort.has(c.dataset.o)||aktOrte.has(c.dataset.o)))?"":"none";
     c.classList.toggle("on",aktOrte.has(c.dataset.o));
   });
   const ortAlle=document.querySelector('[data-o="alle"]');
@@ -1509,13 +1567,17 @@ function filterVereinListForOrt(){
   const vereineAmOrt=new Set();
   if(aktOrte.size)allT.forEach(t=>{if(_terminOrte(t).some(o=>aktOrte.has(o)))vereineAmOrt.add(t.verein);});
   if(!aktOrte.size&&!gemFilter&&!aktLandkreis){lbls.forEach(l=>l.style.display="");return;}
+  // ebenso Vereine mit Terminen in der gewählten Gemeinde/Region (ADR-014 Stufe 3)
+  const vereineInGem=new Set(),vereineInReg=new Set();
+  if(gemFilter)allT.forEach(t=>{if(_terminGems(t).some(g=>aktGemeinden.has(g)))vereineInGem.add(t.verein);});
+  if(aktLandkreis)allT.forEach(t=>{if(_terminRegionen(t).includes(aktLandkreis))vereineInReg.add(t.verein);});
   lbls.forEach(lbl=>{
     const cb=lbl.querySelector("[data-vk]");
     if(cb){
       const k=cb.dataset.vk;
       const inOrt=!aktOrte.size||aktOrte.has(_ortOf[k])||vereineAmOrt.has(k);
-      const inGem=!gemFilter||aktGemeinden.has(_gemOf[k]||"");
-      const inReg=!aktLandkreis||_regionForVerein(k)===aktLandkreis;
+      const inGem=!gemFilter||aktGemeinden.has(_gemOf[k]||"")||vereineInGem.has(k);
+      const inReg=!aktLandkreis||_regionForVerein(k)===aktLandkreis||vereineInReg.has(k);
       lbl.style.display=(inOrt&&inGem&&inReg)?"":"none";
     }
   });
@@ -1772,19 +1834,21 @@ function toggleFavGemeinde(g){
 
 function openFavIcalFeed(){
   const base="webcal://vereinskalender.online/api/ical/feed";
-  const keys=new Set();
+  // Server wendet dieselbe Mischregel an wie der Filter (ADR-025): v=Vereine, o=„Ort|Gemeinde“, g=„Gemeinde|Landkreis“, r=Region
+  const v=[],o=[],g=[],r=[];
   favorites.forEach(f=>{
-    if(f.type==="verein"){keys.add(f.key);}
-    else if(f.type==="ortschaft"){
-      // Vereine, die dort Termine haben (Ort des Termins, ADR-014) – der Feed filtert noch nach Verein, nicht nach Ort
-      allT.forEach(t=>{if(_terminOrte(t).includes(f.key))keys.add(t.verein);});
+    const k=String(f.key);
+    if(f.type==="verein")v.push(k);
+    else if(f.type==="ortschaft"||f.type==="ort"){
+      const gem=_ortGem[k]||"";
+      o.push((_ortBase[k]||k)+"|"+gem.slice(0,gem.indexOf("|")>=0?gem.indexOf("|"):gem.length));
     }
-    else if(f.type==="gemeinde"){
-      Object.keys(_gemOf).forEach(k=>{if(_gemOf[k]===f.key)keys.add(k);});
-    }
+    else if(f.type==="gemeinde")g.push(k);
+    else if(f.type==="region")r.push(k);
   });
-  if(keys.size===0){alert("Noch keine Favoriten gespeichert.\nBitte erst Vereine oder Ortschaften mit dem Herz-Symbol markieren.");return;}
-  window.location.href=base+"?v="+encodeURIComponent([...keys].join(","));
+  if(!v.length&&!o.length&&!g.length&&!r.length){alert("Noch keine Favoriten gespeichert.\nBitte erst Vereine oder Ortschaften mit dem Herz-Symbol markieren.");return;}
+  const p=[["v",v],["o",o],["g",g],["r",r]].filter(([,l])=>l.length).map(([n,l])=>n+"="+encodeURIComponent(l.join(",")));
+  window.location.href=base+"?"+p.join("&");
 }
 
 function toggleFavorite(idx,ev){
@@ -1849,6 +1913,24 @@ function _bandFest(){
   b.style.setProperty("--band-a",Math.max(0,Math.min(1,1-rest/ueberlapp)).toFixed(3));
 }
 
+/* Suche tolerant gegenüber Schreibweisen (v1.61, Josef): ä/ae/a, ö/oe/o, ü/ue/u, ß/ss und Akzente zählen gleich –
+   „Klaeranlage“ und „Klaranlage“ finden „Kläranlage“. Beide Seiten gleich normieren, sonst passt es nicht. */
+function _sNorm(s){
+  return String(s||"").toLowerCase().replace(/ä|ae/g,"a").replace(/ö|oe/g,"o").replace(/ü|ue/g,"u").replace(/ß/g,"ss")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+}
+// Freitext-Treffer: Titel, Ort, Ortschaft, Vereinsname, Beschreibung (v1.61)
+function _suchTreffer(t,q){
+  return [t.bezeichnung,t.ort,t.ortschaft,labels[t.verein],t.beschreibung].some(x=>x&&_sNorm(x).includes(q));
+}
+// Hinweis „Treffer außerhalb deiner Filter“: Filter zurücksetzen, Suchtext behalten
+function filterLoesenSucheBehalten(){
+  const v=document.getElementById("srch-input").value;
+  resetAll();
+  document.getElementById("srch-input").value=v;
+  onSearchInput(v);
+}
+
 function onSearchInput(val){
   const q=val.toLowerCase().trim();
   srchText=q;
@@ -1881,13 +1963,14 @@ function onSearchInput(val){
   srchResults=[];
 
   // Dropdown: nur Vereine + Ortschaften (keine Termine)
+  const qn=_sNorm(q);
   Object.entries(labels).forEach(([k,l])=>{
-    if(l.toLowerCase().includes(q)&&!searchChips.find(c=>c.type==="verein"&&c.key===k))
+    if(_sNorm(l).includes(qn)&&!searchChips.find(c=>c.type==="verein"&&c.key===k))
       srchResults.push({type:"verein",key:k,label:l,icon:icon("house")});
   });
 
   Object.keys(allOrteAll).sort().forEach(ort=>{
-    if(ort.toLowerCase().includes(q)&&!searchChips.find(c=>c.type==="ort"&&c.key===ort))
+    if(_sNorm(ort).includes(qn)&&!searchChips.find(c=>c.type==="ort"&&c.key===ort))
       srchResults.push({type:"ort",key:ort,label:ort,icon:icon("mapPin")});
   });
 
@@ -1985,8 +2068,8 @@ function render(){
     }
     // Normaler UND-Filter
     if(!aktVereine.has(t.verein))return false;
-    if(aktLandkreis!==null&&_regionForVerein(t.verein)!==aktLandkreis)return false;
-    if(aktGemeinden.size>0&&!aktGemeinden.has(_gemOf[t.verein]||""))return false;
+    if(aktLandkreis!==null&&!_terminRegionen(t).includes(aktLandkreis))return false;
+    if(aktGemeinden.size>0&&!_terminGems(t).some(g=>aktGemeinden.has(g)))return false;
     if(aktOrte.size>0&&!_terminOrte(t).some(o=>aktOrte.has(o)))return false;
     return true;
   });
@@ -2012,13 +2095,8 @@ function render(){
 
   // Freitext-Filter (gilt immer)
   if(srchText.length>=2){
-    out=out.filter(t=>{
-      const bez=t.bezeichnung.toLowerCase();
-      const ort=(t.ort||"").toLowerCase();
-      const lbl=(labels[t.verein]||"").toLowerCase();
-      const osch=(t.ortschaft||"").toLowerCase();
-      return bez.includes(srchText)||ort.includes(srchText)||osch.includes(srchText)||lbl.includes(srchText);
-    });
+    const qn=_sNorm(srchText);
+    out=out.filter(t=>_suchTreffer(t,qn));
   }
 
   // Rubrik zuletzt: vorher zählen, damit die Rubrikleiste zeigt, was die übrigen Filter je Rubrik übrig lassen
@@ -2038,8 +2116,14 @@ function render(){
   const el=document.getElementById("ev-list");
   if(!out.length){
     let ctxMsg="Keine Termine gefunden.";
-    if(aktOrte.size===1)ctxMsg=`Keine Termine f&uuml;r <strong>${escHtml([...aktOrte][0])}</strong> gefunden.`;
-    else if(srchText.length>=2)ctxMsg=`Keine Treffer f&uuml;r &bdquo;${escHtml(srchText)}&ldquo;.`;
+    if(srchText.length>=2){
+      ctxMsg=`Keine Treffer f&uuml;r &bdquo;${escHtml(srchText)}&ldquo;.`;
+      // Findet die Suche ohne Filter künftige Termine, darauf hinweisen (v1.61)
+      const qn=_sNorm(srchText),hd=new Date(),heute=hd.getFullYear()+"-"+String(hd.getMonth()+1).padStart(2,"0")+"-"+String(hd.getDate()).padStart(2,"0");
+      const n=allT.filter(t=>t.datum>=heute&&_suchTreffer(t,qn)).length;
+      if(n)ctxMsg+=`<br>${n===1?"1 Treffer":n+" Treffer"} au&szlig;erhalb deiner Filter &ndash; <a href="#" onclick="filterLoesenSucheBehalten();return false;" style="color:var(--accent);font-weight:600">Filter zur&uuml;cksetzen</a>`;
+    }
+    else if(aktOrte.size===1)ctxMsg=`Keine Termine f&uuml;r <strong>${escHtml([...aktOrte][0])}</strong> gefunden.`;
     el.innerHTML=`<div class="ev-empty"><p style="display:flex;justify-content:center;color:var(--text3)">${icon("calendar",32)}</p><small>${ctxMsg}</small></div>`+
       `<div class="cta-card" style="margin-top:12px"><strong>Termine fehlen?</strong>Jahresprogramm als PDF an <a href="mailto:Vereinskalender@icloud.com">Vereinskalender@icloud.com</a> &ndash; wir k&uuml;mmern uns zeitnah.</div>`;
     return;
@@ -4039,7 +4123,7 @@ function showInfoModal(){
       </div>
       <div class="help-row" style="padding:8px 0">
         <span class="help-icon">${icon("search",20)}</span>
-        <div><strong>Suche</strong><span>Verein oder Ort eintippen &ndash; filtert live. Vorschlag antippen f&uuml;r Chip-Filter.</span></div>
+        <div><strong>Suche</strong><span>Beliebigen Text eintippen &ndash; filtert live nach Titel, Ort, Verein und Beschreibung. Schreibweisen wie &bdquo;Kl&auml;ranlage&ldquo;/&bdquo;Klaeranlage&ldquo; z&auml;hlen gleich. Vorschlag antippen f&uuml;r Chip-Filter.</span></div>
       </div>
       <div class="help-row" style="padding:8px 0">
         <span class="help-icon">${icon("clock",20)}</span>
@@ -4047,15 +4131,15 @@ function showInfoModal(){
       </div>
       <div class="help-row" style="padding:8px 0">
         <span class="help-icon">${icon("map",20)}</span>
-        <div><strong>Region</strong><span>Erscheint bei mehreren Regionen &ndash; zeigt nur Vereine der gew&auml;hlten Region (Landkreis und gleichnamige Stadt zusammengefasst, z.&nbsp;B. &bdquo;Landshut&ldquo;). Gemeinde und Ortschaft bieten danach nur noch passende Eintr&auml;ge an.</span></div>
+        <div><strong>Region</strong><span>Erscheint bei mehreren Regionen &ndash; zeigt die Termine, die in der gew&auml;hlten Region stattfinden oder von Vereinen aus dieser Region kommen (Landkreis und gleichnamige Stadt zusammengefasst, z.&nbsp;B. &bdquo;Landshut&ldquo;). Gemeinde und Ortschaft bieten danach nur noch passende Eintr&auml;ge an.</span></div>
       </div>
       <div class="help-row" style="padding:8px 0">
         <span class="help-icon">${icon("mapPin",20)}</span>
-        <div><strong>Gemeinde</strong><span>Mehrfachauswahl m&ouml;glich &ndash; zeigt die Vereine der gew&auml;hlten Gemeinde(n). Gibt es denselben Gemeindenamen in mehreren Landkreisen, steht der Landkreis in Klammern dahinter.</span></div>
+        <div><strong>Gemeinde</strong><span>Mehrfachauswahl m&ouml;glich &ndash; zeigt die Termine, die in der gew&auml;hlten Gemeinde stattfinden oder von Vereinen aus dieser Gemeinde kommen. Gibt es denselben Gemeindenamen in mehreren Landkreisen, steht der Landkreis in Klammern dahinter.</span></div>
       </div>
       <div class="help-row" style="padding:8px 0">
         <span class="help-icon">${icon("mapPin",20)}</span>
-        <div><strong>Ortschaft</strong><span>Mehrfachauswahl m&ouml;glich. Zeigt alle Termine, die in der Ortschaft stattfinden &ndash; unabh&auml;ngig davon, wo der Verein seinen Sitz hat. Ein Termin an zwei Orten erscheint trotzdem nur einmal. Gibt es denselben Ortsnamen in mehreren Gemeinden, steht die Gemeinde in Klammern dahinter.</span></div>
+        <div><strong>Ortschaft</strong><span>Mehrfachauswahl m&ouml;glich. Zeigt alle Termine, die in der Ortschaft stattfinden, und dazu die Termine der Vereine aus dieser Ortschaft, auch wenn sie woanders feiern. Gottesdienste z&auml;hlen nur dort, wo sie stattfinden. Ein Termin an zwei Orten erscheint trotzdem nur einmal. Gibt es denselben Ortsnamen in mehreren Gemeinden, steht die Gemeinde in Klammern dahinter.</span></div>
       </div>
       <div class="help-row" style="padding:8px 0">
         <span class="help-icon">${icon("users",20)}</span>
@@ -4077,7 +4161,7 @@ function showInfoModal(){
         <span class="help-icon">${icon("scale",20)}</span>
         <div><strong>Impressum</strong><span>Josef Fischer &middot; H&ouml;lskofen 13 &middot; 84092 Bayerbach b. Ergoldsbach<br><a href="mailto:Vereinskalender@icloud.com" style="color:var(--accent);text-decoration:none">Vereinskalender@icloud.com</a></span></div>
       </div>
-      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.60 &middot; 2026-10-05 &middot; a sEpp-App</p>
+      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.61 &middot; 2026-10-05 &middot; a sEpp-App</p>
       <button onclick="document.getElementById('info-modal').remove()" style="width:100%;margin-top:16px;padding:12px;background:none;border:1.5px solid var(--border2);border-radius:12px;font-size:14px;color:var(--text2);cursor:pointer">Schlie&szlig;en</button>
     </div>`;
   document.body.appendChild(m);
