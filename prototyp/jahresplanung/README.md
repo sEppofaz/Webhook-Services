@@ -55,6 +55,13 @@ Anmeldung ist simuliert (Verein wählen). Veröffentlichen setzt im Prototyp nur
 | `prototyp/jahresplanung/db.py` | SQLite: Konten (simuliert), Entwürfe, Planungsrunden, Teilnehmer (Schema für `vk_db.py`) |
 | `prototyp/jahresplanung/daten/` | Momentaufnahme `/api/termine` + `planung.sqlite` – **nicht im Git** |
 
+## Pitfall: Sitzungsschlüssel
+
+Der Prototyp startet bei jeder Code-Änderung neu (Reloader). Mit `os.urandom` als Sitzungsschlüssel war danach jeder
+abgemeldet, und vorher geöffnete Formulare scheiterten am CSRF-Token mit „Forbidden“ (Josef 2026-10-05: „ich sehe
+nur noch Anmelden“). Jetzt: fester Schlüssel in `daten/sitzung.key` (nicht im Git), veraltete Formulare führen mit
+Hinweis zurück, Fehlerseiten auf Deutsch. Live gibt es das Problem nicht (fester Schlüssel `flask_secret.key`).
+
 ## Bekannte Punkte zum Weiterbasteln
 
 - **Gemeinsame Veranstaltungen zählen als Konflikt**: Volksfestauszug von Bergschützen, KSK und

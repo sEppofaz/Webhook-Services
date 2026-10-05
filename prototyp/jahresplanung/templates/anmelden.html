@@ -2,6 +2,8 @@
 {% block titel %}Anmelden{% endblock %}
 {% block inhalt %}
 <h1>Als Verein anmelden <span class="chip">simuliert</span></h1>
+{% if fehler %}<div class="warn rot">{{ fehler }}</div>{% endif %}
+<p><b>Verein in der Liste wählen und rechts auf „Anmelden“ tippen.</b></p>
 <p class="hint">Live ist das der normale Vereins-Login mit E-Mail und Passwort. Im Prototyp wählst du einfach den Verein.
 Jedes neue Konto wartet auf die <b>persönliche Freigabe durch VKO</b> (live: Admin-App oder Telegram, wie heute).</p>
 

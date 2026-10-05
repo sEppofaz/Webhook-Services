@@ -200,7 +200,12 @@ else:
     s = c.get("/")
     pruefe(s.status_code == 200 and b"Anmelden" in s.data, "Startseite ohne Anmeldung")
     tok = csrf_von(s.data)
-    pruefe(c.post("/runden/neu", data={"name": "X", "jahr": "2027"}).status_code == 403, "POST ohne CSRF abgelehnt")
+    pruefe(b"Vereine mit Konto" in s.data or b"Registrieren ohne Einladung" in s.data, "Startseite zeigt direkt die Anmeldung")
+    r = c.post("/runden/neu", data={"name": "X", "jahr": "2027"}, headers={"Referer": "http://localhost/runden"})
+    pruefe(r.status_code == 302 and "fehler=" in r.headers["Location"] and DB.runden_des_vereins("a") == [],
+           "POST ohne gültigen CSRF: nichts angelegt, zurück mit Hinweis")
+    s = c.get("/gibtsnicht")
+    pruefe(s.status_code == 404 and "Nicht gefunden".encode() in s.data and b"Not Found" not in s.data, "Fehlerseite auf Deutsch")
     pruefe(c.get("/api/kollisionen?von=2026-07-11").status_code == 401, "Kollisions-API nur angemeldet")
     for alt in ("/kollision", "/vorlage", "/entwuerfe"):
         pruefe(c.get(alt).status_code == 302, f"alte Seite {alt} leitet um")

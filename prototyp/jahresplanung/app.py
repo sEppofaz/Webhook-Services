@@ -30,7 +30,18 @@ from shared.termin_felder import DATUM_RE, zeit_fehler
 from shared.wiederholung import MONATE
 
 app = Flask(__name__)
-app.secret_key = os.urandom(32)   # Prototyp: Sitzungen gelten bis zum Neustart
+def _sitzungsschluessel() -> bytes:
+    """Fester Schlüssel in daten/ (nicht im Git). Vorher os.urandom bei jedem Start: Jeder automatische Neustart
+    nach einer Code-Änderung meldete alle ab, und offene Formulare scheiterten am CSRF-Token (Josef 2026-10-05)."""
+    datei = D.DATEN_DIR / "sitzung.key"
+    D.DATEN_DIR.mkdir(exist_ok=True)
+    if not datei.exists():
+        datei.write_bytes(os.urandom(32))
+        datei.chmod(0o600)
+    return datei.read_bytes()
+
+
+app.secret_key = _sitzungsschluessel()
 app.config["TEMPLATES_AUTO_RELOAD"] = True   # Vorlagen-Änderungen ohne Neustart sichtbar (zum Basteln)
 
 TEXT_MAX = 200
@@ -46,7 +57,21 @@ def _vorlagen_hilfen():
 @app.before_request
 def _csrf_pruefen():
     if request.method == "POST" and not validate_csrf():
-        abort(403, "Ungültige Anfrage – Seite neu laden.")
+        # Meist eine veraltete Seite (vor Neustart/Abmeldung geladen) – zurück mit Hinweis statt nackter 403
+        ziel = request.referrer if (request.referrer or "").startswith(request.host_url) else url_for("start")
+        trenner = "&" if "?" in ziel else "?"
+        return redirect(f"{ziel.split('#')[0]}{trenner}fehler=Die+Seite+war+veraltet+%E2%80%93+bitte+noch+einmal.")
+
+
+@app.errorhandler(400)
+@app.errorhandler(403)
+@app.errorhandler(404)
+@app.errorhandler(429)
+def _fehlerseite(e):
+    """Fehler auf Deutsch, mit Weg zurück (statt Werkzeug-Standardseite „Forbidden“)."""
+    titel = {400: "Ungültige Eingabe", 403: "Nicht erlaubt", 404: "Nicht gefunden", 429: "Zu viele Versuche"}.get(e.code, "Fehler")
+    text = e.description if e.description and not e.description.startswith(("The ", "You ", "Bad ", "The server")) else ""
+    return render_template("fehler.html", titel=titel, text=text), e.code
 
 
 # ── Hilfen ───────────────────────────────────────────────────────────────────
@@ -148,7 +173,7 @@ def start():
     """Angemeldet ist die Startseite „Termine“ (Josef 2026-10-05), sonst kurze Erklärung + Anmelden."""
     if session.get("verein") and db.konto(session["verein"]):
         return redirect(url_for("termine_seite"))
-    return render_template("start.html")
+    return anmelden()
 
 
 @app.post("/daten-holen")
@@ -175,7 +200,7 @@ def alte_seiten():
 @app.get("/anmelden")
 def anmelden():
     return render_template("anmelden.html", konten=db.konten(), gruppen=D.vereine_gruppiert(),
-                           weiter=request.args.get("weiter", ""))
+                           weiter=request.args.get("weiter", ""), fehler=request.args.get("fehler", ""))
 
 
 def _sicheres_ziel(weiter: str) -> str:
