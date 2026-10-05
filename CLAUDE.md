@@ -108,7 +108,8 @@ die Meldung über Bot X und nicht Y" zuerst hier nachsehen:
 Gottesdienste aus `gottesdienste.json` erreichen die Abonnenten also **nicht**. Am
 2026-09-30 war das ein Glücksfall: 23 erfundene Messen gingen nur an Josef.
 
-| täglich 00:10, 20:00 | `kalender_report.py` | Vereinskalender-Bericht (verifiziert, DE) |
+| täglich 00:10, 20:00 | `kalender_report.py` | Vereinskalender-Bericht (verifiziert, DE); 20:00 mit „Offen im Admin“ (v1.62) |
+| monatlich 1., 05:00 | `plz_check.py` | PLZ-Wächter (#419, ADR-016): meldet neuen OpenPLZ-Export per Telegram, sonst still. `/etc/cron.d/pka-plz-check` (Quelle `deploy/cron.d/`), Log `/var/log/pka-plz-check.log`, Zustand `/var/lib/pka-plz/stand.json`. Schreibt **nie** `plz_gemeinden.json`. Test: `plz_check.py --dry-run` (ohne Senden), `--force` rechnet auch ohne neuen Export (~2 Min, 55 MB + ~230 OpenPLZ-Abrufe) |
 | täglich 00:05 | `stats_collector.py` | Besucherstatistik → `page_stats`-Tabelle |
 | wöchentlich Mi 07:00 (`0 7 * * 3`) | `heimat_import.py` | Termine aller Gemeinden (heimat-info, Parser, KI) fetchen → Telegram-Vorschau |
 | Di+Do 06:00 | `traffic_info.py` | Verkehrsinfo-Check |
