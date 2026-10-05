@@ -251,6 +251,8 @@ else:
     pruefe(all(x.encode() in s.data for x in ("Vereinsprofil", "Mitglieder", "Passwort ändern", "Überschneidungen prüfen mit", "Datenschutzerklärung")),
            "Einstellungen: Profil, Mitglieder, Passwort, Prüfkreis, Rechtliches")
     pruefe(b'hdr-pill-pri" href="/einstellungen" aria-current="page"' in s.data, "Kopf: Tab Einstellungen aktiv")
+    tabs = re.findall(rb'class="hdr-pill[^"]*"[^>]*>(?:<svg.*?</svg>)?([^<]+)</', s.data)
+    pruefe([t.decode() for t in tabs] == ["Termine", "Einstellungen", "Planungsmodul", "Abmelden"], f"Tab-Reihenfolge, war {tabs}")
 
     # Kollisions-API aus der Sitzung + Prüfkreis aus den Einstellungen
     j = c.get("/api/kollisionen?verein=d&von=2026-07-11&ort=Testdorf").get_json()

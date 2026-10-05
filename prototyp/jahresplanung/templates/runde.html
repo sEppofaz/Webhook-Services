@@ -20,7 +20,7 @@
 <div id="geaendert" class="warn" hidden>Andere Vereine haben etwas geändert. <a href="" onclick="location.reload();return false">Neu laden</a></div>
 {% if ergebnisse %}
 <div class="card">
-  <b>Ergebnis</b> <span class="hint">– jeder beim Abschluss beteiligte Verein findet es unter „Planungsrunden“</span>
+  <b>Ergebnis</b> <span class="hint">– jeder beim Abschluss beteiligte Verein findet es im „Planungsmodul“</span>
   {% for e in ergebnisse %}
   <div class="aktionen kompakt"><span>Version {{ e.version }} · {{ e.abgeschlossen_am[:10]|tm }}{{ e.abgeschlossen_am[:4] }}, {{ e.abgeschlossen_am[11:16] }} Uhr</span>
     {% if key in e.daten.teilnehmer|map(attribute='verein')|list %}<a class="btn klein" href="{{ url_for('archiv_ergebnis', eid=e.id, fmt='pdf') }}">Ergebnis als PDF</a>{% else %}<span class="hint">(ihr wart da nicht dabei)</span>{% endif %}</div>

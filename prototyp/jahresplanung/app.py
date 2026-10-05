@@ -3,11 +3,11 @@
 Start:  ~/.venvs/vko-jahresplanung/bin/python prototyp/jahresplanung/app.py
 Dann:   http://localhost:5050
 
-Aufbau (Josef 2026-10-05):
+Aufbau (Josef 2026-10-05) – Tabs: Termine · Einstellungen · Planungsmodul:
 - Startseite nach dem Anmelden: „Termine“ – alle Termine des Vereins (im Kalender + Entwürfe). Neuer Termin mit
   Kollisionswarnung beim Tippen; „Veröffentlichen“ oder „Als Entwurf speichern“. Vorjahres-Vorlage als Knopf.
 - „Einstellungen“: mit welchen Vereinen auf Überschneidungen geprüft wird (Gemeinde automatisch + dazu/ohne).
-- „Planungsrunden“: jeder freigegebene Vereinsadmin startet eine (Organisator) und lädt per Link oder Code ein;
+- „Planungsmodul“ (Planungsrunden): jeder freigegebene Vereinsadmin startet eine (Organisator) und lädt per Link oder Code ein;
   Teilnehmer sehen alle Entwürfe mit Konflikten und ändern/bestätigen ihre eigenen. Verlauf + Ergebnis-PDF.
 Josef gibt jedes neue Konto persönlich frei (ADR-026). Schreibt nie in den Live-Kalender. Daten: Momentaufnahme der öffentlichen /api/termine.
 """
@@ -656,7 +656,7 @@ def runde_status(key, runde_id):
         version = db.ergebnis_speichern(runde_id, key, _ergebnis_stand(r, key))
         db.runde_status(runde_id, "abgeschlossen")
         return redirect(url_for("runde_seite", runde_id=runde_id,
-                                meldung=f"Runde abgeschlossen. Das Ergebnis (Version {version}) steht jetzt bei jedem beteiligten Verein unter „Planungsrunden“."))
+                                meldung=f"Runde abgeschlossen. Das Ergebnis (Version {version}) steht jetzt bei jedem beteiligten Verein im „Planungsmodul“."))
     if request.form.get("aktion") == "oeffnen" and r["status"] != "offen":
         db.runde_status(runde_id, "offen")
         db.protokoll(runde_id, key, "Runde wieder geöffnet")
@@ -691,7 +691,7 @@ def _ergebnis_stand(r, key) -> dict:
 
 @app.get("/archiv")
 def archiv():
-    """Früheres eigenes Archiv – die Ergebnisse stehen jetzt bei der Runde unter „Planungsrunden“."""
+    """Früheres eigenes Archiv – die Ergebnisse stehen jetzt bei der Runde im „Planungsmodul“."""
     return redirect(url_for("runden_seite"))
 
 
