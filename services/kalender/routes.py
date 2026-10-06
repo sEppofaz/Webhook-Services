@@ -1411,6 +1411,7 @@ def _load_pending_meta(f: Path) -> dict | None:
                     "uhrzeit_bis": e.get("uhrzeit_bis", ""),
                     "bezeichnung": e["bezeichnung"],
                     "ort":         e.get("ort", ""),
+                    "verdacht":    e.get("_verdacht", ""),   # ADR-027: in der Ansicht nicht vorangehakt
                 })
         mit_neuen = [v for v in vereine.values() if v["neu"]]
         return {
@@ -1421,6 +1422,7 @@ def _load_pending_meta(f: Path) -> dict | None:
             "neu":        sum(1 for e in events if e.get("_neu")),
             "duplikate":  sum(1 for e in events if not e.get("_neu") and not e.get("_sv")),
             "sv":         sum(1 for e in events if e.get("_sv")),
+            "verdacht":   sum(1 for e in events if e.get("_neu") and e.get("_verdacht")),
             "ohne_neue":  len(vereine) - len(mit_neuen),
             "vereine":    sorted(mit_neuen, key=lambda x: x["label"].lower()),
         }

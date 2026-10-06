@@ -313,6 +313,20 @@ def _existing_from_data(data: dict) -> set[tuple[str, str, str]]:
     return existing
 
 
+def _tage_je_verein(data: dict) -> dict[str, dict[str, str]]:
+    """{verein_key: {datum: "Titel HH:MM"}} – Grundlage der Verdachtsregel (ADR-027): ein Crawler-Termin
+    eines selbst pflegenden Vereins an einem Tag, an dem der Verein schon etwas eingetragen hat."""
+    tage: dict = {}
+    for key, items in data.items():
+        if key.startswith("_") or not isinstance(items, list):
+            continue
+        for item in items:
+            if isinstance(item, dict) and item.get("datum") and not (item.get("geloescht") or item.get("deleted")):
+                text = f'{item.get("bezeichnung", "").strip()} {item.get("uhrzeit", "")}'.strip()
+                tage.setdefault(key, {}).setdefault(item["datum"], text)
+    return tage
+
+
 def _existing_events() -> set[tuple[str, str, str]]:
     """Gibt alle (datum, uhrzeit, bezeichnung)-Tripel aus vereinstermine.json zurück."""
     if not VEREINSTERMINE_FILE.exists():
@@ -338,13 +352,18 @@ def _is_duplicate(datum: str, uhrzeit: str, bezeichnung: str,
 
 
 def do_import(uid: str, verein_keys: list | None = None,
-              excluded_events: list | None = None, geo: dict | None = None) -> str:
+              excluded_events: list | None = None, geo: dict | None = None,
+              mit_verdacht: bool = True) -> str:
     """Schreibt bestätigte Events in vereinstermine.json.
     verein_keys=None: alle Events importieren.
     verein_keys=[...]: nur diese Vereine importieren; Pending-Datei bleibt mit Rest.
     excluded_events: Liste von {verein_key, datum, uhrzeit, bezeichnung} – diese Termine überspringen.
     geo: {verein_key: {heimatort, gemeinde, landkreis}} – Admin-Angaben aus der Import-Ansicht,
          gelten nur für die übernommenen Vereine; leere Felder ändern nichts.
+    mit_verdacht=False (Telegram): Verdachtsfälle (_verdacht, ADR-027) nicht übernehmen, sondern in der
+         Pending-Datei für die Admin-Ansicht lassen – dort sind sie einzeln an-/abhakbar.
+    Vereine mit abgeschaltetem Abruf (_meta.crawler_aus) werden nie übernommen (Schalter kann sich
+    zwischen Abruf und Bestätigung geändert haben).
     Duplikatprüfung und Schreiben laufen gemeinsam im Lock von KalenderStore.update() auf dem
     dann aktuellen Dateistand – parallele Änderungen gehen nicht verloren."""
     pending_file = PENDING_DIR / f"heimat_pending_{uid}.json"
@@ -373,11 +392,12 @@ def do_import(uid: str, verein_keys: list | None = None,
         if (filter_keys is None or e["_verein_key"] in filter_keys)
         and (e["_verein_key"], e["datum"], e.get("uhrzeit", ""),
              e["bezeichnung"].strip().lower()) not in excluded_set
+        and (mit_verdacht or not e.get("_verdacht"))
     ]
-    stand = {"neu": 0, "duplikat": 0, "vereine": set()}
+    stand = {"neu": 0, "duplikat": 0, "aus": 0, "vereine": set()}
 
     def _upd(data: dict) -> None:
-        stand.update(neu=0, duplikat=0, vereine=set())
+        stand.update(neu=0, duplikat=0, aus=0, vereine=set())
         labels_ = data.setdefault("_labels", {})
         meta_   = data.setdefault("_meta", {})
         gemeinde_map: dict = data.setdefault("_ortschaften", {}).setdefault("gemeinde_map", {})
@@ -388,6 +408,9 @@ def do_import(uid: str, verein_keys: list | None = None,
                 stand["duplikat"] += 1
                 continue
             key = e["_verein_key"]
+            if meta_.get(key, {}).get("crawler_aus"):
+                stand["aus"] += 1
+                continue
             data.setdefault(key, [])
             labels_.setdefault(key, e["_label"])
             verein_gemeinde = gemeinde_map.get(e["_gemeinde"], "") or e.get("_gemeinde_amtlich", "")
@@ -435,7 +458,7 @@ def do_import(uid: str, verein_keys: list | None = None,
 
     KalenderStore.update(_upd)
     neu, duplikat = stand["neu"], stand["duplikat"]
-    _log(f"✅ Import: {neu} neu, {duplikat} Duplikate übersprungen")
+    _log(f"✅ Import: {neu} neu, {duplikat} Duplikate übersprungen, {stand['aus']} Abruf aus")
     LAST_IMPORT_FILE.write_text(
         json.dumps({
             "datum":   datetime.now().strftime("%Y-%m-%d %H:%M"),
@@ -454,10 +477,15 @@ def do_import(uid: str, verein_keys: list | None = None,
         ]
         _save_rejected_as_deleted(excluded_ev)
 
-    # Pending-Datei: bei Teilimport Rest behalten, sonst löschen
+    # Pending-Datei: bei Teilimport Rest behalten (andere Vereine, liegen gelassene Verdachtsfälle), sonst löschen
+    verdacht_offen = 0
     try:
-        if filter_keys is not None:
-            remaining = [e for e in events if e["_verein_key"] not in filter_keys]
+        if filter_keys is not None or not mit_verdacht:
+            remaining = [e for e in events
+                         if (filter_keys is not None and e["_verein_key"] not in filter_keys)
+                         or (not mit_verdacht and e.get("_verdacht") and e.get("_neu")
+                             and (filter_keys is None or e["_verein_key"] in filter_keys))]
+            verdacht_offen = sum(1 for e in remaining if e.get("_verdacht") and e.get("_neu"))
             if any(e.get("_neu") for e in remaining):   # nur Duplikate übrig → erledigt
                 pending["events"] = remaining
                 _schreibe_pending(pending_file, pending)
@@ -467,7 +495,13 @@ def do_import(uid: str, verein_keys: list | None = None,
             pending_file.unlink(missing_ok=True)
     except OSError as ex:
         _log(f"⚠️  Pending-Datei {pending_file.name} nicht aktualisiert: {ex}")
-    return f"✅ {neu} neue Termine importiert, {duplikat} Duplikate übersprungen"
+    msg = f"✅ {neu} neue Termine importiert, {duplikat} Duplikate übersprungen"
+    if stand["aus"]:
+        msg += f", {stand['aus']} wegen abgeschaltetem Abruf nicht übernommen"
+    if not mit_verdacht and verdacht_offen:
+        msg += (f"\n⚠️ {verdacht_offen} mögliche Doppelte bleiben offen – im Admin-Bereich "
+                "(Importe) einzeln entscheiden")
+    return msg
 
 
 def _save_rejected_as_deleted(events: list) -> None:
@@ -607,7 +641,8 @@ def _ki_lauf(g: dict, heute: str, lauf: dict) -> list[dict]:
     return termine
 
 
-def _zuordnen(e: dict, g: dict, aliase: dict, sv_meta: dict, existing: set) -> None:
+def _zuordnen(e: dict, g: dict, aliase: dict, sv_meta: dict, existing: set,
+              tage: dict | None = None) -> None:
     """Verein, Gemeinde, Rubrik und Neu-Status eines Rohtermins bestimmen."""
     veranst = e.get("_verein_name", "")
     if termin_scraper.ist_namensliste(veranst):
@@ -627,8 +662,13 @@ def _zuordnen(e: dict, g: dict, aliase: dict, sv_meta: dict, existing: set) -> N
     e["quelle"]      = _quelle_von(g)
     e["quelle_url"]  = g.get("url", "")
     e["_methode"]    = g.get("typ") or "heimat"
-    e["_sv"]         = bool(sv_meta.get(e["_verein_key"], {}).get("selbstverwaltung", False))
+    meta             = sv_meta.get(e["_verein_key"], {})
+    e["_sv"]         = bool(meta.get("selbstverwaltung", False))
+    e["_aus"]        = bool(meta.get("crawler_aus", False))
     e["_neu"]        = not _is_duplicate(e["datum"], e["uhrzeit"], e["bezeichnung"], existing)
+    # Verdacht (ADR-027): selbst pflegender Verein hat an dem Tag schon etwas – evtl. umbenannt/verschoben
+    vorhanden = (tage or {}).get(e["_verein_key"], {}).get(e["datum"], "")
+    e["_verdacht"]   = vorhanden if (e["_sv"] and e["_neu"] and vorhanden) else ""
 
 
 def fetch_and_save_pending(gemeinden_filter: list | None = None,
@@ -656,11 +696,14 @@ def fetch_and_save_pending(gemeinden_filter: list | None = None,
         _vk_data       = json.loads(VEREINSTERMINE_FILE.read_text()) if VEREINSTERMINE_FILE.exists() else {}
         _sv_meta       = _vk_data.get("_meta", {})
         _heimat_aliase = _vk_data.get("_heimat_aliases", {})
+        _tage          = _tage_je_verein(_vk_data)
     except Exception:
         _sv_meta       = {}
         _heimat_aliase = {}
+        _tage          = {}
 
     alle_events: list = []
+    aus_events: list  = []      # Vereine mit abgeschaltetem Abruf – nur gezählt, nicht gespeichert
     fehler: list      = []
     lauf = {"hinweise": [], "ki": [], "ki_aufrufe": 0}
 
@@ -691,11 +734,17 @@ def fetch_and_save_pending(gemeinden_filter: list | None = None,
                 for feld, name in (("bezeichnung", "titel"), ("ort", "ort"), ("_verein_name", "verein")):
                     e[feld] = _sanitize_text(e.get(feld, ""), name, g["name"])
         for e in events:
-            _zuordnen(e, g, _heimat_aliase, _sv_meta, existing)
+            _zuordnen(e, g, _heimat_aliase, _sv_meta, existing, _tage)
+        aus_events.extend(e for e in events if e["_aus"])
+        events = [e for e in events if not e["_aus"]]
         alle_events.extend(events)
         neu_count = sum(1 for e in events if e["_neu"])
         _log(f"  → {len(events)} Termine ({neu_count} neu)")
 
+    if aus_events:
+        aus_vereine = sorted({e.get("_label") or e["_verein_key"] for e in aus_events})
+        lauf["hinweise"].append(f"⏸ {len(aus_events)} Termine übersprungen – Abruf vom Verein abgeschaltet: "
+                                + ", ".join(aus_vereine))
     if not alle_events:
         return {"error": "Keine bevorstehenden Termine gefunden", "fehler": fehler,
                 "hinweise": lauf["hinweise"], "ki": lauf["ki"]}
@@ -713,8 +762,10 @@ def fetch_and_save_pending(gemeinden_filter: list | None = None,
     neu = sum(1 for e in alle_events if e["_neu"])
     dup = sum(1 for e in alle_events if not e["_neu"])
     sv  = sum(1 for e in alle_events if e.get("_sv"))
-    _log(f"✅ Pending uid={uid}: {neu} neu, {dup} dup, {sv} sv (davon)")
-    return {"uid": uid, "neu": neu, "duplikate": dup, "sv": sv,
+    verdacht = sum(1 for e in alle_events if e.get("_verdacht"))
+    _log(f"✅ Pending uid={uid}: {neu} neu ({verdacht} Verdacht), {dup} dup, {sv} sv (davon), "
+         f"{len(aus_events)} Abruf aus")
+    return {"uid": uid, "neu": neu, "duplikate": dup, "sv": sv, "verdacht": verdacht,
             "fehler": fehler, "gesamt": len(alle_events),
             "hinweise": lauf["hinweise"], "ki": lauf["ki"]}
 
@@ -765,10 +816,18 @@ def _sende_vorschau(result: dict, secrets: dict) -> None:
         if ort:     teile.append(ort[:25])
         return f"• {e['datum']} {e.get('uhrzeit',''):5} – {' · '.join(teile)} [{e['_gemeinde']}]"
 
-    neue     = [e for e in alle_events if e["_neu"]]
+    neue     = [e for e in alle_events if e["_neu"] and not e.get("_verdacht")]
+    verdacht = [e for e in alle_events if e["_neu"] and e.get("_verdacht")]
     vorschau = "\n".join(_vorschau_zeile(e) for e in neue[:15])
     if len(neue) > 15:
         vorschau += f"\n… +{len(neue)-15} weitere neue"
+    verdacht_text = ""
+    if verdacht:
+        verdacht_text = (f"\n\n⚠️ {len(verdacht)} mögliche Doppelte (Verein pflegt selbst und hat am selben Tag "
+                         "schon einen Termin) – werden mit „importieren“ NICHT übernommen, "
+                         "Entscheidung im Admin-Bereich:\n"
+                         + "\n".join(f"{_vorschau_zeile(e)}\n   ↔ Verein: {e['_verdacht'][:40]}" for e in verdacht[:8])
+                         + (f"\n… +{len(verdacht)-8} weitere" if len(verdacht) > 8 else ""))
 
     sv_labels  = sorted({e.get("_label") or e["_verein_key"] for e in alle_events if e.get("_sv")})
     sv_hinweis = (f"\n\nℹ️ Davon {sv_gesamt} Termine bei selbstverwaltenden Vereinen (bitte bei Bestätigung prüfen): "
@@ -781,13 +840,15 @@ def _sende_vorschau(result: dict, secrets: dict) -> None:
     msg = (f"🏡 Termin-Import ({pending.get('quelle', '')})\n"
            f"Gemeinden: {gemeinden_str}\n"
            f"{zähler}\n\n"
-           + (vorschau if neue else "Alle Termine bereits vorhanden.")
+           + (vorschau if neue else ("Keine eindeutig neuen Termine." if verdacht
+                                     else "Alle Termine bereits vorhanden."))
+           + verdacht_text
            + sv_hinweis
            + (f"\n\n{extra}" if extra else "")
            + f"\n\n→ Admin-Bereich: vereinskalender.online/#admin → Importe")
 
     send_telegram_inline(token, chat_id, msg, [[
-        {"text": f"✅ {neu_gesamt} importieren", "callback_data": f"heimat_ok:{uid}"},
+        {"text": f"✅ {len(neue)} importieren", "callback_data": f"heimat_ok:{uid}"},
         {"text": "❌ Verwerfen",                 "callback_data": f"heimat_no:{uid}"},
     ]])
 

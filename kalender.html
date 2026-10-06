@@ -21,14 +21,14 @@
   --card:#fff;--hdr:#6D28D9;
   --accent:#7C3AED;
   --tab:#6D28D9;--radius:12px;
-  --fav-dim:.35;--pill-pri-bg:#1e1b4b;--pill-pri-fg:#fff;
+  --fav-dim:.35;--pill-pri-bg:#1e1b4b;--verdacht:#b45309;--pill-pri-fg:#fff;
 }
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#1c1c1e;--bg2:#2c2c2e;--bg3:#3a3a3c;
   --text:#f2f2f7;--text2:#aeaeb2;--text3:#636366;
   --border:rgba(255,255,255,0.1);--border2:rgba(255,255,255,0.2);
   --card:#2c2c2e;--accent:#8B5CF6;--tab:#A78BFA;--hdr:#5B21B6;
-  --fav-dim:.65;--pill-pri-bg:#f2f2f7;--pill-pri-fg:#1c1c1e;
+  --fav-dim:.65;--pill-pri-bg:#f2f2f7;--verdacht:#fbbf24;--pill-pri-fg:#1c1c1e;
 }}
 /* identische Dark-Werte für das manuelle Umschalten unabhängig vom System (BKM: PWA-Standards) */
 :root[data-theme="dark"]{
@@ -36,7 +36,7 @@
   --text:#f2f2f7;--text2:#aeaeb2;--text3:#636366;
   --border:rgba(255,255,255,0.1);--border2:rgba(255,255,255,0.2);
   --card:#2c2c2e;--accent:#8B5CF6;--tab:#A78BFA;--hdr:#5B21B6;
-  --fav-dim:.65;--pill-pri-bg:#f2f2f7;--pill-pri-fg:#1c1c1e;
+  --fav-dim:.65;--pill-pri-bg:#f2f2f7;--verdacht:#fbbf24;--pill-pri-fg:#1c1c1e;
 }
 html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif}
 .app{height:100dvh;display:flex;flex-direction:column;overflow:hidden}
@@ -3134,11 +3134,21 @@ function renderAllAccounts(list){
       : `<span style="color:#ff9f0a;display:inline-flex;align-items:center">${icon("mail",12)}</span>`;
     return `<div style="font-size:12px;color:var(--text2);padding:2px 0">${badge} ${parts.join(" &middot; ")}</div>`;
   };
+  // Pflege-Übersicht (ADR-027): pflegt selbst / nur Crawler, Abruf aus, kommende Termine je Herkunft
+  const pflegeBadge=v=>{
+    const p=v.pflege||{};
+    const b=(txt,fg)=>`<span style="font-size:11px;font-weight:600;color:${fg};margin-left:6px">${txt}</span>`;
+    return (p.selbst?b("pflegt selbst","var(--accent)"):b("nur Crawler","var(--text3)"))
+      +(p.crawler_aus?b("Abruf aus","var(--verdacht)"):"");
+  };
+  const pflegeZeile=v=>{const p=v.pflege||{};return `<div style="font-size:11px;color:var(--text3);margin-top:1px">Kommende Termine: ${p.eigene||0} vom Verein · ${p.crawler||0} vom Crawler · Abruf ${p.crawler_aus?"aus":"an"}</div>`;};
+  const nSelbst=list.filter(v=>v.pflege&&v.pflege.selbst).length,nAus=list.filter(v=>v.pflege&&v.pflege.crawler_aus).length;
   const rows=Object.keys(grouped).sort().map(l=>{
     const items=grouped[l].map(v=>`
       <div style="display:flex;align-items:flex-start;gap:8px;padding:10px 14px;border-bottom:.5px solid var(--border)">
         <div style="flex:1;min-width:0">
-          <div style="font-size:14px;font-weight:600;color:var(--text)">${escHtml(v.verein_name)} ${statusBadge(v)}</div>
+          <div style="font-size:14px;font-weight:600;color:var(--text)">${escHtml(v.verein_name)} ${statusBadge(v)}${pflegeBadge(v)}</div>
+          ${pflegeZeile(v)}
           <div style="font-size:11px;color:var(--text3);margin-top:1px">${escHtml(v.rubrik||"")}${v.heimatort?` · ${escHtml(v.heimatort)}`:""}${v.plz?` · PLZ ${escHtml(v.plz)}`:""}</div>
           ${(v.users||[]).map(userLines).join("")}
         </div>
@@ -3148,7 +3158,7 @@ function renderAllAccounts(list){
     return `<div class="ver-section-hdr" id="acc-letter-${l}">${l}</div><div class="filter-card" style="padding:0;margin-bottom:6px">${items}</div>`;
   }).join("");
   el.innerHTML=`
-    <div style="font-size:12px;color:var(--text3);padding:0 2px 10px">${list.length} Verein${list.length!==1?"e":""}</div>
+    <div style="font-size:12px;color:var(--text3);padding:0 2px 10px">${list.length} Verein${list.length!==1?"e":""} · ${nSelbst} pflegen selbst · ${list.length-nSelbst} nur Crawler · Abruf aus: ${nAus}</div>
     ${alphaBar}
     ${rows}`;
 }
@@ -3653,7 +3663,9 @@ function _impGeoVorschlag(v){
 
 function renderImportCard(imp){
   const d=imp.erzeugt?new Date(imp.erzeugt).toLocaleString("de-DE",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}):"";
-  const stats=`Gesamt: ${imp.gesamt} | Neu: ${imp.neu} | Duplikate: ${imp.duplikate}`+(imp.sv?` | SV: ${imp.sv}`:"");
+  const stats=`Gesamt: ${imp.gesamt} | Neu: ${imp.neu} | Duplikate: ${imp.duplikate}`+(imp.sv?` | SV: ${imp.sv}`:"")
+    +(imp.verdacht?` | <span style="color:var(--verdacht)">Verdacht: ${imp.verdacht}</span>`:"");
+  const verdachtHinweis=imp.verdacht?`<div style="font-size:12px;color:var(--text2);margin:-6px 0 10px">Orange markierte Termine sind <b>nicht vorangehakt</b>: Der Verein pflegt selbst und hat am selben Tag schon einen Termin – evtl. derselbe, umbenannt oder verschoben. Anhaken übernimmt, ohne Haken gilt als verworfen.</div>`:"";
   const ausgeblendet=imp.ohne_neue?`<div style="font-size:12px;color:var(--text3);margin:-6px 0 10px">${imp.ohne_neue} ${imp.ohne_neue===1?"Verein":"Vereine"} ohne neue Termine ausgeblendet – deren Termine stehen schon im Kalender.</div>`:"";
   const vereineHtml=imp.vereine.length
     ?imp.vereine.map(v=>renderVereinRow(imp.uid,v)).join("")
@@ -3662,7 +3674,7 @@ function renderImportCard(imp){
     <div style="padding:12px 14px 0">
       <div style="font-weight:600;font-size:15px;color:var(--text1);display:flex;align-items:center;gap:5px">${icon("folder",15)} ${escHtml(imp.quelle)} <span style="font-size:12px;font-weight:400;color:var(--text3)">${d}</span></div>
       <div style="font-size:13px;color:var(--text2);margin:4px 0 10px">${stats}</div>
-      ${ausgeblendet}
+      ${ausgeblendet}${verdachtHinweis}
       <div style="display:flex;gap:8px;margin-bottom:12px">
         <button onclick="confirmAll('${imp.uid}')" style="flex:1;padding:8px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer">&#10003; Alle best&auml;tigen</button>
         <button onclick="rejectAll('${imp.uid}')" style="flex:1;padding:8px;border:1.5px solid #ff3b30;border-radius:8px;background:var(--bg);color:#ff3b30;font-size:13px;cursor:pointer">&#10005; Alle verwerfen</button>
@@ -3685,8 +3697,8 @@ function renderVereinRow(uid,v){
         const eid=`imp-chk-${uid}-${escHtml(v.key)}-${i}`;
         const val=JSON.stringify({verein_key:v.key,datum:t.datum,uhrzeit:t.uhrzeit||"",bezeichnung:t.bezeichnung});
         return `<label style="display:flex;gap:6px;align-items:baseline;font-size:12px;color:var(--text2);padding:3px 0;cursor:pointer">
-          <input type="checkbox" id="${eid}" data-imp-term='${val.replace(/'/g,"&#39;")}' checked style="margin-top:1px;flex-shrink:0">
-          <span>${escHtml(t.datum)}${t.uhrzeit?" "+escHtml(t.uhrzeit)+(t.uhrzeit_bis?"–"+escHtml(t.uhrzeit_bis):""):""} – ${escHtml(t.bezeichnung)}${t.ort?" · <span style='color:var(--text3)'>"+escHtml(t.ort)+"</span>":""}</span>
+          <input type="checkbox" id="${eid}" data-imp-term='${val.replace(/'/g,"&#39;")}'${t.verdacht?"":" checked"} style="margin-top:1px;flex-shrink:0">
+          <span>${escHtml(t.datum)}${t.uhrzeit?" "+escHtml(t.uhrzeit)+(t.uhrzeit_bis?"–"+escHtml(t.uhrzeit_bis):""):""} – ${escHtml(t.bezeichnung)}${t.ort?" · <span style='color:var(--text3)'>"+escHtml(t.ort)+"</span>":""}${t.verdacht?`<br><span style="color:var(--verdacht)">möglicher Doppeleintrag – Verein hat am selben Tag: ${escHtml(t.verdacht)}</span>`:""}</span>
         </label>`;
       }).join("")
     :'<div style="font-size:12px;color:var(--text3)">Keine neuen Termine.</div>';
@@ -4251,7 +4263,7 @@ function showInfoModal(){
         <span class="help-icon">${icon("scale",20)}</span>
         <div><strong>Impressum</strong><span>Josef Fischer &middot; H&ouml;lskofen 13 &middot; 84092 Bayerbach b. Ergoldsbach<br><a href="mailto:Vereinskalender@icloud.com" style="color:var(--accent);text-decoration:none">Vereinskalender@icloud.com</a></span></div>
       </div>
-      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.65 &middot; 2026-10-06 &middot; a sEpp-App</p>
+      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.66 &middot; 2026-10-06 &middot; a sEpp-App</p>
       <button onclick="document.getElementById('info-modal').remove()" style="width:100%;margin-top:16px;padding:12px;background:none;border:1.5px solid var(--border2);border-radius:12px;font-size:14px;color:var(--text2);cursor:pointer">Schlie&szlig;en</button>
     </div>`;
   document.body.appendChild(m);

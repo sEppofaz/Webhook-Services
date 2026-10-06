@@ -967,12 +967,48 @@ def admin_users():
     users_by_verein: dict = {}
     for u in users:
         users_by_verein.setdefault(u["verein_id"], []).append(dict(u))
+    pflege = _pflege_je_verein()
     result = []
     for v in vereine:
         vd = dict(v)
         vd["users"] = users_by_verein.get(v["id"], [])
+        vd["pflege"] = pflege.get(v["verein_key"] or "", {"selbst": False, "crawler_aus": False,
+                                                         "eigene": 0, "crawler": 0})
         result.append(vd)
     return result
+
+
+def _pflege_je_verein() -> dict:
+    """Übersicht im Admin (ADR-027): pflegt der Verein selbst, ist der Abruf aus, wie viele kommende
+    Termine stammen vom Verein (Formular/Upload) bzw. vom Crawler (quelle_url)."""
+    from shared.kalender_store import KalenderStore
+    try:
+        data = KalenderStore.read()
+    except Exception:
+        return {}
+    heute = datetime.now().strftime("%Y-%m-%d")
+    meta, labels = data.get("_meta", {}), data.get("_labels", {})
+    out: dict = {}
+    for key, items in data.items():
+        if key.startswith("_") or not isinstance(items, list):
+            continue
+        eigene = crawler = 0
+        for t in items:
+            if not isinstance(t, dict) or t.get("geloescht") or t.get("deleted") or t.get("datum", "") < heute:
+                continue
+            if t.get("erstellt_von") or (t.get("quelle") and t.get("quelle") == labels.get(key)):
+                eigene += 1
+            elif "quelle_url" in t:
+                crawler += 1
+        out[key] = {"eigene": eigene, "crawler": crawler}
+    for key, m in meta.items():
+        e = out.setdefault(key, {"eigene": 0, "crawler": 0})
+        e["selbst"] = bool(m.get("selbstverwaltung"))
+        e["crawler_aus"] = bool(m.get("crawler_aus"))
+    for e in out.values():
+        e.setdefault("selbst", False)
+        e.setdefault("crawler_aus", False)
+    return out
 
 
 @auth_bp.route("/api/admin/users/<int:user_id>", methods=["PATCH"])

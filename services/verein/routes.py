@@ -60,6 +60,7 @@ def dashboard(user):
     verein_name = user["verein_name"]
     termine = _get_verein_termine(verein_key)
     heute = date.today().isoformat()
+    crawler_block = _crawler_block(user)
 
     rows = ""
     for t in sorted(termine, key=lambda x: x.get("datum", "")):
@@ -164,6 +165,7 @@ def dashboard(user):
 </div>
 {neu_btn}
 {upload_btn}
+{crawler_block}
 <h2 style="font-size:1rem;margin:1rem 0 .5rem">Termine ({len(termine)})</h2>
 {rows}
 {mitglieder_link}
@@ -174,6 +176,66 @@ def dashboard(user):
 <a class="btn btn-sec" href="/" style="margin-top:.5rem">← Zurück zum Kalender</a>
 <p class="hint" style="margin-top:1rem"><a href="/verein/datenschutz">Datenschutzerklärung</a> · <a href="/verein/nutzungsbedingungen">Nutzungsbedingungen</a></p>"""
     return _page(f"Dashboard – {verein_name}", body)
+
+
+# ── Abruf von Gemeinde-Webseiten an/aus (ADR-027) ───────────────────────────
+
+def _crawler_aus(verein_key: str | None) -> bool:
+    if not verein_key:
+        return False
+    try:
+        return bool(_load_data().get("_meta", {}).get(verein_key, {}).get("crawler_aus"))
+    except Exception:
+        return False
+
+
+def _crawler_block(user) -> str:
+    """Karte im Dashboard: Status + (nur Vereinsadmin) Knopf zum Umschalten."""
+    if not user.get("verein_key"):
+        return ""
+    aus = _crawler_aus(user["verein_key"])
+    status = ('<b style="color:#ff9f0a">Aus</b> – neue Termine kommen nur noch von euch.' if aus else
+              '<b style="color:#34c759">An</b> – neue Termine von Gemeinde-Webseiten werden ergänzt.')
+    knopf = ""
+    if user["role"] == "admin":
+        knopf = f"""<form method="post" action="/verein/crawler" style="margin-top:.6rem">
+  {csrf_field(get_csrf_token())}
+  <input type="hidden" name="aus" value="{'0' if aus else '1'}">
+  <button class="btn btn-sec" type="submit" style="margin:0">{'Abruf wieder einschalten' if aus else 'Abruf ausschalten'}</button>
+</form>"""
+    return f"""<div class="card" style="margin-top:1rem">
+  <div style="font-weight:600;margin-bottom:.25rem">Termine von Gemeinde-Webseiten übernehmen</div>
+  <div style="color:#aeaeb2;font-size:.85rem">Vereinskalender liest wöchentlich die Veranstaltungsseiten der Gemeinden
+  (z.&nbsp;B. heimat-info.de) und ergänzt dort gefundene Termine eures Vereins. Pflegt ihr eure Termine selbst,
+  könnt ihr das ausschalten – bestehende Termine bleiben unverändert.</div>
+  <div style="font-size:.9rem;margin-top:.5rem">Status: {status}</div>
+  {knopf}
+</div>"""
+
+
+@verein_bp.route("/verein/crawler", methods=["POST"])
+@require_verein_login
+def crawler_schalten(user):
+    if user["role"] != "admin":
+        return _page("Fehler", '<p class="err">Nur Vereinsadmins können das ändern.</p>'), 403
+    if not validate_csrf():
+        return _page("Fehler", '<p class="err">Ungültige Anfrage. Bitte Seite neu laden.</p>'), 403
+    verein_key = user.get("verein_key")
+    if not verein_key:
+        return redirect("/verein/dashboard")
+    aus = request.form.get("aus") == "1"
+
+    def _mut(d):
+        meta = d.setdefault("_meta", {}).setdefault(verein_key, {})
+        if aus:
+            meta["crawler_aus"] = True
+        else:
+            meta.pop("crawler_aus", None)
+        return d
+
+    KalenderStore.update(_mut)
+    log_audit("crawler_aus" if aus else "crawler_an", "", verein_key, user["id"])
+    return redirect("/verein/dashboard")
 
 
 # ── Neuer Termin ─────────────────────────────────────────────────────────────

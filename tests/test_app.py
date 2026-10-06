@@ -782,11 +782,110 @@ def test_quelle_pfarrbrief():
     (TMP / "gottesdienste.json").unlink()
 
 
+# ── 24: Verdacht auf Doppeleintrag + Abruf-Schalter je Verein (ADR-027) ──────
+def test_verdacht_und_schalter():
+    print("\n24 · Verdacht auf Doppeleintrag, Abruf-Schalter, Admin-Übersicht")
+    import heimat_import as hi
+    hi.PENDING_DIR = TMP / "imports"
+    hi.LOG_FILE = str(TMP / "heimat.log")
+    hi.LAST_IMPORT_FILE = TMP / "last_import.json"
+    d = daten()
+    d["_labels"].update({"ffw_sv": "FFW SV", "tsv_nur": "TSV Nur", "ffw_aus": "FFW Aus"})
+    d["_meta"].update({"ffw_sv": {"selbstverwaltung": True}, "tsv_nur": {}, "ffw_aus": {"selbstverwaltung": True}})
+    d["ffw_sv"] = [{"id": "s1", "datum": "2099-05-01", "uhrzeit": "18:00", "bezeichnung": "Weinfest der FFW",
+                    "erstellt_von": "a@b.de"}]
+    d["tsv_nur"] = [{"datum": "2099-05-01", "uhrzeit": "14:00", "bezeichnung": "Turnier", "quelle": "heimat-info.de",
+                     "quelle_url": "https://x"}]
+    schreibe(d)
+    g = {"name": "Testgem", "verein_key": "gemeinde_test", "label": "Veranstaltungen Testgem", "url": "https://x"}
+    def roh(verein, datum, uhr, titel):
+        return {"_verein_name": verein, "datum": datum, "uhrzeit": uhr, "bezeichnung": titel, "ort": ""}
+    tage = hi._tage_je_verein(d)
+    existing = hi._existing_from_data(d)
+    e1 = roh("FFW SV", "2099-05-01", "19:00", "Weinfest")              # umbenannt + verschoben → Verdacht
+    e2 = roh("FFW SV", "2099-05-02", "19:00", "Kirchweih")             # anderer Tag → eindeutig neu
+    e3 = roh("TSV Nur", "2099-05-01", "16:00", "Sommerfest")           # pflegt nicht selbst → kein Verdacht
+    e4 = roh("FFW SV", "2099-05-01", "18:00", "Weinfest der FFW")      # exakt vorhanden → Duplikat
+    for e in (e1, e2, e3, e4):
+        hi._zuordnen(e, g, {}, d["_meta"], existing, tage)
+    pruefe(e1["_neu"] and e1["_verdacht"] == "Weinfest der FFW 18:00", "Verdacht: selbst pflegend + selber Tag", e1)
+    pruefe(e2["_neu"] and not e2["_verdacht"], "anderer Tag: kein Verdacht")
+    pruefe(e3["_neu"] and not e3["_verdacht"], "Verein ohne Selbstpflege: kein Verdacht")
+    pruefe(not e4["_neu"] and not e4["_verdacht"], "exaktes Duplikat bleibt Duplikat, kein Verdacht")
+
+    # Telegram-Weg: Verdacht bleibt liegen, Rest wird übernommen
+    pf = hi.PENDING_DIR / "heimat_pending_verd01.json"
+    pf.write_text(json.dumps({"uid": "verd01", "events": [e1, e2, e3, e4]}))
+    gesendet = []
+    alt = hi.send_telegram_inline
+    hi.send_telegram_inline = lambda tok, chat, msg, kb: gesendet.append((msg, kb))
+    try:
+        hi._sende_vorschau({"uid": "verd01", "neu": 3, "duplikate": 1, "sv": 3, "gesamt": 4,
+                            "fehler": [], "hinweise": [], "ki": []}, {"TOKEN": "t", "CHAT_ID": "1"})
+    finally:
+        hi.send_telegram_inline = alt
+    msg, kb = gesendet[0]
+    pruefe("mögliche Doppelte" in msg and "Weinfest der FFW 18:00" in msg, "Telegram-Vorschau nennt den Verdacht", msg[-300:])
+    pruefe(kb[0][0]["text"].startswith("✅ 2 importieren"), "Knopf zählt nur eindeutige Termine", kb[0][0]["text"])
+    res = hi.do_import("verd01", mit_verdacht=False)
+    T = {t["bezeichnung"] for k in ("ffw_sv", "tsv_nur") for t in daten()[k]}
+    pruefe("Kirchweih" in T and "Sommerfest" in T and "Weinfest" not in T, "Telegram-Import ohne Verdachtsfall", T)
+    rest = json.loads(pf.read_text())["events"] if pf.exists() else []
+    pruefe([e["bezeichnung"] for e in rest] == ["Weinfest"], "Verdachtsfall bleibt im Pending für den Admin", rest)
+    pruefe("1 mögliche Doppelte bleiben offen" in res, "Rückmeldung nennt offene Verdachtsfälle", res)
+    # Admin-Ansicht: Verdacht wird markiert geliefert
+    imp = app.test_client().get("/api/admin/importe", headers=ADMIN).get_json()
+    eintrag = next(i for i in imp if i["uid"] == "verd01")
+    pruefe(eintrag["verdacht"] == 1 and eintrag["vereine"][0]["termine"][0]["verdacht"] == "Weinfest der FFW 18:00",
+           "Admin-Importe liefern den Verdacht je Termin", eintrag)
+    hi.do_import("verd01")      # Admin hakt an → wird übernommen
+    pruefe(any(t["bezeichnung"] == "Weinfest" for t in daten()["ffw_sv"]) and not pf.exists(),
+           "Admin-Bestätigung übernimmt den Verdachtsfall")
+
+    # Schalter im Dashboard
+    vid, uid = verein_anlegen("FFW Aus", "ffw_aus", "aus@example.org")
+    mid = user_anlegen(vid, "mitglied-aus@example.org")
+    cl, _ = client_fuer(uid)
+    t = cl.get("/verein/dashboard").get_data(as_text=True)
+    pruefe("Termine von Gemeinde-Webseiten" in t and "Abruf ausschalten" in t, "Dashboard zeigt Schalter (Status an)")
+    r = cl.post("/verein/crawler", data={"aus": "1"})
+    pruefe(r.status_code == 403 and not daten()["_meta"]["ffw_aus"].get("crawler_aus"), "ohne CSRF abgelehnt")
+    mcl, _ = client_fuer(mid)
+    r = mcl.post("/verein/crawler", data={"_csrf": csrf(mcl), "aus": "1"})
+    pruefe(r.status_code == 403, "Mitglied ohne Adminrolle darf nicht schalten")
+    pruefe("Abruf ausschalten" not in mcl.get("/verein/dashboard").get_data(as_text=True), "Mitglied sieht keinen Knopf")
+    r = cl.post("/verein/crawler", data={"_csrf": csrf(cl), "aus": "1"})
+    pruefe(r.status_code == 302 and daten()["_meta"]["ffw_aus"].get("crawler_aus") is True, "Admin schaltet aus")
+    pruefe(daten()["_meta"]["ffw_aus"].get("selbstverwaltung") is True, "andere _meta-Felder bleiben")
+    pruefe("Abruf wieder einschalten" in cl.get("/verein/dashboard").get_data(as_text=True), "Dashboard zeigt Aus")
+
+    # Abruf aus: Termine fallen beim Bestätigen weg (Schalter nach dem Abruf umgelegt)
+    e5 = roh("FFW Aus", "2099-06-01", "10:00", "Maibaum")
+    hi._zuordnen(e5, g, {}, daten()["_meta"], set(), {})
+    pruefe(e5["_aus"], "_zuordnen erkennt abgeschalteten Abruf")
+    e5["_aus"] = False   # wie ein Pending von vor dem Umschalten
+    pf2 = hi.PENDING_DIR / "heimat_pending_aus001.json"
+    pf2.write_text(json.dumps({"uid": "aus001", "events": [e5]}))
+    res = hi.do_import("aus001")
+    pruefe(not daten().get("ffw_aus") and "abgeschaltetem Abruf" in res, "do_import übernimmt nichts bei Abruf aus", res)
+
+    # Admin-Übersicht
+    vid2, _ = verein_anlegen("FFW SV", "ffw_sv", "sv@example.org")
+    L = {v["verein_key"]: v["pflege"] for v in app.test_client().get("/api/admin/users", headers=ADMIN).get_json()}
+    pruefe(L["ffw_aus"]["crawler_aus"] and L["ffw_aus"]["selbst"], "Übersicht: Abruf aus + pflegt selbst", L["ffw_aus"])
+    pruefe(L["ffw_sv"] == {"eigene": 1, "crawler": 2, "selbst": True, "crawler_aus": False},
+           "Übersicht zählt eigene und Crawler-Termine", L["ffw_sv"])
+
+    r = cl.post("/verein/crawler", data={"_csrf": csrf(cl), "aus": "0"})
+    pruefe("crawler_aus" not in daten()["_meta"]["ffw_aus"], "wieder einschalten entfernt das Feld")
+
+
 TESTS = [test_xss, test_telegram_secret, test_vereine_api_lock, test_erinnerung, test_sessions,
          test_admin_loeschen, test_admin_verein_meta, test_verknuepfen,
          test_ical_uids, test_registrierung_key, test_fremde_endpunkte,
          test_pending_atomar, test_import_vergangenheit, test_stats_zeit, test_cookies,
-         test_freigabe_nachricht, test_store_mehrprozess, test_bot_tastatur, test_abo_mischregel, test_chips_ohne_onclick, test_rename_relevanz, test_import_ortschaft, test_register_pruefen, test_plz_check, test_quelle_pfarrbrief]
+         test_freigabe_nachricht, test_store_mehrprozess, test_bot_tastatur, test_abo_mischregel, test_chips_ohne_onclick, test_rename_relevanz, test_import_ortschaft, test_register_pruefen, test_plz_check, test_quelle_pfarrbrief,
+         test_verdacht_und_schalter]
 
 if __name__ == "__main__":
     for t in TESTS:

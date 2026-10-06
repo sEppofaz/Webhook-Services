@@ -529,7 +529,7 @@ def telegram_webhook():
                             "heimat_import", "/opt/rename-webhook/heimat_import.py")
                         mod = importlib.util.module_from_spec(spec)
                         spec.loader.exec_module(mod)
-                        result = mod.do_import(u)
+                        result = mod.do_import(u, mit_verdacht=False)   # Verdachtsfälle nur im Admin (ADR-027)
                         send_telegram(TELEGRAM_CHAT_ID, result)
                     except Exception as e:
                         tb = traceback.format_exc()
