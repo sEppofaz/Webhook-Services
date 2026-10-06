@@ -110,11 +110,13 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
 .chip.on{background:var(--accent);color:#fff;border-color:var(--accent)}
 
 /* ── Verein checkboxes ── */
-.v-list{display:grid;grid-template-columns:1fr 1fr;gap:2px 12px}
-@media(min-width:600px){.v-list{grid-template-columns:1fr 1fr 1fr}}
-.v-check{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--text2);cursor:pointer;padding:5px 0}
+/* Spaltenzahl aus der Namensbreite (in em → wächst mit Systemschrift), nicht aus Breakpoints (v1.65) */
+.v-list{display:grid;font-size:13px;grid-template-columns:repeat(auto-fill,minmax(min(100%,12em),1fr));gap:2px 12px}
+.v-check{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--text2);cursor:pointer;padding:3px 0;min-width:0}
+.v-name{flex:1;min-width:0;overflow-wrap:anywhere;hyphens:auto}
 .v-check input{accent-color:var(--accent);width:16px;height:16px;cursor:pointer;flex-shrink:0}
-.v-check-star{margin-left:auto;font-size:13px;cursor:pointer;flex-shrink:0;line-height:1;background:none;border:none;padding:2px;border-radius:4px;transition:opacity .15s}
+.v-check-star{margin-left:auto;flex-shrink:0;position:relative}
+.v-check-star::after{content:"";position:absolute;inset:-9px -8px}  /* Tippfläche ~32 px ohne Spaltenbreite zu fressen */
 .v-sel-row{grid-column:1/-1;display:flex;gap:8px;padding-bottom:8px;border-bottom:.5px solid var(--border);margin-bottom:2px}
 
 /* ── Event cards ── */
@@ -444,7 +446,6 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
   .ev-tile-t{font-size:18px}
   .ev-title{font-size:17px}
   .ev-meta{font-size:13px}
-  .v-list{grid-template-columns:1fr}
   html.vorschau #s-kal.on{display:block;max-width:720px}  /* Vorschau ohne Filter: keine leere Seitenspalte */
 }
 </style>
@@ -1628,16 +1629,17 @@ function buildVereinFilter(){
     cb.type="checkbox";cb.dataset.vk=k;cb.checked=true;
     cb.onchange=()=>onCbChange(cb);
     lbl.appendChild(cb);
-    lbl.appendChild(document.createTextNode(l));
+    const nm=document.createElement("span");
+    nm.className="v-name";nm.textContent=l;
+    lbl.appendChild(nm);
     // Favoriten-Stern
     const isFav=favorites.some(f=>f.type==="verein"&&f.key===k);
     const star=document.createElement("button");
-    star.className="v-check-star";
+    star.className="fav-star v-check-star"+(isFav?" on":"");  // fav-star: toggleFavVerein() färbt nur diese Klasse um
+    star.type="button";
     star.dataset.favk=k;
     star.innerHTML=icon("heart",14);
-    star.style.opacity=isFav?"1":"0.35";
-    if(isFav)star.style.color="#ff3b30";
-    star.title="Favorit";
+    star.title="Favorit";star.setAttribute("aria-label","Favorit "+l);
     star.onclick=(ev)=>{ev.preventDefault();ev.stopPropagation();toggleFavVerein(k,l);};
     lbl.appendChild(star);
     list.appendChild(lbl);
@@ -4249,7 +4251,7 @@ function showInfoModal(){
         <span class="help-icon">${icon("scale",20)}</span>
         <div><strong>Impressum</strong><span>Josef Fischer &middot; H&ouml;lskofen 13 &middot; 84092 Bayerbach b. Ergoldsbach<br><a href="mailto:Vereinskalender@icloud.com" style="color:var(--accent);text-decoration:none">Vereinskalender@icloud.com</a></span></div>
       </div>
-      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.64 &middot; 2026-10-05 &middot; a sEpp-App</p>
+      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.65 &middot; 2026-10-06 &middot; a sEpp-App</p>
       <button onclick="document.getElementById('info-modal').remove()" style="width:100%;margin-top:16px;padding:12px;background:none;border:1.5px solid var(--border2);border-radius:12px;font-size:14px;color:var(--text2);cursor:pointer">Schlie&szlig;en</button>
     </div>`;
   document.body.appendChild(m);
