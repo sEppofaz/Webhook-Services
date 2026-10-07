@@ -1,0 +1,6 @@
+# Lebenszeichen Mailversand (Brevo-Schlüssel aktiv halten, Josef 2026-10-07) – Quelle im Repo: deploy/cron.d/pka-mail-lebenszeichen
+# Installation: install -m 644 -o root -g root /opt/rename-webhook/deploy/cron.d/pka-mail-lebenszeichen /etc/cron.d/pka-mail-lebenszeichen
+# Montags 08:00: Testmail an Vereinskalender@icloud.com (mail_lebenszeichen.py); Fehlschlag → Telegram + Cron-Wächter.
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+0 8 * * 1 root /opt/rename-webhook/bin/python3 /opt/rename-webhook/cronwrap.py mail_lebenszeichen -- /opt/rename-webhook/bin/python3 /opt/rename-webhook/mail_lebenszeichen.py >> /var/log/pka-mail-lebenszeichen.log 2>&1

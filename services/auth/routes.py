@@ -21,10 +21,11 @@ from shared.csrf import csrf_field, get_csrf_token, validate_csrf
 from shared.vk_mail import (
     ANREDEN,
     gruss_aus,
+    konto_mail,
+    konto_mail_text,
     send_rejected_email,
     send_reset_email,
     send_verify_email,
-    send_welcome_email,
 )
 from shared.flask_notify import send_telegram, send_telegram_inline
 from shared.geo import orte_fuer_plz, ortschaft_aufloesen, plz_gueltig
@@ -590,7 +591,8 @@ def verify_email():
     token = request.args.get("token", "")
     with db_conn() as conn:
         row = conn.execute(
-            "SELECT id, verify_token_expires FROM vk_users WHERE verify_token = ?",
+            """SELECT u.id, u.verify_token_expires, v.status AS verein_status
+               FROM vk_users u LEFT JOIN vereine_accounts v ON v.id = u.verein_id WHERE u.verify_token = ?""",
             (token,),
         ).fetchone()
         if not row:
@@ -603,7 +605,10 @@ def verify_email():
             "UPDATE vk_users SET email_verified=1, verify_token=NULL, verify_token_expires=NULL WHERE id=?",
             (row["id"],),
         )
-    body = f'<p class="ok">E-Mail-Adresse bestätigt!</p><p>Dein Konto wird nun vom Administrator geprüft. Du erhältst eine E-Mail sobald es freigeschaltet wurde.</p><a class="btn btn-sec" href="/" style="margin-top:.5rem">← Zurück zum Kalender</a>'
+    if row["verein_status"] == "aktiv":   # schon freigegeben (Bestätigungslink nach der Freigabe) → direkt anmelden
+        body = '<p class="ok">E-Mail-Adresse bestätigt!</p><p>Euer Konto ist freigeschaltet – ihr könnt euch jetzt anmelden.</p><a class="btn" href="/verein/login" style="margin-top:.5rem">Jetzt anmelden</a>'
+    else:
+        body = f'<p class="ok">E-Mail-Adresse bestätigt!</p><p>Dein Konto wird nun vom Administrator geprüft. Du erhältst eine E-Mail sobald es freigeschaltet wurde.</p><a class="btn btn-sec" href="/" style="margin-top:.5rem">← Zurück zum Kalender</a>'
     return _page("Bestätigt", body)
 
 
@@ -889,7 +894,8 @@ def approve_verein(verein_id: int):
     with db_conn() as conn:
         row = conn.execute(
             """SELECT v.verein_name, v.verein_key, v.plz, v.gemeinde, v.landkreis,
-                      v.heimatort, v.rubrik, u.email, u.anrede, u.vorname, u.nachname
+                      v.heimatort, v.rubrik, u.email, u.anrede, u.vorname, u.nachname,
+                      u.id AS uid, u.email_verified
                FROM vereine_accounts v
                JOIN vk_users u ON u.verein_id = v.id AND u.role = 'admin'
                WHERE v.id = ? AND v.status = 'pending'""",
@@ -901,12 +907,13 @@ def approve_verein(verein_id: int):
             "UPDATE vereine_accounts SET status='aktiv', freigegeben_at=CURRENT_TIMESTAMP WHERE id=?",
             (verein_id,),
         )
-        send_welcome_email(row["email"], row["verein_name"], gruss=gruss_aus(row))
+        art, ok = konto_mail(conn, row["uid"], row["email"], row["verein_name"], row["email_verified"],
+                             gruss=gruss_aus(row))
 
     from shared.kalender_store import register_verein
     register_verein(row["verein_key"], row["verein_name"], row)
 
-    return {"ok": True}
+    return {"ok": True, "mail": art, "mail_ok": ok, "mail_text": konto_mail_text(art, ok)}
 
 
 @auth_bp.route("/api/admin/vereine/<int:verein_id>/reject", methods=["POST"])
@@ -927,8 +934,8 @@ def reject_verein(verein_id: int):
             "UPDATE vereine_accounts SET status='abgelehnt' WHERE id=?",
             (verein_id,),
         )
-        send_rejected_email(row["email"], row["verein_name"], gruss=gruss_aus(row))
-    return {"ok": True}
+        ok = send_rejected_email(row["email"], row["verein_name"], gruss=gruss_aus(row))
+    return {"ok": True, "mail_ok": ok}
 
 
 @auth_bp.route("/api/admin/vereine-pending")
@@ -1028,6 +1035,31 @@ def admin_update_user(user_id: int):
             (name, telefon, user_id),
         )
     return {"ok": True}
+
+
+@auth_bp.route("/api/admin/users/<int:user_id>/mail", methods=["POST"])
+def admin_konto_mail(user_id: int):
+    """Admin → Accounts → „Mail erneut senden“: Bestätigungslink (E-Mail unbestätigt) bzw. Willkommens-Mail
+    (freigegebener Verein). Für Fälle, in denen die Mail bei Registrierung/Freigabe nicht ankam."""
+    token = request.headers.get("X-Upload-Token", "")
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
+        return {"error": "Unauthorized"}, 401
+    with db_conn() as conn:
+        row = conn.execute(
+            """SELECT u.id, u.email, u.email_verified, u.aktiv, u.anrede, u.vorname, u.nachname,
+                      v.verein_name, v.status
+               FROM vk_users u JOIN vereine_accounts v ON v.id = u.verein_id WHERE u.id = ?""",
+            (user_id,),
+        ).fetchone()
+        if not row:
+            return {"error": "Nicht gefunden"}, 404
+        if not row["aktiv"]:
+            return {"error": "Benutzer ist deaktiviert"}, 409
+        if row["email_verified"] and row["status"] != "aktiv":
+            return {"error": "Verein ist noch nicht freigegeben – erst freigeben, dann geht die Willkommens-Mail raus"}, 409
+        art, ok = konto_mail(conn, row["id"], row["email"], row["verein_name"], row["email_verified"],
+                             gruss=gruss_aus(row))
+    return {"ok": ok, "mail": art, "mail_text": konto_mail_text(art, ok)}
 
 
 @auth_bp.route("/api/admin/verein/<int:verein_id>", methods=["PATCH"])

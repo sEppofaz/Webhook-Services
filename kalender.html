@@ -3055,6 +3055,8 @@ async function approveVerein(id,btn){
     btn.disabled=false;
     return;
   }
+  const r=await resp.json().catch(()=>({}));
+  if(r.mail_text)alert("✅ Freigegeben\n"+r.mail_text);
   loadPendingVereine();
 }
 async function rejectVereinAccount(id,btn){
@@ -3124,7 +3126,7 @@ function renderAllAccounts(list){
     if(v.status==="pending") return `<span style="color:#ff9f0a;font-size:11px;display:inline-flex;align-items:center;gap:2px">${icon("clock",11)} ausstehend</span>`;
     return `<span style="color:#8e8e93;font-size:11px">inaktiv</span>`;
   };
-  const userLines=u=>{
+  const userLines=(u,v)=>{
     const parts=[];
     if(u.name) parts.push(`<strong>${escHtml(u.name)}</strong>`);
     if(u.email) parts.push(`<a href="mailto:${escHtml(u.email)}" style="color:var(--accent);text-decoration:none">${escHtml(u.email)}</a>`);
@@ -3132,7 +3134,12 @@ function renderAllAccounts(list){
     const badge=u.aktiv&&u.email_verified
       ? `<span style="color:#34c759">&#10003;</span>`
       : `<span style="color:#ff9f0a;display:inline-flex;align-items:center">${icon("mail",12)}</span>`;
-    return `<div style="font-size:12px;color:var(--text2);padding:2px 0">${badge} ${parts.join(" &middot; ")}</div>`;
+    // Mail erneut senden (2026-10-07): unbestätigt → Bestätigungslink, freigegeben → Willkommens-Mail
+    const mailBtn=u.aktiv&&(!u.email_verified||v.status==="aktiv")
+      ? `<button type="button" class="acc-mail-btn" data-uid="${u.id}" style="margin-left:6px;padding:2px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--accent);font-size:11px;cursor:pointer">${u.email_verified?"Willkommens-Mail senden":"Bestätigungslink senden"}</button>`
+      : "";
+    const offen=!u.email_verified?`<div style="font-size:11px;color:#ff9f0a">E-Mail-Adresse noch nicht bestätigt – Anmelden erst danach möglich</div>`:"";
+    return `<div style="font-size:12px;color:var(--text2);padding:2px 0">${badge} ${parts.join(" &middot; ")}${mailBtn}${offen}</div>`;
   };
   // Pflege-Übersicht (ADR-027): pflegt selbst / nur Crawler, Abruf aus, kommende Termine je Herkunft
   const pflegeBadge=v=>{
@@ -3150,7 +3157,7 @@ function renderAllAccounts(list){
           <div style="font-size:14px;font-weight:600;color:var(--text)">${escHtml(v.verein_name)} ${statusBadge(v)}${pflegeBadge(v)}</div>
           ${pflegeZeile(v)}
           <div style="font-size:11px;color:var(--text3);margin-top:1px">${escHtml(v.rubrik||"")}${v.heimatort?` · ${escHtml(v.heimatort)}`:""}${v.plz?` · PLZ ${escHtml(v.plz)}`:""}</div>
-          ${(v.users||[]).map(userLines).join("")}
+          ${(v.users||[]).map(u=>userLines(u,v)).join("")}
         </div>
         <button class="ver-del-btn" style="border-color:var(--border2);color:var(--text2);flex-shrink:0"
           onclick="openVereinEditModal(${v.id},_vereinMap[${v.id}].verein_name,_vereinMap[${v.id}])">${icon("pen",14)}</button>
@@ -3162,6 +3169,23 @@ function renderAllAccounts(list){
     ${alphaBar}
     ${rows}`;
 }
+
+// „Bestätigungslink senden“ / „Willkommens-Mail senden“ – delegiert, Werte nur über data-uid
+document.addEventListener("click",async e=>{
+  const btn=e.target.closest(".acc-mail-btn");
+  if(!btn)return;
+  if(!confirm(btn.textContent+"?"))return;
+  btn.disabled=true;
+  const alt=btn.textContent;
+  btn.textContent="Wird gesendet …";
+  try{
+    const resp=await fetch(`/api/admin/users/${encodeURIComponent(btn.dataset.uid)}/mail`,{method:"POST",headers:{"X-Upload-Token":localStorage.getItem("ut")||""}});
+    const r=await resp.json().catch(()=>({}));
+    alert(resp.ok?r.mail_text:("❌ "+(r.error||"Fehler – bitte erneut versuchen")));
+  }catch(err){alert("❌ Keine Verbindung – bitte erneut versuchen");}
+  btn.disabled=false;
+  btn.textContent=alt;
+});
 
 function scrollToAccLetter(l){
   const el=document.getElementById("acc-letter-"+l);
@@ -4263,7 +4287,7 @@ function showInfoModal(){
         <span class="help-icon">${icon("scale",20)}</span>
         <div><strong>Impressum</strong><span>Josef Fischer &middot; H&ouml;lskofen 13 &middot; 84092 Bayerbach b. Ergoldsbach<br><a href="mailto:Vereinskalender@icloud.com" style="color:var(--accent);text-decoration:none">Vereinskalender@icloud.com</a></span></div>
       </div>
-      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.66 &middot; 2026-10-06 &middot; a sEpp-App</p>
+      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.67 &middot; 2026-10-07 &middot; a sEpp-App</p>
       <button onclick="document.getElementById('info-modal').remove()" style="width:100%;margin-top:16px;padding:12px;background:none;border:1.5px solid var(--border2);border-radius:12px;font-size:14px;color:var(--text2);cursor:pointer">Schlie&szlig;en</button>
     </div>`;
   document.body.appendChild(m);

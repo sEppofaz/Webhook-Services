@@ -880,12 +880,123 @@ def test_verdacht_und_schalter():
     pruefe("crawler_aus" not in daten()["_meta"]["ffw_aus"], "wieder einschalten entfernt das Feld")
 
 
+# ── Mailversand: Fehler melden, Freigabe-Rückmeldung, „Mail erneut senden“ (2026-10-07) ──
+def test_mail_rueckmeldung():
+    print("\nM1 · Mailversand: Fehler melden, Freigabe, erneut senden")
+    from shared import vk_mail
+    import services.telegram.routes as tr
+    gemeldet, gesendet, telegram = [], [], []
+    alt_melden, alt_send = vk_mail._fehler_melden, vk_mail._send
+    vk_mail._fehler_melden = lambda to, sub, grund: gemeldet.append((to, grund))
+    try:
+        pruefe(vk_mail._send("a@b.de", "Test", "x") is False and gemeldet and "SMTP-Zugang fehlt" in gemeldet[-1][1],
+               "fehlender SMTP-Zugang → Telegram-Meldung", gemeldet)
+        gemeldet.clear()
+        pruefe(vk_mail._send("a@b.de\nBcc: x@y.de", "s", "b") is False and not gemeldet,
+               "Header-Injection: abgelehnt, ohne Alarm")
+        os.environ.update(BREVO_SMTP_USER="u", BREVO_SMTP_KEY="k")
+        import smtplib
+        alt_smtp = smtplib.SMTP
+        class Kaputt:
+            def __init__(self, *a, **k):
+                raise smtplib.SMTPAuthenticationError(535, b"Authentication failed")
+        smtplib.SMTP = Kaputt
+        try:
+            pruefe(vk_mail._send("a@b.de", "Test", "x") is False and "SMTPAuthenticationError" in gemeldet[-1][1],
+                   "SMTP-Fehler (z. B. inaktiver Schlüssel) → Telegram-Meldung", gemeldet)
+        finally:
+            smtplib.SMTP = alt_smtp
+            os.environ.pop("BREVO_SMTP_USER"); os.environ.pop("BREVO_SMTP_KEY")
+    finally:
+        vk_mail._fehler_melden = alt_melden
+
+    # Ab hier _send nachgestellt: gelingt oder scheitert je nach Schalter
+    klappt = {"ja": True}
+    vk_mail._send = lambda to, sub, body: gesendet.append((to, sub, body)) or klappt["ja"]
+    alt_tg, alt_cb = tr.send_telegram, tr.answer_telegram_callback
+    tr.send_telegram = lambda chat, text: telegram.append(text)
+    tr.answer_telegram_callback = lambda cb, text=None: telegram.append("CB:" + str(text))
+    from shared.telegram import cb_name
+    try:
+        def pending(name, mail, bestaetigt):
+            with vk_db.db_conn() as c:
+                vid = c.execute("INSERT INTO vereine_accounts (verein_key, verein_name, status) VALUES (?,?,'pending') RETURNING id",
+                                (name.lower().replace(" ", "_"), name)).fetchone()["id"]
+                uid = c.execute("INSERT INTO vk_users (email, password_hash, verein_id, role, email_verified, aktiv)"
+                                " VALUES (?,?,?, 'admin', ?, 1) RETURNING id", (mail, "x", vid, bestaetigt)).fetchone()["id"]
+            return vid, uid
+
+        def freigeben_tg(vid, name):
+            body = {"callback_query": {"id": "1", "data": f"verein_approve:{vid}:{cb_name(name)}", "from": {"id": 4711}}}
+            app.test_client().post("/telegram", json=body, headers={"X-Telegram-Bot-Api-Secret-Token": "tgsecret"})
+
+        # Freigabe per Telegram, E-Mail noch unbestätigt → Bestätigungslink statt Willkommens-Mail
+        vid, uid = pending("FF Mailtest", "mt@x.de", 0)
+        freigeben_tg(vid, "FF Mailtest")
+        with vk_db.db_conn() as c:
+            tok = c.execute("SELECT verify_token FROM vk_users WHERE id=?", (uid,)).fetchone()["verify_token"]
+        pruefe(bool(tok) and "bestätigen" in gesendet[-1][1],
+               "unbestätigt: Freigabe schickt neuen Bestätigungslink", gesendet[-1][1])
+        pruefe(any("Bestätigungslink verschickt" in t for t in telegram), "Telegram nennt den Bestätigungslink", telegram)
+        r = app.test_client().get(f"/api/auth/verify?token={tok}")
+        pruefe(r.status_code == 200 and "jetzt anmelden" in r.get_data(as_text=True),
+               "Bestätigung nach der Freigabe → „Jetzt anmelden“")
+
+        # Freigabe per Telegram, Mail scheitert → Warnung statt ✅ allein
+        telegram.clear(); klappt["ja"] = False
+        vid2, uid2 = pending("FF Mailfehler", "mf@x.de", 1)
+        freigeben_tg(vid2, "FF Mailfehler")
+        pruefe(any("NICHT verschickt" in t for t in telegram) and any("Mail fehlgeschlagen" in t for t in telegram),
+               "Mail gescheitert → Telegram warnt", telegram)
+        klappt["ja"] = True
+
+        # Freigabe über die Admin-App: Antwort enthält, was mit der Mail passiert ist
+        vid3, uid3 = pending("FF Adminfrei", "af@x.de", 1)
+        r = app.test_client().post(f"/api/admin/vereine/{vid3}/approve", headers=ADMIN).get_json()
+        pruefe(r["mail"] == "willkommen" and r["mail_ok"] and "Willkommens-Mail verschickt" in r["mail_text"],
+               "Admin-Freigabe meldet die Willkommens-Mail", r)
+
+        # Admin → Accounts → „Mail erneut senden“
+        cl = app.test_client()
+        pruefe(cl.post(f"/api/admin/users/{uid}/mail").status_code == 401, "erneut senden nur mit Admin-Token")
+        with vk_db.db_conn() as c:
+            c.execute("UPDATE vk_users SET email_verified=0 WHERE id=?", (uid,))
+        r = cl.post(f"/api/admin/users/{uid}/mail", headers=ADMIN)
+        with vk_db.db_conn() as c:
+            tok2 = c.execute("SELECT verify_token FROM vk_users WHERE id=?", (uid,)).fetchone()["verify_token"]
+        pruefe(r.status_code == 200 and r.get_json()["mail"] == "bestaetigung" and tok2 and tok2 != tok,
+               "unbestätigt → neuer Bestätigungslink", r.get_json())
+        r = cl.post(f"/api/admin/users/{uid3}/mail", headers=ADMIN).get_json()
+        pruefe(r["mail"] == "willkommen" and r["ok"], "bestätigt + freigegeben → Willkommens-Mail", r)
+        vid4, uid4 = pending("FF Nochnicht", "nn@x.de", 1)
+        pruefe(cl.post(f"/api/admin/users/{uid4}/mail", headers=ADMIN).status_code == 409,
+               "bestätigt, aber nicht freigegeben → keine Willkommens-Mail")
+        klappt["ja"] = False
+        r = cl.post(f"/api/admin/users/{uid3}/mail", headers=ADMIN).get_json()
+        pruefe(r["ok"] is False and "NICHT verschickt" in r["mail_text"], "Fehlschlag wird angezeigt", r)
+        src = (ROOT / "kalender.html").read_text()
+        pruefe('class="acc-mail-btn" data-uid="${u.id}"' in src and "Bestätigungslink senden" in src,
+               "Admin: Knopf je Benutzer über data-uid")
+    finally:
+        vk_mail._send = alt_send
+        tr.send_telegram, tr.answer_telegram_callback = alt_tg, alt_cb
+
+
+def test_mail_lebenszeichen():
+    print("\nM2 · Lebenszeichen-Mail")
+    reg = json.loads((ROOT / "cron_registry.json").read_text())
+    job = [j for j in reg["jobs"] if j["name"] == "mail_lebenszeichen"]
+    cron = (ROOT / "deploy" / "cron.d" / "pka-mail-lebenszeichen").read_text()
+    pruefe(job and job[0]["days"] == [0] and job[0]["at"] == ["08:00"], "Registry: montags 08:00", job)
+    pruefe("0 8 * * 1 root" in cron and "cronwrap.py mail_lebenszeichen --" in cron, "cron.d: Mo 08:00 über cronwrap")
+
+
 TESTS = [test_xss, test_telegram_secret, test_vereine_api_lock, test_erinnerung, test_sessions,
          test_admin_loeschen, test_admin_verein_meta, test_verknuepfen,
          test_ical_uids, test_registrierung_key, test_fremde_endpunkte,
          test_pending_atomar, test_import_vergangenheit, test_stats_zeit, test_cookies,
          test_freigabe_nachricht, test_store_mehrprozess, test_bot_tastatur, test_abo_mischregel, test_chips_ohne_onclick, test_rename_relevanz, test_import_ortschaft, test_register_pruefen, test_plz_check, test_quelle_pfarrbrief,
-         test_verdacht_und_schalter]
+         test_verdacht_und_schalter, test_mail_rueckmeldung, test_mail_lebenszeichen]
 
 if __name__ == "__main__":
     for t in TESTS:

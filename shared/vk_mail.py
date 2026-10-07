@@ -1,8 +1,12 @@
 import html
+import json
 import os
+import secrets
 import smtplib
 import sys
+import urllib.request
 import uuid
+from datetime import datetime, timedelta
 from email import utils as email_utils
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -45,14 +49,34 @@ Du erhältst diese E-Mail, weil eine Aktion auf unserem Portal durchgeführt wur
 </div></body></html>"""
 
 
+def _fehler_melden(to_email: str, subject: str, grund: str) -> None:
+    """Gescheiterte Mail sofort per Telegram an Josef (2026-10-07: Willkommens- und Bestätigungsmail für
+    FF Hölskofen gingen still verloren, der Brevo-SMTP-Schlüssel war inaktiv). Wirft nie."""
+    token, chat = os.environ.get("TOKEN", ""), os.environ.get("CHAT_ID", "")
+    if not token or not chat:
+        return
+    text = (f"⚠️ Mail nicht verschickt\nAn: {to_email}\nBetreff: {subject}\nGrund: {grund[:300]}\n"
+            "Bitte selbst Bescheid geben. Erneut senden: Admin → Accounts.")
+    try:
+        req = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage",
+                                     data=json.dumps({"chat_id": chat, "text": text}).encode(),
+                                     headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=5)
+    except Exception as e:
+        print(f"MAIL-ALARM nicht gesendet: {e}", file=sys.stderr)
+
+
 def _send(to_email: str, subject: str, html_body: str) -> bool:
-    smtp_user = os.environ.get("BREVO_SMTP_USER", "")
-    smtp_key  = os.environ.get("BREVO_SMTP_KEY", "")
-    if not smtp_user or not smtp_key:
-        return False
+    """Schickt die Mail über Brevo. Jeder Fehlschlag (fehlender Zugang, SMTP-Fehler) meldet sich per Telegram."""
     # Betreff enthält teils den Vereinsnamen (Formulareingabe) – keine Zeilenumbrüche in Header
     subject = " ".join(str(subject).split())
     if any(c in to_email for c in "\r\n"):
+        return False
+    smtp_user = os.environ.get("BREVO_SMTP_USER", "")
+    smtp_key  = os.environ.get("BREVO_SMTP_KEY", "")
+    if not smtp_user or not smtp_key:
+        print(f"MAIL ERROR to {to_email}: SMTP-Zugang fehlt", file=sys.stderr)
+        _fehler_melden(to_email, subject, "SMTP-Zugang fehlt (BREVO_SMTP_USER/BREVO_SMTP_KEY nicht gesetzt)")
         return False
     msg = MIMEMultipart("alternative")
     msg["Subject"]      = subject
@@ -74,6 +98,7 @@ def _send(to_email: str, subject: str, html_body: str) -> bool:
         return True
     except Exception as e:
         print(f"MAIL ERROR to {to_email}: {e}", file=sys.stderr)
+        _fehler_melden(to_email, subject, f"{type(e).__name__}: {e}")
         return False
 
 
@@ -188,3 +213,25 @@ Sie gilt erst, wenn sie über den Link in der dortigen E-Mail bestätigt wird.</
 <a href="mailto:Vereinskalender@icloud.com" style="color:#6D28D9">Vereinskalender@icloud.com</a>.</p>"""
     return _send(to_email, "E-Mail-Adresse geändert – Vereinskalender",
                  _html_wrap("Hinweis", _mit_gruss(body, gruss)))
+
+
+def konto_mail(conn, user_id: int, to_email: str, verein_name: str, email_verified, gruss: str = "") -> tuple[str, bool]:
+    """Die eine Mail, die ein freigegebener Verein braucht (Freigabe, Admin „Mail erneut senden“):
+    E-Mail noch nicht bestätigt → neuer Bestätigungslink (24 h; danach kann er sich direkt anmelden),
+    sonst die Willkommens-Mail. Gibt (art, verschickt) zurück, art = "bestaetigung" | "willkommen"."""
+    if not email_verified:
+        token = secrets.token_urlsafe(32)
+        conn.execute("UPDATE vk_users SET verify_token=?, verify_token_expires=? WHERE id=?",
+                     (token, (datetime.utcnow() + timedelta(hours=24)).isoformat(), user_id))
+        return "bestaetigung", send_verify_email(to_email, token, gruss=gruss)
+    return "willkommen", send_welcome_email(to_email, verein_name, gruss=gruss)
+
+
+def konto_mail_text(art: str, verschickt: bool) -> str:
+    """Eine Zeile für Telegram und Admin: was rausging bzw. was zu tun ist."""
+    if not verschickt:
+        return "⚠️ Mail NICHT verschickt – bitte selbst Bescheid geben. Erneut senden: Admin → Accounts."
+    if art == "bestaetigung":
+        return ("📧 Bestätigungslink verschickt – die E-Mail-Adresse ist noch nicht bestätigt; "
+                "nach dem Klick kann sich der Verein anmelden.")
+    return "📧 Willkommens-Mail verschickt."
