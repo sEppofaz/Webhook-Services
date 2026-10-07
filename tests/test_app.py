@@ -996,6 +996,8 @@ def test_freigabe_gruppe():
     import shared.telegram as st
     import services.auth.routes as ar
     import services.telegram.routes as tr
+    eingetragen = st.FREIGABE_CHAT_ID
+    st.FREIGABE_CHAT_ID = ""
     pruefe(st.freigabe_chat_id() == "4711", "ohne Eintrag: Hauptchat (Rückfall)")
     st.FREIGABE_CHAT_ID = "-1009"
     an, haupt = [], []
@@ -1020,8 +1022,20 @@ def test_freigabe_gruppe():
         pruefe(haupt and "-1001234" in haupt[-1][1], "neue ID nach Umwandlung zur Supergruppe wird gemeldet", haupt)
         src = (ROOT / "services" / "auth" / "routes.py").read_text()
         pruefe('os.environ.get("CHAT_ID"' not in src, "Konto-Meldungen nutzen alle freigabe_chat_id()")
+        import shared.flask_notify as fn
+        alt_tok = fn.TELEGRAM_TOKEN
+        fn.TELEGRAM_TOKEN = "x"
+        try:
+            haupt.clear()
+            merk = TMP / "angekuendigt.txt"
+            tr.freigabe_gruppe_ankuendigen(merk)
+            tr.freigabe_gruppe_ankuendigen(merk)
+            pruefe(len(haupt) == 1 and haupt[0][0] == "-1009" and "Vereinskonten" in haupt[0][1],
+                   "Begrüßung in der Gruppe genau einmal je ID", haupt)
+        finally:
+            fn.TELEGRAM_TOKEN = alt_tok
     finally:
-        st.FREIGABE_CHAT_ID = ""
+        st.FREIGABE_CHAT_ID = eingetragen
         ar.send_telegram_inline, tr.send_telegram = alt_inline, alt_tg
 
 

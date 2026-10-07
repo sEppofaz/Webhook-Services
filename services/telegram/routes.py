@@ -307,6 +307,32 @@ def webhook_todo():
         log(f"\u274c  webhook_todo: {e}")
         return {"error": str(e)}, 500
 
+_ANGEKUENDIGT = Path("/opt/rename-webhook/freigabe_chat_angekuendigt.txt")
+
+
+def freigabe_gruppe_ankuendigen(datei: Path = _ANGEKUENDIGT) -> None:
+    """Beim Start: ist FREIGABE_CHAT_ID neu oder geändert, einmal eine Begrüßung in die Gruppe – zugleich der
+    Live-Test, dass der Bot dort schreiben kann. Merkt sich die angekündigte ID in `datei`."""
+    import shared.telegram as st
+    from shared.flask_notify import TELEGRAM_TOKEN
+    ziel = st.FREIGABE_CHAT_ID
+    if not ziel or not TELEGRAM_TOKEN:
+        return
+    try:
+        if datei.exists() and datei.read_text().strip() == ziel:
+            return
+        datei.write_text(ziel)
+    except OSError as e:
+        log(f"⚠️  Freigabe-Gruppe: Merkdatei nicht schreibbar ({e})")
+        return
+    send_telegram(ziel, "✅ Diese Gruppe empfängt ab jetzt alles zu Vereinskonten:\n"
+                        "• neue Anmeldungen mit „Freigeben“/„Ablehnen“\n"
+                        "• Ergebnis der Freigabe samt Mail-Rückmeldung\n"
+                        "• Verknüpfungsvorschläge und Ortschaft-Hinweise\n"
+                        "• gescheiterte Mails\n"
+                        "Importe, Berichte und Befehle bleiben im bisherigen Chat.")
+
+
 def _gruppen_meldung(data: dict) -> None:
     """Chat-ID einer neuen Gruppe an Josef melden (für FREIGABE_CHAT_ID in shared/telegram.py) – ohne getUpdates,
     das würde den Webhook abschalten. Nur wenn Josef selbst den Bot hinzufügt; Fremde lösen nichts aus."""

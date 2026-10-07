@@ -48,3 +48,4 @@ vereinstermine_backup_*.json
 
 # Flask Session-Secret – NIEMALS in Git
 flask_secret.key
+freigabe_chat_angekuendigt.txt

@@ -7,7 +7,7 @@ import urllib.request
 # (Chat-ID), deshalb im Repo. Leer = alles in den Hauptchat (CHAT_ID). Die ID meldet der Bot selbst, sobald er
 # zur Gruppe hinzugefügt wird. Pitfall: Wird die Gruppe zur Supergruppe, ändert sich die ID (der Bot meldet
 # auch das) – dann hier neu eintragen.
-FREIGABE_CHAT_ID = ""
+FREIGABE_CHAT_ID = "-5343827729"   # Gruppe „VKO Freigaben“, eingetragen 2026-10-07
 
 
 def freigabe_chat_id() -> str:
