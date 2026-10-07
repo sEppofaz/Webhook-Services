@@ -29,7 +29,7 @@ from shared.kalender_core import (
 
 telegram_bp = Blueprint("telegram", __name__)
 
-from shared.telegram import cb_name, secret_ok, webhook_secret
+from shared.telegram import cb_name, freigabe_chat_id, secret_ok, webhook_secret
 
 # Fail closed: ohne gültigen Secret-Header kein Update (sonst ließen sich /reboot,
 # Vereinsfreigaben usw. mit einem gefälschten Body auslösen – Review 2026-10-04)
@@ -307,6 +307,28 @@ def webhook_todo():
         log(f"\u274c  webhook_todo: {e}")
         return {"error": str(e)}, 500
 
+def _gruppen_meldung(data: dict) -> None:
+    """Chat-ID einer neuen Gruppe an Josef melden (für FREIGABE_CHAT_ID in shared/telegram.py) – ohne getUpdates,
+    das würde den Webhook abschalten. Nur wenn Josef selbst den Bot hinzufügt; Fremde lösen nichts aus."""
+    if not TELEGRAM_CHAT_ID:
+        return
+    mcm = data.get("my_chat_member")
+    if mcm:
+        chat = mcm.get("chat", {})
+        neu = mcm.get("new_chat_member", {}).get("status", "")
+        if (str(mcm.get("from", {}).get("id", "")) == TELEGRAM_CHAT_ID
+                and chat.get("type") in ("group", "supergroup", "channel") and neu in ("member", "administrator")):
+            send_telegram(TELEGRAM_CHAT_ID,
+                          f"🤖 Ich wurde zur Gruppe „{chat.get('title', '')}“ hinzugefügt.\nChat-ID: {chat.get('id')}\n"
+                          "Für die VKO-Freigaben trägt Claude sie in shared/telegram.py ein (FREIGABE_CHAT_ID).")
+        return
+    msg = data.get("message", {})
+    alt, neu_id = str(msg.get("chat", {}).get("id", "")), msg.get("migrate_to_chat_id")
+    if alt and alt == freigabe_chat_id() and alt != TELEGRAM_CHAT_ID:
+        send_telegram(TELEGRAM_CHAT_ID, f"⚠️ Die Gruppe „VKO Freigaben“ hat eine neue Chat-ID: {neu_id}\n"
+                                        "Bis sie in shared/telegram.py eingetragen ist, kommen dort keine Meldungen an.")
+
+
 @telegram_bp.route("/telegram", methods=["POST"])
 def telegram_webhook():
     if not secret_ok(request.headers.get("X-Telegram-Bot-Api-Secret-Token"), TELEGRAM_WEBHOOK_SECRET):
@@ -316,6 +338,10 @@ def telegram_webhook():
     message = data.get("message", {})
     chat_id = str(message.get("chat", {}).get("id", ""))
     text    = message.get("text", "").strip()
+
+    if data.get("my_chat_member") or message.get("migrate_to_chat_id"):
+        _gruppen_meldung(data)
+        return "", 200
 
     if TELEGRAM_CHAT_ID and chat_id != TELEGRAM_CHAT_ID and not data.get("callback_query"):
         return "", 200
@@ -569,7 +595,7 @@ def telegram_webhook():
                         verein_name = row["verein_name"]
                         transferred = uebertrage_key(source_key, row["verein_key"])
                         answer_telegram_callback(cb_id, f"✅ {transferred} Termine übertragen")
-                        send_telegram(TELEGRAM_CHAT_ID,
+                        send_telegram(freigabe_chat_id(),
                             f"✅ Verknüpft: {source_key} → {verein_name}\n"
                             f"{transferred} Termine übertragen.")
                 except Exception as e:
@@ -613,7 +639,7 @@ def telegram_webhook():
                             from shared.kalender_store import register_verein
                             register_verein(row["verein_key"], row["verein_name"], row)
                             answer_telegram_callback(cb_id, "✅ Freigegeben" if ok else "✅ Freigegeben – ⚠️ Mail fehlgeschlagen")
-                            send_telegram(TELEGRAM_CHAT_ID, f"✅ Verein freigegeben: {row['verein_name']}\n"
+                            send_telegram(freigabe_chat_id(), f"✅ Verein freigegeben: {row['verein_name']}\n"
                                           + konto_mail_text(art, ok))
                         else:
                             conn.execute(
@@ -622,7 +648,7 @@ def telegram_webhook():
                             )
                             ok = send_rejected_email(row["email"], row["verein_name"], gruss=gruss_aus(row))
                             answer_telegram_callback(cb_id, "❌ Abgelehnt")
-                            send_telegram(TELEGRAM_CHAT_ID, f"❌ Verein abgelehnt: {row['verein_name']}\n"
+                            send_telegram(freigabe_chat_id(), f"❌ Verein abgelehnt: {row['verein_name']}\n"
                                           + ("📧 Absage verschickt." if ok else
                                              f"⚠️ Absage NICHT verschickt – bitte selbst Bescheid geben ({row['email']})."))
             except Exception as e:

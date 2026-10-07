@@ -52,7 +52,8 @@ Du erhältst diese E-Mail, weil eine Aktion auf unserem Portal durchgeführt wur
 def _fehler_melden(to_email: str, subject: str, grund: str) -> None:
     """Gescheiterte Mail sofort per Telegram an Josef (2026-10-07: Willkommens- und Bestätigungsmail für
     FF Hölskofen gingen still verloren, der Brevo-SMTP-Schlüssel war inaktiv). Wirft nie."""
-    token, chat = os.environ.get("TOKEN", ""), os.environ.get("CHAT_ID", "")
+    from shared.telegram import freigabe_chat_id
+    token, chat = os.environ.get("TOKEN", ""), freigabe_chat_id()
     if not token or not chat:
         return
     text = (f"⚠️ Mail nicht verschickt\nAn: {to_email}\nBetreff: {subject}\nGrund: {grund[:300]}\n"

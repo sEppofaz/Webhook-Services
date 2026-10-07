@@ -991,12 +991,46 @@ def test_mail_lebenszeichen():
     pruefe("0 8 * * 1 root" in cron and "cronwrap.py mail_lebenszeichen --" in cron, "cron.d: Mo 08:00 über cronwrap")
 
 
+def test_freigabe_gruppe():
+    print("\nM3 · Eigene Telegram-Gruppe für VKO-Freigaben")
+    import shared.telegram as st
+    import services.auth.routes as ar
+    import services.telegram.routes as tr
+    pruefe(st.freigabe_chat_id() == "4711", "ohne Eintrag: Hauptchat (Rückfall)")
+    st.FREIGABE_CHAT_ID = "-1009"
+    an, haupt = [], []
+    alt_inline, alt_tg = ar.send_telegram_inline, tr.send_telegram
+    ar.send_telegram_inline = lambda chat, text, kb, parse_mode=None: an.append(chat)
+    tr.send_telegram = lambda chat, text: haupt.append((chat, text))
+    try:
+        ar._telegram_approve_msg(1, "FF Gruppe", "g@x.de")
+        pruefe(an == ["-1009"], "Freigabe-Anfrage geht in die Gruppe", an)
+        cl = app.test_client()
+        H = {"X-Telegram-Bot-Api-Secret-Token": "tgsecret"}
+        def beitritt(von):
+            return {"my_chat_member": {"chat": {"id": -1005, "title": "VKO Freigaben", "type": "group"},
+                                       "from": {"id": von}, "new_chat_member": {"status": "member"}}}
+        cl.post("/telegram", json=beitritt(4711), headers=H)
+        pruefe(haupt and haupt[-1][0] == "4711" and "-1005" in haupt[-1][1] and "VKO Freigaben" in haupt[-1][1],
+               "Bot meldet Chat-ID der neuen Gruppe im Hauptchat", haupt)
+        haupt.clear()
+        cl.post("/telegram", json=beitritt(999), headers=H)
+        pruefe(not haupt, "von Fremden hinzugefügt: keine Meldung")
+        cl.post("/telegram", json={"message": {"chat": {"id": -1009}, "migrate_to_chat_id": -1001234}}, headers=H)
+        pruefe(haupt and "-1001234" in haupt[-1][1], "neue ID nach Umwandlung zur Supergruppe wird gemeldet", haupt)
+        src = (ROOT / "services" / "auth" / "routes.py").read_text()
+        pruefe('os.environ.get("CHAT_ID"' not in src, "Konto-Meldungen nutzen alle freigabe_chat_id()")
+    finally:
+        st.FREIGABE_CHAT_ID = ""
+        ar.send_telegram_inline, tr.send_telegram = alt_inline, alt_tg
+
+
 TESTS = [test_xss, test_telegram_secret, test_vereine_api_lock, test_erinnerung, test_sessions,
          test_admin_loeschen, test_admin_verein_meta, test_verknuepfen,
          test_ical_uids, test_registrierung_key, test_fremde_endpunkte,
          test_pending_atomar, test_import_vergangenheit, test_stats_zeit, test_cookies,
          test_freigabe_nachricht, test_store_mehrprozess, test_bot_tastatur, test_abo_mischregel, test_chips_ohne_onclick, test_rename_relevanz, test_import_ortschaft, test_register_pruefen, test_plz_check, test_quelle_pfarrbrief,
-         test_verdacht_und_schalter, test_mail_rueckmeldung, test_mail_lebenszeichen]
+         test_verdacht_und_schalter, test_mail_rueckmeldung, test_mail_lebenszeichen, test_freigabe_gruppe]
 
 if __name__ == "__main__":
     for t in TESTS:

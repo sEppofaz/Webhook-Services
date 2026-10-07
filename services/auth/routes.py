@@ -28,6 +28,7 @@ from shared.vk_mail import (
     send_verify_email,
 )
 from shared.flask_notify import send_telegram, send_telegram_inline
+from shared.telegram import freigabe_chat_id
 from shared.geo import orte_fuer_plz, ortschaft_aufloesen, plz_gueltig
 
 auth_bp = Blueprint("auth", __name__)
@@ -218,7 +219,7 @@ def _telegram_approve_msg(verein_id: int, verein_name: str, email: str,
         lines.append(f"Telefon: {e(telefon)}")
     try:
         send_telegram_inline(
-            os.environ.get("CHAT_ID", ""),
+            freigabe_chat_id(),
             "\n".join(lines),
             [
                 [
@@ -263,7 +264,7 @@ def _telegram_suggest_links(verein_id: int, verein_name: str, verein_key: str) -
                 f"Ähnlichkeit: {score:.0%}"
             )
             send_telegram_inline(
-                os.environ.get("CHAT_ID", ""),
+                freigabe_chat_id(),
                 text,
                 [[
                     {"text": "✅ Verknüpfen", "callback_data": f"vk_link:{verein_id}:{src_key}"},
@@ -312,7 +313,7 @@ def _telegram_ortschaft_hinweis(verein_name: str, plz: str, ort: str, hinweise: 
             f"Ort: {plz} {ort}\n"
             + "\n".join(f"⚠️ {h}" for h in hinweise))
     try:
-        send_telegram(os.environ.get("CHAT_ID", ""), text)
+        send_telegram(freigabe_chat_id(), text)
     except Exception:
         pass
 

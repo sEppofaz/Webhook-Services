@@ -1,5 +1,17 @@
 import json
+import os
 import urllib.request
+
+# Eigene Telegram-Gruppe „VKO Freigaben“ (Josef 2026-10-07): alles rund um Vereinskonten – Freigabe-Anfragen
+# mit Knöpfen, Ergebnis, Verknüpfungsvorschläge, Ortschaft-Hinweise, gescheiterte Mails. Keine Geheimnis-Info
+# (Chat-ID), deshalb im Repo. Leer = alles in den Hauptchat (CHAT_ID). Die ID meldet der Bot selbst, sobald er
+# zur Gruppe hinzugefügt wird. Pitfall: Wird die Gruppe zur Supergruppe, ändert sich die ID (der Bot meldet
+# auch das) – dann hier neu eintragen.
+FREIGABE_CHAT_ID = ""
+
+
+def freigabe_chat_id() -> str:
+    return FREIGABE_CHAT_ID or os.environ.get("CHAT_ID", "")
 
 TELEGRAM_MSG_LIMIT = 4096
 
