@@ -110,6 +110,7 @@ Gottesdienste aus `gottesdienste.json` erreichen die Abonnenten also **nicht**. 
 2026-09-30 war das ein Glücksfall: 23 erfundene Messen gingen nur an Josef.
 
 | täglich 00:10, 20:00 | `kalender_report.py` | Vereinskalender-Bericht (verifiziert, DE); 20:00 mit „Offen im Admin“ (v1.62) |
+| Mo 08:00 | `mail_lebenszeichen.py` | Testmail an Vereinskalender@icloud.com über Brevo – hält den SMTP-Schlüssel aktiv; Fehlschlag → Telegram (`_send`) + Exit 1 (Cron-Wächter). `/etc/cron.d/pka-mail-lebenszeichen` (Quelle `deploy/cron.d/`), Log `/var/log/pka-mail-lebenszeichen.log`. `--dry-run` prüft nur, ob der Zugang gesetzt ist. Liest `secrets.env` per `load_secrets()` → **nicht von Claude ausführen**, auch nicht als Trockenlauf |
 | monatlich 1., 05:00 | `plz_check.py` | PLZ-Wächter (#419, ADR-016): meldet neuen OpenPLZ-Export per Telegram, sonst still. `/etc/cron.d/pka-plz-check` (Quelle `deploy/cron.d/`), Log `/var/log/pka-plz-check.log`, Zustand `/var/lib/pka-plz/stand.json`. Schreibt **nie** `plz_gemeinden.json`. Test: `plz_check.py --dry-run` (ohne Senden), `--force` rechnet auch ohne neuen Export (~2 Min, 55 MB + ~230 OpenPLZ-Abrufe) |
 | täglich 00:05 | `stats_collector.py` | Besucherstatistik → `page_stats`-Tabelle |
 | wöchentlich Mi 07:00 (`0 7 * * 3`) | `heimat_import.py` | Termine aller Gemeinden (heimat-info, Parser, KI) fetchen → Telegram-Vorschau |
@@ -618,6 +619,8 @@ Endpunkt `/telegram` – nur Josefs Chat-ID. Token = `TOKEN` aus `/etc/pka/secre
 - **E-Mail-Prüfung `_valid_email`:** keine `<>"'(),;:\[]` und kein Leerzeichen (Adresse landet in HTML und Mail-Headern). `vk_mail._send` verweigert Adressen mit Zeilenumbruch.
 - **Fremde Apps über VKO-Domains gesperrt:** `webhook.py` antwortet für `/api/verkehr`, `/autoquartett/`, `/aktien-` mit 404, wenn der Host `vereinskalender.online`/`veranstaltungen.website` ist (kostenpflichtige Endpunkte, nur über `umbenennen.duckdns.org` mit eigenem nginx-Limit gedacht).
 - **E-Mail:** Brevo SMTP (`smtp-relay.brevo.com:587`); `FROM_EMAIL = noreply@vereinskalender.online`
+- **Mailversand meldet Fehler (seit v1.67, 2026-10-07):** `vk_mail._send()` schickt bei jedem Fehlschlag (fehlender `BREVO_SMTP_*`, SMTP-Fehler) eine Telegram-Warnung (`_fehler_melden`, liest `TOKEN`/`CHAT_ID` aus der Umgebung, wirft nie). Neue Mailart ⇒ über `_send()`, nie eigenes `smtplib`. Freigabe (Telegram-Callback **und** `/api/admin/vereine/<id>/approve`) läuft über `vk_mail.konto_mail()`: E-Mail noch unbestätigt → neuer Bestätigungslink statt Willkommens-Mail (Login braucht `email_verified`), sonst Willkommens-Mail; `konto_mail_text()` liefert die Rückmeldung für Telegram/Admin. Bestätigt jemand nach der Freigabe, zeigt `/api/auth/verify` „Jetzt anmelden“. Admin → Accounts: „Bestätigungslink senden“/„Willkommens-Mail senden“ je Benutzer (`POST /api/admin/users/<id>/mail`, 409 wenn bestätigt, aber Verein nicht freigegeben).
+- **⚠️ Pitfall Brevo-Schlüssel inaktiv (Vorfall 2026-10-07, FF Hölskofen):** Brevo markiert SMTP-Schlüssel nach 3 Monaten ohne Nutzung als inaktiv. Bei wenigen Registrierungen gingen Bestätigungs- und Willkommens-Mail still verloren (`_send` gab nur `False` zurück, Telegram meldete trotzdem „✅ Freigegeben“), der Verein konnte sich nicht anmelden. Gegenmittel: Fehler-Telegram (oben) + `mail_lebenszeichen.py` (montags, Cron-Tabelle).
 
 ---
 
