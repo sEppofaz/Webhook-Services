@@ -27,6 +27,7 @@ from shared.vk_mail import (
     send_reset_email,
     send_verify_email,
 )
+from shared import vk_mail
 from shared.flask_notify import send_telegram, send_telegram_inline
 from shared.telegram import freigabe_chat_id
 from shared.geo import orte_fuer_plz, ortschaft_aufloesen, plz_gueltig
@@ -1061,6 +1062,94 @@ def admin_konto_mail(user_id: int):
         art, ok = konto_mail(conn, row["id"], row["email"], row["verein_name"], row["email_verified"],
                              gruss=gruss_aus(row))
     return {"ok": ok, "mail": art, "mail_text": konto_mail_text(art, ok)}
+
+
+# ── Admin → Texte: E-Mail-Texte selbst bearbeiten (v1.68) ────────────────────
+
+def _admin_ok() -> bool:
+    token = request.headers.get("X-Upload-Token", "")
+    return bool(UPLOAD_TOKEN) and hmac.compare_digest(token, UPLOAD_TOKEN)
+
+
+def _mailtext_eintrag(art: str) -> dict:
+    s = vk_mail.STANDARD[art]
+    aktuell = vk_mail.texte(art)
+    return {"art": art, "zweck": s["zweck"], "texte": aktuell,
+            "standard": {f: s[f] for f in vk_mail.FELDER},
+            "geaendert": aktuell != {f: s[f] for f in vk_mail.FELDER},
+            "platzhalter": [{"name": p, "info": vk_mail.PLATZHALTER[p]} for p in s["platzhalter"]],
+            "knopf": bool(s["knopf_link"]), "verlauf": len(vk_mail.verlauf(art))}
+
+
+def _formular_texte(art: str):
+    body = request.get_json(silent=True) or {}
+    werte = {f: body.get(f, "") for f in vk_mail.FELDER}
+    return werte, vk_mail.pruefe_texte(art, werte)
+
+
+@auth_bp.route("/api/admin/mailtexte")
+def admin_mailtexte():
+    if not _admin_ok():
+        return {"error": "Unauthorized"}, 401
+    return jsonify([_mailtext_eintrag(a) for a in vk_mail.STANDARD])
+
+
+@auth_bp.route("/api/admin/mailtexte/<art>", methods=["PUT"])
+def admin_mailtext_speichern(art: str):
+    if not _admin_ok():
+        return {"error": "Unauthorized"}, 401
+    if art not in vk_mail.STANDARD:
+        return {"error": "Unbekannte Mail"}, 404
+    werte, fehler = _formular_texte(art)
+    if fehler:
+        return {"error": fehler}, 400
+    vk_mail.speichere_texte(art, werte)
+    return _mailtext_eintrag(art)
+
+
+@auth_bp.route("/api/admin/mailtexte/<art>/vorschau", methods=["POST"])
+def admin_mailtext_vorschau(art: str):
+    """Vorschau mit Beispielwerten – auch für noch nicht gespeicherte Texte aus dem Formular."""
+    if not _admin_ok():
+        return {"error": "Unauthorized"}, 401
+    if art not in vk_mail.STANDARD:
+        return {"error": "Unbekannte Mail"}, 404
+    werte, fehler = _formular_texte(art)
+    if fehler:
+        return {"error": fehler}, 400
+    betreff, inhalt = vk_mail.baue_mail(art, vk_mail.BEISPIEL, "Hallo Frau Muster,", eigene=werte)
+    return {"betreff": betreff, "html": inhalt}
+
+
+@auth_bp.route("/api/admin/mailtexte/<art>/test", methods=["POST"])
+def admin_mailtext_test(art: str):
+    """Testmail mit den GESPEICHERTEN Texten und Beispielwerten an das Vereinskalender-Postfach."""
+    if not _admin_ok():
+        return {"error": "Unauthorized"}, 401
+    if art not in vk_mail.STANDARD:
+        return {"error": "Unbekannte Mail"}, 404
+    betreff, inhalt = vk_mail.baue_mail(art, vk_mail.BEISPIEL, "Hallo Frau Muster,")
+    ok = vk_mail._send(vk_mail.KONTAKT, "[Test] " + betreff, inhalt)
+    return {"ok": ok, "an": vk_mail.KONTAKT}
+
+
+@auth_bp.route("/api/admin/mailtexte/<art>/zuruecksetzen", methods=["POST"])
+def admin_mailtext_zuruecksetzen(art: str):
+    """{"auf": "standard"} oder {"auf": "vorige"} (letzte gespeicherte Fassung vor der aktuellen)."""
+    if not _admin_ok():
+        return {"error": "Unauthorized"}, 401
+    if art not in vk_mail.STANDARD:
+        return {"error": "Unbekannte Mail"}, 404
+    auf = (request.get_json(silent=True) or {}).get("auf", "standard")
+    if auf == "vorige":
+        v = vk_mail.verlauf(art)
+        if not v:
+            return {"error": "Es gibt keine vorige Fassung."}, 409
+        werte = v[0]["texte"]
+    else:
+        werte = {f: vk_mail.STANDARD[art][f] for f in vk_mail.FELDER}
+    vk_mail.speichere_texte(art, werte)
+    return _mailtext_eintrag(art)
 
 
 @auth_bp.route("/api/admin/verein/<int:verein_id>", methods=["PATCH"])

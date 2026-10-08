@@ -298,6 +298,16 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
 .alpha-btn:active{background:var(--tab);color:#fff}
 .alpha-btn.inactive{color:var(--text3);cursor:default;background:none;font-weight:400}
 .ver-section-hdr{font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.5px;padding:8px 2px 4px;text-transform:uppercase}
+.mt-eintrag{display:block;width:100%;text-align:left;padding:10px 12px;margin:0 0 8px;border:1.5px solid var(--border2);border-radius:10px;background:var(--bg);cursor:pointer;font-size:14px}
+.mt-chip{margin-left:8px;font-size:11px;font-weight:600;color:var(--accent)}
+.mt-label{display:block;font-size:12px;color:var(--text2);margin:10px 0 3px;font-weight:600}
+.mt-feld{display:block;width:100%;box-sizing:border-box;padding:9px 10px;border:1.5px solid var(--border2);border-radius:8px;background:var(--bg);color:var(--text);font-size:16px;font-family:inherit;outline:none}
+input.mt-feld{height:40px}textarea.mt-feld{resize:vertical;line-height:1.45}
+.mt-btn,.mt-ph,.mt-zurueck{box-sizing:border-box;height:40px;padding:0 14px;border-radius:8px;border:1.5px solid var(--border2);background:var(--bg);color:var(--text);font-size:14px;font-weight:600;cursor:pointer}
+.mt-ph{height:32px;padding:0 10px;font-family:ui-monospace,Menlo,monospace;font-weight:500;color:var(--accent)}
+.mt-zurueck{height:34px;color:var(--accent)}
+.mt-pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.mt-vorschau{width:100%;height:520px;border:1.5px solid var(--border2);border-radius:10px;background:#f2f2f7}
 .ver-del-btn{padding:4px 10px;border-radius:7px;border:1.5px solid #ff3b30;color:#ff3b30;background:none;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0}
 
 /* ── Confirm-Modal ── */
@@ -661,6 +671,7 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
       <button class="adm-tab" id="admbtn-sta" onclick="switchAdmTab('sta')" style="display:flex;align-items:center;gap:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="16"/></svg> Stats</button>
       <button class="adm-tab" id="admbtn-lnk" onclick="switchAdmTab('lnk')" style="display:flex;align-items:center;gap:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Verknüpfen<span id="lnk-badge" style="display:none;background:#ff9500;color:#fff;border-radius:8px;padding:0 5px;font-size:10px;margin-left:4px;vertical-align:middle;line-height:16px"></span></button>
       <button class="adm-tab" id="admbtn-ort" onclick="switchAdmTab('ort')" style="display:flex;align-items:center;gap:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg> Orte</button>
+      <button class="adm-tab" id="admbtn-txt" onclick="switchAdmTab('txt')" style="display:flex;align-items:center;gap:4px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg> Texte</button>
       <button class="adm-tab adm-tab-logout" onclick="adminLogout()" title="Abmelden" aria-label="Abmelden" style="color:#ff3b30;display:flex;align-items:center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
     </div>
 
@@ -780,6 +791,12 @@ textarea.adm-inp{height:auto;min-height:76px;padding:8px 10px;line-height:1.4;re
     <!-- Tab 8: Orte → Ortschaft (v1.42) -->
     <div id="adm-tab-ort" style="display:none">
       <div id="ort-tab-content">
+        <div style="text-align:center;padding:40px 20px;color:var(--text3)">Lade&#8230;</div>
+      </div>
+    </div>
+
+    <div id="adm-tab-txt" style="display:none">
+      <div id="txt-tab-content">
         <div style="text-align:center;padding:40px 20px;color:var(--text3)">Lade&#8230;</div>
       </div>
     </div>
@@ -2457,7 +2474,7 @@ function zeigeMeldung(text){
 
 /* ── Admin-Tabs ── */
 function switchAdmTab(tab){
-  ["upload","imp","ver","acc","trm","sta","lnk","ort"].forEach(t=>{
+  ["upload","imp","ver","acc","trm","sta","lnk","ort","txt"].forEach(t=>{
     document.getElementById("adm-tab-"+t).style.display=t===tab?"":"none";
     document.getElementById("admbtn-"+t).classList.toggle("on",t===tab);
   });
@@ -2468,7 +2485,112 @@ function switchAdmTab(tab){
   if(tab==="sta")loadStats();
   if(tab==="lnk")loadVerknuepfungen();
   if(tab==="ort")loadOrte();
+  if(tab==="txt")loadMailTexte();
 }
+
+/* ── Admin-Tab „Texte“: E-Mail-Texte selbst bearbeiten (v1.68) ──
+   Texte ohne HTML: Leerzeile = Absatz, „- “ = Aufzählung, „1. “ = nummeriert, **fett**, Platzhalter {name}.
+   Rahmen, Anrede und Link des Knopfs setzt der Server. Werte nur per data-Attribut, kein Text in onclick. */
+let _mailTexte=[],_mtArt=null,_mtFeld=null,_mtTimer=null;
+const _MT_FELDER=[["betreff","Betreff","input"],["ueberschrift","Überschrift","input"],["text","Text","textarea"],
+                  ["knopf","Beschriftung des Knopfs","input"],["hinweis","Kleiner Hinweis unten (grau)","textarea"]];
+function _mtToken(){return localStorage.getItem("ut")||"";}
+async function _mtApi(pfad,methode,daten){
+  const r=await fetch("/api/admin/mailtexte"+pfad,{method:methode||"GET",
+    headers:{"X-Upload-Token":_mtToken(),"Content-Type":"application/json"},body:daten?JSON.stringify(daten):undefined});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(j.error||("HTTP "+r.status));
+  return j;
+}
+async function loadMailTexte(){
+  const el=document.getElementById("txt-tab-content");
+  el.innerHTML=`<div style="text-align:center;padding:30px;color:var(--text3)">${icon("loader",20)} Lade&hellip;</div>`;
+  try{_mailTexte=await _mtApi("");}
+  catch(e){el.innerHTML='<div style="color:#ff3b30;padding:16px">Fehler: '+escHtml(String(e.message||e))+'</div>';return;}
+  _mtArt=null;
+  el.innerHTML=`<p style="font-size:13px;color:var(--text2);margin:0 0 10px">Diese E-Mails verschickt der Vereinskalender automatisch. Antippen zum Bearbeiten – Änderungen gelten ab dem Speichern.</p>`
+    +_mailTexte.map(m=>`<button type="button" class="mt-eintrag" data-art="${escHtml(m.art)}">
+        <span style="font-weight:600;color:var(--text)">${escHtml(m.texte.betreff)}</span>${m.geaendert?'<span class="mt-chip">geändert</span>':""}
+        <span style="display:block;font-size:12px;color:var(--text3);margin-top:2px">${escHtml(m.zweck)}</span></button>`).join("");
+}
+function _mtOeffnen(art){
+  const m=_mailTexte.find(x=>x.art===art);if(!m)return;
+  _mtArt=art;_mtFeld=null;
+  const el=document.getElementById("txt-tab-content");
+  const felder=_MT_FELDER.filter(([f])=>f!=="knopf"||m.knopf).map(([f,label,typ])=>`
+    <label class="mt-label" for="mt-${f}">${label}</label>
+    ${typ==="input"?`<input id="mt-${f}" class="mt-feld" data-feld="${f}" value="${escHtml(m.texte[f])}">`
+      :`<textarea id="mt-${f}" class="mt-feld" data-feld="${f}" rows="${f==="text"?8:3}">${escHtml(m.texte[f])}</textarea>`}`).join("");
+  const chips=m.platzhalter.map(p=>`<button type="button" class="mt-ph" data-ph="${escHtml(p.name)}" title="${escHtml(p.info)}">{${escHtml(p.name)}}</button>`).join("");
+  el.innerHTML=`
+    <button type="button" class="mt-zurueck">&larr; Alle E-Mails</button>
+    <div style="font-size:15px;font-weight:700;color:var(--text);margin:8px 0 2px">${escHtml(m.zweck)}</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:8px">Leerzeile = neuer Absatz · „- “ am Zeilenanfang = Aufzählung · „1. “ = nummeriert · **fett**</div>
+    ${felder}
+    ${chips?`<div class="mt-label">Platzhalter – antippen fügt ihn an der Schreibmarke ein</div><div style="display:flex;flex-wrap:wrap;gap:6px">${chips}</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:4px">${m.platzhalter.map(p=>`{${escHtml(p.name)}} = ${escHtml(p.info)}`).join(" · ")}</div>`:""}
+    <div id="mt-meldung" style="font-size:13px;min-height:18px;margin:10px 0 0"></div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px">
+      <button type="button" class="mt-btn mt-pri" data-aktion="speichern">Speichern</button>
+      <button type="button" class="mt-btn" data-aktion="test">Testmail an mich</button>
+      ${m.verlauf?'<button type="button" class="mt-btn" data-aktion="vorige">Vorige Fassung</button>':""}
+      ${m.geaendert?'<button type="button" class="mt-btn" data-aktion="standard">Auf Standard zurücksetzen</button>':""}
+    </div>
+    <div class="mt-label" style="margin-top:14px">Vorschau <span id="mt-betreff" style="font-weight:400;color:var(--text3)"></span></div>
+    <iframe id="mt-vorschau" class="mt-vorschau" title="Vorschau der E-Mail" sandbox></iframe>`;
+  _mtVorschau();
+}
+function _mtWerte(){
+  const m=_mailTexte.find(x=>x.art===_mtArt),w={};
+  _MT_FELDER.forEach(([f])=>{const e=document.getElementById("mt-"+f);w[f]=e?e.value:m.texte[f];});
+  return w;
+}
+function _mtMeldung(text,farbe){const e=document.getElementById("mt-meldung");if(e){e.textContent=text;e.style.color=farbe||"var(--text2)";}}
+async function _mtVorschau(){
+  if(!_mtArt)return;
+  try{
+    const r=await _mtApi("/"+encodeURIComponent(_mtArt)+"/vorschau","POST",_mtWerte());
+    document.getElementById("mt-vorschau").srcdoc=r.html;
+    document.getElementById("mt-betreff").textContent="– Betreff: "+r.betreff;
+    _mtMeldung("");
+  }catch(e){_mtMeldung("⚠️ "+(e.message||e),"#ff3b30");}
+}
+async function _mtAktion(aktion,btn){
+  const art=encodeURIComponent(_mtArt);
+  btn.disabled=true;
+  try{
+    if(aktion==="speichern"){
+      const m=await _mtApi("/"+art,"PUT",_mtWerte());
+      _mailTexte=_mailTexte.map(x=>x.art===m.art?m:x);_mtOeffnen(m.art);_mtMeldung("✅ Gespeichert – gilt ab sofort.","#34c759");
+    }else if(aktion==="test"){
+      const r=await _mtApi("/"+art+"/test","POST");
+      _mtMeldung(r.ok?"📧 Testmail (gespeicherte Fassung) an "+r.an+" verschickt.":"⚠️ Testmail NICHT verschickt – Telegram-Gruppe prüfen.",r.ok?"#34c759":"#ff3b30");
+    }else{
+      if(!confirm(aktion==="standard"?"Wirklich den Standardtext wiederherstellen?":"Vorige Fassung wiederherstellen?")){btn.disabled=false;return;}
+      const m=await _mtApi("/"+art+"/zuruecksetzen","POST",{auf:aktion==="standard"?"standard":"vorige"});
+      _mailTexte=_mailTexte.map(x=>x.art===m.art?m:x);_mtOeffnen(m.art);_mtMeldung("✅ Wiederhergestellt.","#34c759");
+    }
+  }catch(e){_mtMeldung("⚠️ "+(e.message||e),"#ff3b30");}
+  btn.disabled=false;
+}
+document.addEventListener("click",e=>{
+  const t=e.target.closest("#txt-tab-content button");
+  if(!t)return;
+  if(t.classList.contains("mt-eintrag"))_mtOeffnen(t.dataset.art);
+  else if(t.classList.contains("mt-zurueck"))loadMailTexte();
+  else if(t.dataset.aktion)_mtAktion(t.dataset.aktion,t);
+  else if(t.dataset.ph){
+    const f=_mtFeld||document.getElementById("mt-text"),ein="{"+t.dataset.ph+"}";
+    const a=f.selectionStart??f.value.length,b=f.selectionEnd??a;
+    f.value=f.value.slice(0,a)+ein+f.value.slice(b);f.focus();f.selectionStart=f.selectionEnd=a+ein.length;
+    _mtVorschau();
+  }
+});
+document.addEventListener("focusin",e=>{if(e.target.classList&&e.target.classList.contains("mt-feld"))_mtFeld=e.target;});
+document.addEventListener("input",e=>{
+  if(!e.target.classList||!e.target.classList.contains("mt-feld"))return;
+  clearTimeout(_mtTimer);_mtTimer=setTimeout(_mtVorschau,500);
+});
 
 /* ── Admin-Tab „Orte": Veranstaltungsort → Ortschaft (v1.42) ── */
 let _ortDaten=null;
@@ -4287,7 +4409,7 @@ function showInfoModal(){
         <span class="help-icon">${icon("scale",20)}</span>
         <div><strong>Impressum</strong><span>Josef Fischer &middot; H&ouml;lskofen 13 &middot; 84092 Bayerbach b. Ergoldsbach<br><a href="mailto:Vereinskalender@icloud.com" style="color:var(--accent);text-decoration:none">Vereinskalender@icloud.com</a></span></div>
       </div>
-      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.67 &middot; 2026-10-07 &middot; a sEpp-App</p>
+      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.68 &middot; 2026-10-08 &middot; a sEpp-App</p>
       <button onclick="document.getElementById('info-modal').remove()" style="width:100%;margin-top:16px;padding:12px;background:none;border:1.5px solid var(--border2);border-radius:12px;font-size:14px;color:var(--text2);cursor:pointer">Schlie&szlig;en</button>
     </div>`;
   document.body.appendChild(m);

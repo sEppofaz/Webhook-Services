@@ -1039,12 +1039,84 @@ def test_freigabe_gruppe():
         ar.send_telegram_inline, tr.send_telegram = alt_inline, alt_tg
 
 
+def test_mailtexte():
+    print("\nM4 · E-Mail-Texte selbst bearbeiten (Admin → Texte)")
+    import importlib.util, re as _re
+    from shared import vk_mail
+    vk_mail.MAIL_TEXTE_FILE = TMP / "mail_texte.json"
+    # Standard = bisheriger Inhalt: gleicher sichtbarer Text wie die alte Fassung (aus Git, vor v1.68)
+    spec = importlib.util.spec_from_file_location("vk_mail_alt", os.environ["VK_MAIL_ALT"]) if os.environ.get("VK_MAIL_ALT") else None
+    if spec:
+        alt = importlib.util.module_from_spec(spec); spec.loader.exec_module(alt)
+        def sichtbar(h):   # ohne <style> und <title> (Titel = jetzt die Überschrift), Anführungszeichen vereinheitlicht
+            h = _re.sub(r"<(style|title)>.*?</\1>", "", h, flags=_re.S)
+            return " ".join(_re.sub(r"<[^>]+>", " ", h).split()).replace('"', "“")
+        neu_g, alt_g = {}, {}
+        for mod, ziel in ((vk_mail, neu_g), (alt, alt_g)):
+            mod._send = lambda to, sub, body, z=ziel: z.setdefault("x", []).append((sub, body)) or True
+            mod.send_verify_email("a@b.de", "TOK", "Hallo,"); mod.send_reset_email("a@b.de", "TOK", "Hallo,")
+            mod.send_invite_email("a@b.de", "TOK", "FF X"); mod.send_welcome_email("a@b.de", "FF X", "Hallo,")
+            mod.send_rejected_email("a@b.de", "FF X", "Hallo,"); mod.send_email_change_confirm("a@b.de", "TOK", "FF X", "Hallo,")
+            mod.send_email_change_notice("a@b.de", "max@web.de", "FF X", "Hallo,")
+        for (s1, b1), (s2, b2) in zip(neu_g["x"], alt_g["x"]):
+            w1, w2 = set(sichtbar(b1).split()) - {"https://vereinskalender.online"}, set(sichtbar(b2).split())
+            pruefe(s1 == s2 and w1 == w2, f"Standard wie bisher: {s1}", (w1 ^ w2))
+        importlib.reload(vk_mail)
+        vk_mail.MAIL_TEXTE_FILE = TMP / "mail_texte.json"
+    cl = app.test_client()
+    pruefe(cl.get("/api/admin/mailtexte").status_code == 401, "nur mit Admin-Token")
+    liste = cl.get("/api/admin/mailtexte", headers=ADMIN).get_json()
+    pruefe(len(liste) == 7 and not any(m["geaendert"] for m in liste), "7 Mails, nichts geändert", [m["art"] for m in liste])
+    w = dict(liste[[m["art"] for m in liste].index("welcome")]["texte"])
+    w["text"] = "Hallo **{verein}**!\n\n- eins <script>x</script>\n- zwei {profil_link}"
+    r = cl.put("/api/admin/mailtexte/welcome", json={**w, "text": "{gibtsnicht}"}, headers=ADMIN)
+    pruefe(r.status_code == 400 and "gibtsnicht" in r.get_json()["error"], "unbekannter Platzhalter abgelehnt")
+    r = cl.put("/api/admin/mailtexte/welcome", json={**w, "knopf": ""}, headers=ADMIN)
+    pruefe(r.status_code == 400, "Knopf mit Link darf nicht leer sein")
+    v = cl.post("/api/admin/mailtexte/welcome/vorschau", json=w, headers=ADMIN).get_json()
+    pruefe("<strong>FF Musterdorf e.V.</strong>" in v["html"] and "<ul" in v["html"] and "&lt;script&gt;" in v["html"]
+           and "<script>x" not in v["html"] and 'href="https://vereinskalender.online/verein/profil"' in v["html"],
+           "Vorschau: fett, Aufzählung, escapt, Link anklickbar")
+    pruefe(not (TMP / "mail_texte.json").exists(), "Vorschau speichert nichts")
+    m = cl.put("/api/admin/mailtexte/welcome", json=w, headers=ADMIN).get_json()
+    pruefe(m["geaendert"] and m["verlauf"] == 1, "gespeichert, alte Fassung im Verlauf", m)
+    gesendet = []
+    alt_send = vk_mail._send
+    vk_mail._send = lambda to, sub, body: gesendet.append((to, sub, body)) or True
+    try:
+        vk_mail.send_welcome_email("v@x.de", "FF <Echt>", "Hallo,")
+        pruefe("<strong>FF &lt;Echt&gt;</strong>" in gesendet[-1][2] and "<li>zwei" in gesendet[-1][2],
+               "echte Willkommens-Mail nutzt Josefs Fassung (Name escapt)")
+        r = cl.post("/api/admin/mailtexte/welcome/test", headers=ADMIN).get_json()
+        pruefe(r["ok"] and gesendet[-1][0] == "Vereinskalender@icloud.com" and gesendet[-1][1].startswith("[Test]"),
+               "Testmail an das Vereinskalender-Postfach", gesendet[-1][:2])
+    finally:
+        vk_mail._send = alt_send
+    m = cl.post("/api/admin/mailtexte/welcome/zuruecksetzen", json={"auf": "vorige"}, headers=ADMIN).get_json()
+    pruefe(not m["geaendert"], "vorige Fassung (= Standard) wiederhergestellt")
+    cl.put("/api/admin/mailtexte/welcome", json=w, headers=ADMIN)
+    m = cl.post("/api/admin/mailtexte/welcome/zuruecksetzen", json={"auf": "standard"}, headers=ADMIN).get_json()
+    pruefe(not m["geaendert"] and "welcome" not in json.loads((TMP / "mail_texte.json").read_text()).get("texte", {}),
+           "auf Standard zurückgesetzt – keine Überschreibung mehr gespeichert")
+    (TMP / "mail_texte.json").write_text("{kaputt")
+    gemeldet = []
+    alt_m = vk_mail._fehler_melden
+    vk_mail._fehler_melden = lambda *a: gemeldet.append(a)
+    try:
+        pruefe(vk_mail.texte("reset")["knopf"] == "Neues Passwort setzen" and gemeldet, "kaputte Datei → Standard + Hinweis")
+    finally:
+        vk_mail._fehler_melden = alt_m
+    (TMP / "mail_texte.json").unlink()
+    src = (ROOT / "kalender.html").read_text()
+    pruefe("switchAdmTab('txt')" in src and 'class="mt-eintrag" data-art=' in src, "Admin: Reiter Texte, Werte per data-Attribut")
+
+
 TESTS = [test_xss, test_telegram_secret, test_vereine_api_lock, test_erinnerung, test_sessions,
          test_admin_loeschen, test_admin_verein_meta, test_verknuepfen,
          test_ical_uids, test_registrierung_key, test_fremde_endpunkte,
          test_pending_atomar, test_import_vergangenheit, test_stats_zeit, test_cookies,
          test_freigabe_nachricht, test_store_mehrprozess, test_bot_tastatur, test_abo_mischregel, test_chips_ohne_onclick, test_rename_relevanz, test_import_ortschaft, test_register_pruefen, test_plz_check, test_quelle_pfarrbrief,
-         test_verdacht_und_schalter, test_mail_rueckmeldung, test_mail_lebenszeichen, test_freigabe_gruppe]
+         test_verdacht_und_schalter, test_mail_rueckmeldung, test_mail_lebenszeichen, test_freigabe_gruppe, test_mailtexte]
 
 if __name__ == "__main__":
     for t in TESTS:

@@ -1,6 +1,7 @@
 import html
 import json
 import os
+import re
 import secrets
 import smtplib
 import sys
@@ -10,6 +11,7 @@ from datetime import datetime, timedelta
 from email import utils as email_utils
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from pathlib import Path
 
 SMTP_HOST = "smtp-relay.brevo.com"
 SMTP_PORT = 587
@@ -133,87 +135,265 @@ def _mit_gruss(body: str, gruss: str) -> str:
     return f"{teile[0]}</h2>\n<p>{gruss}</p>{teile[1]}" if len(teile) == 2 else f"<p>{gruss}</p>{body}"
 
 
+# ── Mail-Texte: Standard im Code, Josefs Fassung in mail_texte.json (Admin → Texte, v1.68) ─────────
+# Josef bearbeitet Betreff, Überschrift, Text, Knopf und Hinweis selbst – ohne HTML. Der Rahmen (Kopf,
+# Fußzeile, Anrede, Link des Knopfs) bleibt im Code. Text: Leerzeile = Absatz, „- “ = Aufzählung,
+# „1. “ = nummeriert, **fett**. Platzhalter nur aus der Liste der jeweiligen Mail.
+
+MAIL_TEXTE_FILE = Path("/opt/rename-webhook/mail_texte.json")
+FELDER = {"betreff": 150, "ueberschrift": 120, "text": 4000, "knopf": 60, "hinweis": 1000}   # Feld → Höchstlänge
+VERLAUF_MAX = 20
+KONTAKT = "Vereinskalender@icloud.com"
+
+# Platzhalter → Beschreibung (für die Admin-Oberfläche). Links werden als anklickbarer Link eingesetzt.
+PLATZHALTER = {
+    "verein": "Name des Vereins",
+    "link": "persönlicher Link dieser Mail",
+    "login_link": "Link zur Anmeldung",
+    "profil_link": "Link zum Vereinsprofil",
+    "upload_link": "Link zum Terminplan-Upload",
+    "kalender_link": "Link zum Kalender",
+    "kontakt": KONTAKT,
+    "neu": "neue Adresse (gekürzt, z. B. ma…@web.de)",
+}
+_LINKS = {"link", "login_link", "profil_link", "upload_link", "kalender_link"}
+
+STANDARD = {
+    "verify": {
+        "zweck": "Nach der Registrierung – E-Mail-Adresse bestätigen (auch nach der Freigabe, wenn noch offen)",
+        "platzhalter": ["link"], "knopf_link": "link", "anrede": True,
+        "betreff": "Deine E-Mail-Adresse bestätigen – Vereinskalender",
+        "ueberschrift": "E-Mail-Adresse bestätigen",
+        "text": "Bitte bestätige deine E-Mail-Adresse, um deine Registrierung abzuschließen.",
+        "knopf": "E-Mail bestätigen",
+        "hinweis": "Der Link ist **24 Stunden** gültig.\nFalls du dich nicht registriert hast, kannst du diese E-Mail ignorieren.\n\nDirektlink: {link}",
+    },
+    "reset": {
+        "zweck": "Passwort vergessen – Link zum neuen Passwort",
+        "platzhalter": ["link"], "knopf_link": "link", "anrede": True,
+        "betreff": "Passwort zurücksetzen – Vereinskalender",
+        "ueberschrift": "Passwort zurücksetzen",
+        "text": "Du hast eine Passwort-Zurücksetzung angefordert.",
+        "knopf": "Neues Passwort setzen",
+        "hinweis": "Der Link ist **1 Stunde** gültig.\nFalls du keine Zurücksetzung angefordert hast, ignoriere diese E-Mail.",
+    },
+    "invite": {
+        "zweck": "Ein Vereinsadmin lädt ein weiteres Mitglied ein",
+        "platzhalter": ["verein", "link"], "knopf_link": "link", "anrede": False,
+        "betreff": "Einladung: {verein} – Vereinskalender",
+        "ueberschrift": "Einladung zur Mitarbeit",
+        "text": "Du wurdest eingeladen, den Vereinskalender für **{verein}** mitzuverwalten.",
+        "knopf": "Einladung annehmen",
+        "hinweis": "Der Link ist **48 Stunden** gültig.",
+    },
+    "welcome": {
+        "zweck": "Nach der Freigabe – Konto ist freigeschaltet",
+        "platzhalter": ["verein", "login_link", "profil_link", "upload_link", "kalender_link", "kontakt"],
+        "knopf_link": "login_link", "anrede": True,
+        "betreff": "Konto freigeschaltet – {verein}",
+        "ueberschrift": "Willkommen beim Vereinskalender!",
+        "text": ("Das Konto für **{verein}** ist freigeschaltet. In drei Schritten seid ihr dabei:\n\n"
+                 "1. **Profil prüfen** – PLZ, Ortschaft, Rubrik und Ansprechpartner kontrollieren: {profil_link}\n"
+                 "2. **Termine hochladen** – Jahresprogramm als PDF, Foto oder Excel: {upload_link}\n"
+                 "3. **Kalender abonnieren** – Auf {kalender_link} den Button „Abonnieren“ antippen – dann habt ihr "
+                 "alle Termine automatisch im iPhone-Kalender."),
+        "knopf": "Jetzt einloggen",
+        "hinweis": "Bei Fragen einfach auf diese E-Mail antworten oder schreiben an {kontakt}.",
+    },
+    "rejected": {
+        "zweck": "Registrierung abgelehnt",
+        "platzhalter": ["verein", "kontakt"], "knopf_link": "", "anrede": True,
+        "betreff": "Registrierungsanfrage – Vereinskalender",
+        "ueberschrift": "Registrierung nicht angenommen",
+        "text": ("Die Registrierungsanfrage für **{verein}** konnte leider nicht bestätigt werden.\n\n"
+                 "Bei Fragen wende dich direkt an den Kalender-Administrator."),
+        "knopf": "",
+        "hinweis": "",
+    },
+    "email_change_confirm": {
+        "zweck": "Verein ändert seine Login-Adresse – Mail an die NEUE Adresse",
+        "platzhalter": ["verein", "link"], "knopf_link": "link", "anrede": True,
+        "betreff": "Neue E-Mail-Adresse bestätigen – Vereinskalender",
+        "ueberschrift": "Neue E-Mail-Adresse bestätigen",
+        "text": "Für **{verein}** soll diese Adresse künftig zum Einloggen und für Benachrichtigungen dienen.",
+        "knopf": "Adresse bestätigen",
+        "hinweis": ("Der Link ist **24 Stunden** gültig. Bis dahin gilt die bisherige Adresse.\n"
+                    "Falls du das nicht veranlasst hast, ignoriere diese E-Mail.\n\nDirektlink: {link}"),
+    },
+    "email_change_notice": {
+        "zweck": "Verein ändert seine Login-Adresse – Hinweis an die ALTE Adresse",
+        "platzhalter": ["verein", "neu", "kontakt"], "knopf_link": "", "anrede": True,
+        "betreff": "E-Mail-Adresse geändert – Vereinskalender",
+        "ueberschrift": "Änderung der E-Mail-Adresse angefordert",
+        "text": ("Für **{verein}** wurde eine neue Login-Adresse eingetragen: **{neu}**.\n"
+                 "Sie gilt erst, wenn sie über den Link in der dortigen E-Mail bestätigt wird.\n\n"
+                 "Warst du das nicht? Dann ändere bitte sofort dein Passwort und melde dich unter {kontakt}."),
+        "knopf": "",
+        "hinweis": "",
+    },
+}
+
+# Beispielwerte für Vorschau und Testmail
+BEISPIEL = {"verein": "FF Musterdorf e.V.", "link": f"{BASE_URL}/beispiel-link", "neu": "ma…@web.de"}
+
+
+def _lade_datei() -> dict:
+    """Inhalt von mail_texte.json – fehlt die Datei: leer. Kaputte Datei → Standardtexte + Telegram-Hinweis."""
+    try:
+        if not MAIL_TEXTE_FILE.exists():
+            return {}
+        d = json.loads(MAIL_TEXTE_FILE.read_text())
+        return d if isinstance(d, dict) else {}
+    except Exception as e:
+        print(f"MAIL-TEXTE nicht lesbar: {e}", file=sys.stderr)
+        _fehler_melden("–", "mail_texte.json", f"Datei nicht lesbar, Standardtexte werden benutzt ({type(e).__name__})")
+        return {}
+
+
+def texte(art: str) -> dict:
+    """Aktuelle Texte einer Mail: Standard, überschrieben von Josefs Fassung."""
+    eigen = (_lade_datei().get("texte") or {}).get(art) or {}
+    return {f: (eigen[f] if isinstance(eigen.get(f), str) else STANDARD[art][f]) for f in FELDER}
+
+
+def pruefe_texte(art: str, werte: dict) -> str:
+    """Fehlertext für die Admin-Oberfläche, leer = in Ordnung."""
+    erlaubt = set(STANDARD[art]["platzhalter"])
+    for feld, maximal in FELDER.items():
+        wert = werte.get(feld, "")
+        if not isinstance(wert, str):
+            return f"„{feld}“ fehlt."
+        if len(wert) > maximal:
+            return f"„{feld}“ ist zu lang (höchstens {maximal} Zeichen)."
+        for name in re.findall(r"\{([^{}]*)\}", wert):
+            if name not in erlaubt:
+                moeglich = ", ".join("{" + p + "}" for p in STANDARD[art]["platzhalter"]) or "keine"
+                return f"Platzhalter {{{name}}} gibt es in dieser Mail nicht. Möglich: {moeglich}."
+    if not werte.get("betreff", "").strip() or not werte.get("ueberschrift", "").strip():
+        return "Betreff und Überschrift dürfen nicht leer sein."
+    if STANDARD[art]["knopf_link"] and not werte.get("knopf", "").strip():
+        return "Die Beschriftung des Knopfs darf nicht leer sein – sonst fehlt der Link."
+    return ""
+
+
+def _schreiben(d: dict) -> None:
+    """Atomar (BKM Atomic-Write-Pattern): erst Temp-Datei, dann umbenennen."""
+    tmp = MAIL_TEXTE_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(d, ensure_ascii=False, indent=1))
+    os.replace(tmp, MAIL_TEXTE_FILE)
+
+
+def speichere_texte(art: str, werte: dict) -> None:
+    d = _lade_datei()
+    alt = texte(art)
+    verlauf = d.setdefault("verlauf", {}).setdefault(art, [])
+    verlauf.insert(0, {"zeit": datetime.now().isoformat(timespec="seconds"), "texte": alt})
+    del verlauf[VERLAUF_MAX:]
+    neu = {f: werte[f] for f in FELDER}
+    if neu == {f: STANDARD[art][f] for f in FELDER}:
+        d.setdefault("texte", {}).pop(art, None)          # gleich Standard → nichts überschreiben
+    else:
+        d.setdefault("texte", {})[art] = neu
+    _schreiben(d)
+
+
+def verlauf(art: str) -> list[dict]:
+    return (_lade_datei().get("verlauf") or {}).get(art) or []
+
+
+def _ersetzen(text: str, werte: dict, als_html: bool) -> str:
+    """Escapen, dann Platzhalter einsetzen (Links anklickbar) und **fett**."""
+    if not als_html:
+        for k, v in werte.items():
+            text = text.replace("{" + k + "}", str(v))
+        return text
+    out = html.escape(text)
+    for k, v in werte.items():
+        if k in _LINKS:
+            wert = f'<a href="{html.escape(v)}" style="color:#6D28D9">{html.escape(v)}</a>'
+        elif k == "kontakt":
+            wert = f'<a href="mailto:{html.escape(v)}" style="color:#6D28D9">{html.escape(v)}</a>'
+        else:
+            wert = html.escape(str(v))
+        out = out.replace("{" + k + "}", wert)
+    return re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", out)
+
+
+def _bloecke(text: str, werte: dict) -> str:
+    """Leerzeile = Absatz, Zeilen mit „- “ bzw. „1. “ = Liste, sonst Zeilenumbruch."""
+    teile = []
+    for block in re.split(r"\n\s*\n", text.strip()):
+        zeilen = [z for z in block.split("\n") if z.strip()]
+        if not zeilen:
+            continue
+        if all(re.match(r"\s*-\s+", z) for z in zeilen):
+            tag, rx = "ul", r"\s*-\s+"
+        elif all(re.match(r"\s*\d+\.\s+", z) for z in zeilen):
+            tag, rx = "ol", r"\s*\d+\.\s+"
+        else:
+            teile.append("<p>" + "<br>\n".join(_ersetzen(z, werte, True) for z in zeilen) + "</p>")
+            continue
+        punkte = "".join(f"<li>{_ersetzen(re.sub(rx, '', z, count=1), werte, True)}</li>" for z in zeilen)
+        teile.append(f'<{tag} style="margin:12px 0 16px;padding-left:20px;color:#3c3c43;line-height:1.8;font-size:14px">'
+                     f"{punkte}</{tag}>")
+    return "\n".join(teile)
+
+
+def baue_mail(art: str, werte: dict, gruss: str = "", eigene: dict | None = None) -> tuple[str, str]:
+    """(Betreff, HTML) einer Mail. `eigene` = Texte aus dem Formular (Vorschau vor dem Speichern)."""
+    t = eigene or texte(art)
+    werte = {"login_link": f"{BASE_URL}/verein/login", "profil_link": f"{BASE_URL}/verein/profil",
+             "upload_link": f"{BASE_URL}/verein/upload", "kalender_link": BASE_URL, "kontakt": KONTAKT, **werte}
+    werte = {k: v for k, v in werte.items() if k in STANDARD[art]["platzhalter"]}
+    body = f"<h2>{_ersetzen(t['ueberschrift'], werte, True)}</h2>\n{_bloecke(t['text'], werte)}"
+    ziel = STANDARD[art]["knopf_link"]
+    if ziel and t["knopf"].strip():
+        body += f'\n<a class="btn" href="{html.escape(werte[ziel])}">{html.escape(t["knopf"])}</a>'
+    if t["hinweis"].strip():
+        hinweis = "<br>\n".join(_ersetzen(z, werte, True) for z in t["hinweis"].strip().split("\n"))
+        body += f'\n<p class="hint">{hinweis}</p>'
+    if STANDARD[art]["anrede"]:
+        body = _mit_gruss(body, gruss)
+    titel = html.escape(_ersetzen(t["ueberschrift"], werte, False))
+    return _ersetzen(t["betreff"], werte, False), _html_wrap(titel, body)
+
+
+def _mail(art: str, to_email: str, werte: dict, gruss: str = "") -> bool:
+    betreff, body = baue_mail(art, werte, gruss)
+    return _send(to_email, betreff, body)
+
+
 def send_verify_email(to_email: str, token: str, gruss: str = "") -> bool:
-    link = f"{BASE_URL}/api/auth/verify?token={token}"
-    body = f"""<h2>E-Mail-Adresse bestätigen</h2>
-<p>Bitte bestätige deine E-Mail-Adresse, um deine Registrierung abzuschließen.</p>
-<a class="btn" href="{link}">E-Mail bestätigen</a>
-<p class="hint">Der Link ist <strong>24 Stunden</strong> gültig.<br>
-Falls du dich nicht registriert hast, kannst du diese E-Mail ignorieren.<br><br>
-Direktlink: <a href="{link}" style="color:#6D28D9">{link}</a></p>"""
-    return _send(to_email, "Deine E-Mail-Adresse bestätigen – Vereinskalender", _html_wrap("E-Mail bestätigen", _mit_gruss(body, gruss)))
+    return _mail("verify", to_email, {"link": f"{BASE_URL}/api/auth/verify?token={token}"}, gruss)
 
 
 def send_reset_email(to_email: str, token: str, gruss: str = "") -> bool:
-    link = f"{BASE_URL}/verein/passwort-reset?token={token}"
-    body = f"""<h2>Passwort zurücksetzen</h2>
-<p>Du hast eine Passwort-Zurücksetzung angefordert.</p>
-<a class="btn" href="{link}">Neues Passwort setzen</a>
-<p class="hint">Der Link ist <strong>1 Stunde</strong> gültig.<br>
-Falls du keine Zurücksetzung angefordert hast, ignoriere diese E-Mail.</p>"""
-    return _send(to_email, "Passwort zurücksetzen – Vereinskalender", _html_wrap("Passwort zurücksetzen", _mit_gruss(body, gruss)))
+    return _mail("reset", to_email, {"link": f"{BASE_URL}/verein/passwort-reset?token={token}"}, gruss)
 
 
 def send_invite_email(to_email: str, token: str, verein_name: str) -> bool:
-    link = f"{BASE_URL}/verein/einladung?token={token}"
-    body = f"""<h2>Einladung zur Mitarbeit</h2>
-<p>Du wurdest eingeladen, den Vereinskalender für <strong>{html.escape(verein_name)}</strong> mitzuverwalten.</p>
-<a class="btn" href="{link}">Einladung annehmen</a>
-<p class="hint">Der Link ist <strong>48 Stunden</strong> gültig.</p>"""
-    return _send(to_email, f"Einladung: {verein_name} – Vereinskalender", _html_wrap("Einladung", body))
+    return _mail("invite", to_email, {"link": f"{BASE_URL}/verein/einladung?token={token}", "verein": verein_name})
 
 
 def send_welcome_email(to_email: str, verein_name: str, gruss: str = "") -> bool:
-    login_link  = f"{BASE_URL}/verein/login"
-    upload_link = f"{BASE_URL}/verein/upload"
-    profil_link = f"{BASE_URL}/verein/profil"
-    body = f"""<h2>Willkommen beim Vereinskalender!</h2>
-<p>Das Konto für <strong>{html.escape(verein_name)}</strong> ist freigeschaltet. In drei Schritten seid ihr dabei:</p>
-<ol style="margin:12px 0 16px;padding-left:20px;color:#3c3c43;line-height:2;font-size:14px">
-  <li><strong>Profil prüfen</strong> – PLZ, Ortschaft, Rubrik und Ansprechpartner kontrollieren:<br>
-      <a href="{profil_link}" style="color:#6D28D9">{profil_link}</a></li>
-  <li><strong>Termine hochladen</strong> – Jahresprogramm als PDF, Foto oder Excel:<br>
-      <a href="{upload_link}" style="color:#6D28D9">{upload_link}</a></li>
-  <li><strong>Kalender abonnieren</strong> – Auf <a href="{BASE_URL}" style="color:#6D28D9">vereinskalender.online</a>
-      den Button <em>„Abonnieren"</em> antippen – dann habt ihr alle Termine automatisch im iPhone-Kalender.</li>
-</ol>
-<a class="btn" href="{login_link}">Jetzt einloggen</a>
-<p class="hint">Bei Fragen einfach auf diese E-Mail antworten oder schreiben an
-<a href="mailto:Vereinskalender@icloud.com" style="color:#6D28D9">Vereinskalender@icloud.com</a>.</p>"""
-    return _send(to_email, f"Konto freigeschaltet – {verein_name}", _html_wrap("Willkommen!", _mit_gruss(body, gruss)))
+    return _mail("welcome", to_email, {"verein": verein_name}, gruss)
 
 
 def send_rejected_email(to_email: str, verein_name: str, gruss: str = "") -> bool:
-    body = f"""<h2>Registrierung nicht angenommen</h2>
-<p>Die Registrierungsanfrage für <strong>{html.escape(verein_name)}</strong> konnte leider nicht bestätigt werden.</p>
-<p>Bei Fragen wende dich direkt an den Kalender-Administrator.</p>"""
-    return _send(to_email, f"Registrierungsanfrage – Vereinskalender", _html_wrap("Registrierung", _mit_gruss(body, gruss)))
+    return _mail("rejected", to_email, {"verein": verein_name}, gruss)
 
 
 def send_email_change_confirm(to_email: str, token: str, verein_name: str, gruss: str = "") -> bool:
     """An die NEUE Adresse: erst der Klick macht sie zur Login-Adresse."""
-    link = f"{BASE_URL}/verein/email-bestaetigen?token={token}"
-    body = f"""<h2>Neue E-Mail-Adresse bestätigen</h2>
-<p>Für <strong>{html.escape(verein_name)}</strong> soll diese Adresse künftig zum Einloggen und für Benachrichtigungen dienen.</p>
-<a class="btn" href="{link}">Adresse bestätigen</a>
-<p class="hint">Der Link ist <strong>24 Stunden</strong> gültig. Bis dahin gilt die bisherige Adresse.<br>
-Falls du das nicht veranlasst hast, ignoriere diese E-Mail.<br><br>
-Direktlink: <a href="{link}" style="color:#6D28D9">{link}</a></p>"""
-    return _send(to_email, "Neue E-Mail-Adresse bestätigen – Vereinskalender",
-                 _html_wrap("E-Mail bestätigen", _mit_gruss(body, gruss)))
+    return _mail("email_change_confirm", to_email,
+                 {"link": f"{BASE_URL}/verein/email-bestaetigen?token={token}", "verein": verein_name}, gruss)
 
 
 def send_email_change_notice(to_email: str, neu: str, verein_name: str, gruss: str = "") -> bool:
     """An die ALTE Adresse: Hinweis, damit eine fremde Änderung auffällt."""
     teile = neu.split("@")
     maskiert = (teile[0][:2] + "…@" + teile[1]) if len(teile) == 2 else "…"
-    body = f"""<h2>Änderung der E-Mail-Adresse angefordert</h2>
-<p>Für <strong>{html.escape(verein_name)}</strong> wurde eine neue Login-Adresse eingetragen: <strong>{html.escape(maskiert)}</strong>.
-Sie gilt erst, wenn sie über den Link in der dortigen E-Mail bestätigt wird.</p>
-<p>Warst du das nicht? Dann ändere bitte sofort dein Passwort und melde dich unter
-<a href="mailto:Vereinskalender@icloud.com" style="color:#6D28D9">Vereinskalender@icloud.com</a>.</p>"""
-    return _send(to_email, "E-Mail-Adresse geändert – Vereinskalender",
-                 _html_wrap("Hinweis", _mit_gruss(body, gruss)))
+    return _mail("email_change_notice", to_email, {"verein": verein_name, "neu": maskiert}, gruss)
 
 
 def konto_mail(conn, user_id: int, to_email: str, verein_name: str, email_verified, gruss: str = "") -> tuple[str, bool]:
