@@ -224,6 +224,9 @@ else:
     als("a")
     pruefe(c.post("/runden/neu", data={"_csrf": tok, "name": "X", "jahr": "2027"}).status_code == 403,
            "ohne Freigabe keine Runde starten")
+    s = c.get("/termine?jahr=2027").data
+    pruefe("1 Termin aus 2026 übernehmen".encode() in s and "Übernehmen</button>".encode() in s, "Vorjahr als Karte mit Anzahl")
+    pruefe(s.count("Kontofreigabe".encode()) == 1, "Freigabe-Hinweis nur einmal")
     c.post("/entwuerfe/aus-vorjahr", data={"_csrf": tok, "jahr": "2027"})
     pruefe([t["datum"] for t in DB.entwuerfe("a", 2027)] == ["2027-07-10"], "Entwürfe auch vor der Freigabe")
     pruefe(c.post(f"/entwuerfe/{DB.entwuerfe('a', 2027)[0]['_eid']}", data={"_csrf": tok, "aktion": "veroeffentlichen"}).status_code == 403,
@@ -247,40 +250,63 @@ else:
     pruefe(re.search(rb'hdr-pill-pri" href="/termine" aria-current="page"', s.data) is not None, "Kopf: Tab Termine aktiv (gefüllt)")
     pruefe(b'hdr-pill hdr-pill-sec" href="/einstellungen"' in s.data, "Kopf: andere Tabs umrandet wie Info/Login")
     pruefe(b"Terminplan hochladen" in s.data and b"Hilfe &amp; FAQ" in s.data, "Termine: Upload und Hilfe aus dem Dashboard")
+    pruefe(b">PDF</a>" in s.data and b">Excel</a>" in s.data and b"<summary>Weitere Formate</summary>" in s.data,
+           "Herunterladen: PDF und Excel sichtbar, Rest unter „Weitere Formate“")
+    pruefe(all(c.get(f"/termine/export.{f}").status_code == 200 for f in ("pdf", "xlsx", "ics")), "Export-Links funktionieren")
     s = c.get("/einstellungen")
     pruefe(all(x.encode() in s.data for x in ("Vereinsprofil", "Mitglieder", "Passwort ändern", "Überschneidungen prüfen mit", "Datenschutzerklärung")),
            "Einstellungen: Profil, Mitglieder, Passwort, Prüfkreis, Rechtliches")
     pruefe(b'hdr-pill-pri" href="/einstellungen" aria-current="page"' in s.data, "Kopf: Tab Einstellungen aktiv")
     tabs = re.findall(rb'class="hdr-pill[^"]*"[^>]*>(?:<svg.*?</svg>)?([^<]+)</', s.data)
-    pruefe([t.decode() for t in tabs] == ["Termine", "Einstellungen", "Planungsmodul", "Abmelden"], f"Tab-Reihenfolge, war {tabs}")
+    pruefe([t.decode() for t in tabs] == ["Termine", "Planungsrunden", "Einstellungen", "Abmelden"], f"Tab-Reihenfolge, war {tabs}")
 
     # Kollisions-API aus der Sitzung + Prüfkreis aus den Einstellungen
     j = c.get("/api/kollisionen?verein=d&von=2026-07-11&ort=Testdorf").get_json()
     pruefe([x["bezeichnung"] for x in j] == ["Grillfest"], f"API: Verein aus der Sitzung (Parameter ignoriert), war {j}")
+    s = c.get("/einstellungen").data
+    pruefe("Wer trägt eure Termine ein?".encode() in s and "Nur noch selbst eintragen".encode() in s,
+           "Einstellungen: Schalter Gemeinde-Webseiten (Standard: an)")
+    c.post("/einstellungen/quellen", data={"_csrf": tok, "aus": "1"})
+    s = c.get("/einstellungen").data
+    pruefe(DB.crawler_aus("a") and "Nur wir selbst.".encode() in s and "wieder mitnutzen".encode() in s,
+           "ausgeschaltet: Status und Gegenknopf")
+    c.post("/einstellungen/quellen", data={"_csrf": tok, "aus": "0"})
+    pruefe(not DB.crawler_aus("a"), "wieder eingeschaltet")
+    gem_a = [k for k, _ in D.vereine_der_gemeinde(*D.sitz("a")) if k != "a"]
     s = c.get("/einstellungen")
-    pruefe(b"Testdorf" in s.data and b'name="ohne" value="b"' in s.data and b'name="dazu" value="d"' in s.data,
-           "Einstellungen: Gemeinde, ausschließen, dazunehmen")
-    c.post("/einstellungen", data={"_csrf": tok, "dazu": ["d", "gibtsnicht"], "ohne": ["b", "d"]})
-    pruefe(DB.pruefkreis("a") == ({"d"}, {"b"}), f"ohne nur für Vereine der eigenen Gemeinde, war {DB.pruefkreis('a')}")
-    c.post("/einstellungen", data={"_csrf": tok, "dazu": ["d"]})
+    pruefe(b"Testdorf \xe2\x80\x93 eure Gemeinde" in s.data and b'name="geprueft" value="b" checked' in s.data
+           and b'name="geprueft" value="d">' in s.data and b'name="ohne"' not in s.data and b'name="dazu"' not in s.data,
+           "Einstellungen: eine Liste, eigene Gemeinde vorab angehakt")
+    c.post("/einstellungen", data={"_csrf": tok, "geprueft": [k for k in gem_a if k != "b"] + ["d", "gibtsnicht", "a"]})
+    pruefe(DB.pruefkreis("a") == ({"d"}, {"b"}), f"Haken weg = ohne, fremder Haken = dazu, war {DB.pruefkreis('a')}")
+    s = c.get("/einstellungen")
+    pruefe(b'value="b">' in s.data and b'value="d" checked' in s.data and "Außerhalb eurer Gemeinde dabei: Verein D".encode() in s.data,
+           "gespeicherte Auswahl wird angezeigt")
+    c.post("/einstellungen", data={"_csrf": tok, "geprueft": gem_a + ["d"]})
     j = c.get("/api/kollisionen?von=2026-07-11&ort=Testdorf").get_json()
     pruefe(sorted((x["bezeichnung"], x["nachbar"]) for x in j) == [("Fremdfest", True), ("Grillfest", False)],
            f"dazugenommener Nachbar wird gemeldet, war {j}")
-    c.post("/einstellungen", data={"_csrf": tok, "ohne": ["b"]})
+    c.post("/einstellungen", data={"_csrf": tok, "geprueft": [k for k in gem_a if k != "b"]})
     j = c.get("/api/kollisionen?von=2026-07-11&ort=Testdorf").get_json()
     pruefe(j == [], f"ausgeschlossener Verein der Gemeinde wird nicht gemeldet, war {j}")
     pruefe(b"Grillfest" not in c.get("/termine?jahr=2026").data, "Prüfkreis gilt auch für die Markierungen in „Termine“")
-    c.post("/einstellungen", data={"_csrf": tok})
+    c.post("/einstellungen", data={"_csrf": tok, "geprueft": gem_a})
     pruefe(DB.pruefkreis("a") == (set(), set()), "Einstellungen zurückgesetzt")
     als("b")
     pruefe(DB.pruefkreis("b") == (set(), set()), "Einstellungen gelten je Verein")
     als("a")
     for v in ("a", "b", "d"):
         c.post("/demo/freigeben", data={"_csrf": tok, "verein": v})
-    pruefe(DB.freigegeben("a") and not DB.freigegeben("c"), "Freigabe durch VKO (c bleibt ausstehend)")
+    pruefe(DB.freigegeben("a") and not DB.freigegeben("c"), "Kontofreigabe (c bleibt ausstehend)")
     c.post("/entwuerfe/aus-vorjahr", data={"_csrf": tok, "jahr": "2027"})
     pruefe(len(DB.entwuerfe("a", 2027)) == 1, "Vorjahr zweimal erzeugen legt keine Doppel an")
-    pruefe(b"aus dem Vorjahr erzeugen" not in c.get("/termine?jahr=2027").data, "Vorjahr-Knopf weg, wenn alles übernommen")
+    s = c.get("/termine?jahr=2027").data
+    pruefe("Übernehmen</button>".encode() not in s, "Vorjahr-Karte weg, wenn alles übernommen")
+    pruefe("Noch nicht veröffentlicht (1)".encode() in s and b"<h2>Im Kalender</h2>" in s
+           and s.index("Noch nicht veröffentlicht".encode()) < s.index(b"<h2>Im Kalender</h2>"),
+           "Termine: Entwürfe oben, „Im Kalender“ darunter")
+    pruefe(b'data-klappe="neu"' in s and b'id="neu" class="klappe" hidden' in s, "Neuer Termin klappt oben auf")
+    pruefe("Alle veröffentlichen".encode() not in s, "„Alle veröffentlichen“ erst ab zwei Entwürfen")
 
     # Neuer Termin: mehrtägig als Entwurf, einzeln sofort veröffentlicht
     r = c.post("/entwuerfe/neu", data={"_csrf": tok, "datum": "2027-09-03", "datum_bis": "2027-09-05",
@@ -322,9 +348,12 @@ else:
     c.post(f"/runde/{rid}/beitreten", data={"_csrf": tok, "nachweis": runde["link"]})
     pruefe("b" in DB.aktive_teilnehmer(rid), "B ist beigetreten")
     s = c.get(f"/runde/{rid}")
-    pruefe(b"Sommerfest" in s.data and b"Grillfest" in s.data and b"Konflikte am gleichen Tag (1)" in s.data,
+    pruefe(b"Sommerfest" in s.data and b"Grillfest" in s.data and b"Nur Termine mit Konflikt (2)" in s.data,
            "Runde zeigt Entwürfe aller mit Konflikt")
-    pruefe(b"betrifft euch" in s.data, "Konflikt als eigener markiert")
+    pruefe(b"Konflikte am gleichen Tag" not in s.data and b"Normale Ansicht" not in s.data and b'id="gross"' in s.data,
+           "Runde: keine doppelte Konfliktliste, eine Ansicht mit „Große Schrift“")
+    pruefe(b"noch 1 offen" in s.data and b"<th>" not in s.data.split(b'id="teilnehmer"')[1].split(b"Alle Termine")[0],
+           "Teilnehmer als Liste mit einem Status")
     pruefe(b"Sommerfest" not in c.get("/api/kollisionen?verein=b&von=2027-07-10").data, "Entwurf nicht in der Formular-Warnung")
 
     # B kann A's Termin nicht ändern; ändert und bestätigt seinen eigenen in der Runde
@@ -335,12 +364,25 @@ else:
     r = c.post(f"/entwuerfe/{eid_b}", data={"_csrf": tok, "aktion": "speichern", "runde": rid, "datum": "2027-07-17",
                                             "uhrzeit": "19:00", "bezeichnung": "Grillfest", "ort": ""})
     pruefe(r.headers["Location"].startswith(f"/runde/{rid}"), "Änderung aus der Runde springt zur Runde zurück")
-    pruefe(b"Konflikte am gleichen Tag (0)" in c.get(f"/runde/{rid}").data, "Konflikt nach eigener Änderung weg")
+    s = c.get(f"/runde/{rid}").data
+    pruefe(b'id="nur-konflikte"' not in s and b"Keine Termine am gleichen Tag." in s, "Konflikt nach eigener Änderung weg")
     c.post("/entwuerfe/alle", data={"_csrf": tok, "jahr": "2027", "aktion": "bestaetigen", "runde": rid})
     pruefe(all(t["status"] == "bestaetigt" for t in DB.entwuerfe("b", 2027)), "alle eigenen bestätigt")
     c.post(f"/entwuerfe/{eid_b}", data={"_csrf": tok, "aktion": "speichern", "datum": "2027-07-18", "uhrzeit": "19:00",
                                         "bezeichnung": "Grillfest", "ort": ""})
     pruefe(DB.entwurf(eid_b)["status"] == "entwurf", "Änderung hebt Bestätigung auf")
+    c.post(f"/entwuerfe/{eid_b}", data={"_csrf": tok, "aktion": "bestaetigen"})
+    s = c.get("/termine?jahr=2027").data
+    pruefe(b">Best\xc3\xa4tigt<" not in s and b">Ver\xc3\xb6ffentlicht<" not in s and b">Entwurf<" in s,
+           "Termine: nur „Entwurf“ und „Im Kalender“ (Bestätigt nur in der Runde)")
+    pruefe(b">Best\xc3\xa4tigt<" in c.get(f"/runde/{rid}").data, "Runde zeigt „Bestätigt“")
+    pruefe(b'value="bestaetigen"' not in s and b'value="nicht_bestaetigen"' not in s, "Termine: kein Bestätigen-Knopf")
+    pruefe(s.count(f'data-klappe="b{eid_b}"'.encode()) == 1 and f'id="b{eid_b}" class="klappe" hidden'.encode() in s,
+           "Karte: ein Knopf „Bearbeiten“, Formular zugeklappt")
+    karte = s[s.index(f'id="b{eid_b}"'.encode()):]
+    karte = karte[:karte.index(b"</form>")]
+    pruefe(b'value="loeschen"' in karte and b'value="speichern"' in karte, "Löschen steckt im Bearbeiten-Formular")
+    c.post(f"/entwuerfe/{eid_b}", data={"_csrf": tok, "aktion": "nicht_bestaetigen"})
 
     # C (nicht freigegeben) und D per Code
     als("c")
@@ -460,7 +502,40 @@ else:
     pruefe(c.post(f"/runde/{rid}/beitreten", data={"_csrf": tok, "nachweis": neu_r["link"]}).status_code == 403,
            "nach Abschluss kein Beitritt")
     pruefe(c.get("/anmelden").status_code == 200 and c.get("/runden").status_code == 200, "Übersichtsseiten")
+    pruefe("Neues Vereinskonto anlegen".encode() in c.get("/anmelden").data and b"ohne Einladung" not in c.get("/anmelden").data,
+           "Anmeldeseite: „Neues Vereinskonto anlegen“")
     pruefe(c.get("/planung").status_code == 302, "alte Adresse leitet um")
+
+    # Einladung vor der Freigabe: gemerkt, nach der Freigabe Beitritt von „Termine“ aus
+    als("a")
+    r2 = DB.runde(int(c.post("/runden/neu", data={"_csrf": tok, "name": "Einladungstest", "jahr": "2028"})
+                      .headers["Location"].rsplit("/", 1)[1]))
+    r3 = DB.runde(int(c.post("/runden/neu", data={"_csrf": tok, "name": "Erneuert", "jahr": "2028"})
+                      .headers["Location"].rsplit("/", 1)[1]))
+    als("p", neu=True)
+    s = c.get(f"/r/{r2['link']}")
+    pruefe("Beitreten geht erst nach Kontofreigabe".encode() in s.data, "Beitrittsseite: Text ohne VKO")
+    with c.session_transaction() as sitzung:
+        sitzung.pop("code_fehler", None)   # Versuchslimit aus dem Code-Test oben
+    c.post("/runde/beitreten-code", data={"_csrf": tok, "code": DB.code_anzeige(r3["code"])})
+    pruefe({e["id"] for e in DB.offene_einladungen("p")} == {r2["id"], r3["id"]}, "Einladung per Link und Code gemerkt")
+    s = c.get("/termine")
+    pruefe("Einladungstest 2028“ eingeladen".encode() in s.data and b"Jetzt beitreten" not in s.data
+           and b"Nach der Kontofreigabe" in s.data, "vor Freigabe: Hinweis ohne Beitritts-Knopf")
+    pruefe("Einladungstest 2028“ eingeladen".encode() in c.get("/runden").data, "Einladung auch unter „Planungsrunden“")
+    pruefe(b"VKO" not in s.data and b"VKO" not in c.get("/runden").data and b"VKO" not in c.get("/anmelden").data,
+           "nirgends „VKO“ in den Texten")
+    als("a")
+    c.post(f"/runde/{r3['id']}/erneuern", data={"_csrf": tok})
+    c.post("/demo/freigeben", data={"_csrf": tok, "verein": "p"})
+    als("p")
+    s = c.get("/termine")
+    pruefe(b"Jetzt beitreten" in s.data and b"Erneuert 2028" not in s.data,
+           "nach Freigabe: Knopf da, erneuerter Code zählt nicht mehr")
+    e = DB.offene_einladungen("p")[0]
+    c.post(f"/runde/{e['id']}/beitreten", data={"_csrf": tok, "nachweis": e["nachweis"]})
+    pruefe("p" in DB.aktive_teilnehmer(r2["id"]) and DB.offene_einladungen("p") == []
+           and b"Jetzt beitreten" not in c.get("/termine").data, "Beitritt von „Termine“, Hinweis danach weg")
 
 print(f"\n{OK} Prüfungen ok, {len(FEHLER)} Fehler")
 sys.exit(1 if FEHLER else 0)

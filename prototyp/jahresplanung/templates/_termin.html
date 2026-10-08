@@ -5,54 +5,63 @@
 {% macro rueck(runde_id, ansicht_jahr) %}{% if runde_id %}<input type="hidden" name="runde" value="{{ runde_id }}">{% endif %}{% if ansicht_jahr %}<input type="hidden" name="ansicht_jahr" value="{{ ansicht_jahr }}">{% endif %}{% endmacro %}
 
 {% macro termin_karte(t, eigen, csrf, STATUS, STUFE_TAG, zeit_text, runde_id=None, aenderbar=True, darf=False, farbe=None, verein_name="", ansicht_jahr=None) %}
+{% set st = 'entwurf' if (t.status == 'bestaetigt' and not runde_id) else t.status %}
 <div id="t{{ t._eid }}" class="card termin {{ t.status }} {{ 'konflikt' if t._konflikt_tag else ('we' if t._konflikte else '') }} {{ 'fremd' if not eigen }}">
   <div class="kopf">
     <b>{{ t.datum|wochentag_kurz }} {{ t.datum|tm }}{{ t.datum[:4] }}{% if t.uhrzeit %}, {{ zeit_text(t) }}{% endif %}</b>
     <span>{{ t.bezeichnung }}</span>
-    <span class="chip {{ t.status }}">{{ STATUS[t.status] }}</span>
+    <span class="chip {{ st }}">{{ STATUS[st] }}</span>
   </div>
   {% if not eigen %}<div class="hint"><span class="vfarbe f{{ farbe or 0 }}"></span>{{ verein_name }}</div>{% endif %}
   {% if t.ort %}<div class="hint">{{ t.ort }}</div>{% endif %}
   {% if eigen and t.regel %}<div class="hint">{{ t.regel }}</div>{% endif %}
-  {% for k in t._konflikte %}
-    <div class="konf"><span class="{{ 'tag' if k.stufe == STUFE_TAG else 'we' }}">●</span>
-      {{ 'Gleicher Tag' if k.stufe == STUFE_TAG else 'Gleiches Wochenende' }}: {{ k.datum|wochentag_kurz }} {{ k.datum|tm }} {{ k.uhrzeit }} {{ k.bezeichnung }} – {{ k.verein_name }}{% if k.quelle == 'Entwurf' %} (Entwurf){% endif %}{% if k.nachbar %} · Nachbarschaft{% endif %}</div>
-  {% endfor %}
-  {% if eigen and t.status == 'kalender' %}
-    <div class="hint" style="margin-top:6px">Steht schon im Vereinskalender – ändern wie bisher über „Termin bearbeiten“.</div>
-  {% elif eigen and aenderbar %}
-    {% if t.status != 'veroeffentlicht' %}
-    <div class="aktionen kompakt">
-      <form method="post" action="{{ url_for('entwurf_aktion', eid=t._eid) }}">{{ csrf()|safe }}{{ rueck(runde_id, ansicht_jahr) }}
+  {% if t._konflikte %}
+  <div class="konf-liste">
+    {% for k in t._konflikte %}{% set tag = k.stufe == STUFE_TAG %}
+    <div class="konf-karte {{ 'tag' if tag else 'we' }}">
+      <div><b>{{ k.datum|wochentag_kurz }} {{ k.datum|tm }}{% if k.uhrzeit %}, {{ k.uhrzeit }}{% endif %}</b> {{ k.bezeichnung }}</div>
+      <div class="hint">{{ k.verein_name }}
+        <span class="chip {{ 'tag' if tag else 'we' }}">{{ 'Gleicher Tag' if tag else 'Gleiches Wochenende' }}</span>{% if k.quelle == 'Entwurf' %} <span class="chip entwurf">Entwurf</span>{% endif %}{% if k.nachbar %} <span class="chip nachbar">Nachbarschaft</span>{% endif %}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if eigen and aenderbar %}
+  <div class="aktionen kompakt">
+    <button class="btn sek klein" type="button" data-klappe="b{{ t._eid }}">Bearbeiten</button>
+    {% if t.status in ('entwurf', 'bestaetigt') %}
+      {% if runde_id %}<form method="post" action="{{ url_for('entwurf_aktion', eid=t._eid) }}">{{ csrf()|safe }}{{ rueck(runde_id, ansicht_jahr) }}
         {% if t.status == 'entwurf' %}<button class="btn klein" name="aktion" value="bestaetigen">Bestätigen</button>
         {% else %}<button class="btn sek klein" name="aktion" value="nicht_bestaetigen">Bestätigung zurücknehmen</button>{% endif %}
-      </form>
+      </form>{% endif %}
       {% if darf %}<form method="post" action="{{ url_for('entwurf_aktion', eid=t._eid) }}" onsubmit="return confirm('Termin veröffentlichen? Er erscheint dann im Vereinskalender.')">{{ csrf()|safe }}{{ rueck(runde_id, ansicht_jahr) }}
-        <button class="btn sek klein" name="aktion" value="veroeffentlichen">Veröffentlichen</button></form>{% endif %}
-      <form method="post" action="{{ url_for('entwurf_aktion', eid=t._eid) }}" onsubmit="return confirm('Entwurf löschen?')">{{ csrf()|safe }}{{ rueck(runde_id, ansicht_jahr) }}
-        <button class="btn sek klein" name="aktion" value="loeschen">Löschen</button></form>
-    </div>
-    <details style="margin-top:8px"><summary>Ändern</summary>
-      <form class="kollision-pruefen" data-eid="{{ t._eid }}" method="post" action="{{ url_for('entwurf_aktion', eid=t._eid) }}">{{ csrf()|safe }}{{ rueck(runde_id, ansicht_jahr) }}
-        <div class="zeile">
-          <div><label>Datum</label><input type="date" name="datum" value="{{ t.datum }}" required></div>
-          <div><label>Uhrzeit</label><input type="time" name="uhrzeit" value="{{ t.uhrzeit }}"></div>
-          <div><label>bis</label><input type="time" name="uhrzeit_bis" value="{{ t.uhrzeit_bis }}"></div>
-        </div>
-        <label>Bezeichnung</label><input name="bezeichnung" value="{{ t.bezeichnung }}" maxlength="200" required>
-        <label>Ort</label><input name="ort" value="{{ t.ort }}" maxlength="200">
-        <div class="kollision-hinweis" aria-live="polite"></div>
-        <p class="hint">Speichern hebt eine Bestätigung auf – danach neu bestätigen.</p>
-        <div class="aktionen"><button class="btn" name="aktion" value="speichern">Speichern</button></div>
-      </form>
-    </details>
-    {% else %}
-    <div class="aktionen kompakt">
-      <span class="hint">veröffentlicht am {{ t.veroeffentlicht_am[:10]|tm }}{{ t.veroeffentlicht_am[:4] }} – Änderungen live über „Termin bearbeiten“.</span>
+        <button class="btn {{ 'sek' if runde_id }} klein" name="aktion" value="veroeffentlichen">Veröffentlichen</button></form>{% endif %}
+    {% elif t.status == 'veroeffentlicht' %}
       <form method="post" action="{{ url_for('entwurf_aktion', eid=t._eid) }}">{{ csrf()|safe }}{{ rueck(runde_id, ansicht_jahr) }}
         <button class="btn sek klein" name="aktion" value="zurueckziehen" title="Nur im Prototyp">Zurück zu Entwurf (Prototyp)</button></form>
-    </div>
     {% endif %}
+  </div>
+  {% if t.status in ('entwurf', 'bestaetigt') %}
+  <div id="b{{ t._eid }}" class="klappe" hidden>
+    <form class="kollision-pruefen" data-eid="{{ t._eid }}" method="post" action="{{ url_for('entwurf_aktion', eid=t._eid) }}">{{ csrf()|safe }}{{ rueck(runde_id, ansicht_jahr) }}
+      <div class="zeile">
+        <div><label>Datum</label><input type="date" name="datum" value="{{ t.datum }}" required></div>
+        <div><label>Uhrzeit</label><input type="time" name="uhrzeit" value="{{ t.uhrzeit }}"></div>
+        <div><label>bis</label><input type="time" name="uhrzeit_bis" value="{{ t.uhrzeit_bis }}"></div>
+      </div>
+      <label>Bezeichnung</label><input name="bezeichnung" value="{{ t.bezeichnung }}" maxlength="200" required>
+      <label>Ort</label><input name="ort" value="{{ t.ort }}" maxlength="200">
+      <div class="kollision-hinweis" aria-live="polite"></div>
+      {% if runde_id and t.status == 'bestaetigt' %}<p class="hint">Nach dem Speichern bitte neu bestätigen.</p>{% endif %}
+      <div class="aktionen">
+        <button class="btn" name="aktion" value="speichern">Speichern</button>
+        <button class="btn sek" name="aktion" value="loeschen" formnovalidate onclick="return confirm('Termin löschen?')">Löschen</button>
+      </div>
+    </form>
+  </div>
+  {% else %}
+  <div id="b{{ t._eid }}" class="klappe hint" hidden style="margin-top:8px">Im Prototyp nicht möglich – live öffnet sich hier das bekannte Formular „Termin bearbeiten“.</div>
+  {% endif %}
   {% endif %}
 </div>
 {% endmacro %}

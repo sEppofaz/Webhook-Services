@@ -3,11 +3,11 @@
 Start:  ~/.venvs/vko-jahresplanung/bin/python prototyp/jahresplanung/app.py
 Dann:   http://localhost:5050
 
-Aufbau (Josef 2026-10-05) – Tabs: Termine · Einstellungen · Planungsmodul:
+Aufbau (Josef 2026-10-05) – Tabs: Termine · Planungsrunden · Einstellungen:
 - Startseite nach dem Anmelden: „Termine“ – alle Termine des Vereins (im Kalender + Entwürfe). Neuer Termin mit
   Kollisionswarnung beim Tippen; „Veröffentlichen“ oder „Als Entwurf speichern“. Vorjahres-Vorlage als Knopf.
 - „Einstellungen“: mit welchen Vereinen auf Überschneidungen geprüft wird (Gemeinde automatisch + dazu/ohne).
-- „Planungsmodul“ (Planungsrunden): jeder freigegebene Vereinsadmin startet eine (Organisator) und lädt per Link oder Code ein;
+- „Planungsrunden“: jeder freigegebene Vereinsadmin startet eine (Organisator) und lädt per Link oder Code ein;
   Teilnehmer sehen alle Entwürfe mit Konflikten und ändern/bestätigen ihre eigenen. Verlauf + Ergebnis-PDF.
 Josef gibt jedes neue Konto persönlich frei (ADR-026). Schreibt nie in den Live-Kalender. Daten: Momentaufnahme der öffentlichen /api/termine.
 """
@@ -263,13 +263,15 @@ def termine_seite(key):
     sicht = [t for t in alle if (t["datum"][:4] == str(jahr) if jahr else t["datum"] >= heute)]
     _pruefen(key, sicht)
     eigene = [t for t in sicht if t["status"] in ("entwurf", "bestaetigt")]
+    im_kalender = [t for t in sicht if t["status"] not in ("entwurf", "bestaetigt")]
     vorlage_jahr = jahr or date.today().year + 1
     jahre = sorted({int(t["datum"][:4]) for t in alle} | {date.today().year, date.today().year + 1})
-    return render_template("termine.html", key=key, jahr=jahr, jahre=jahre, monate=_nach_monat(sicht),
-                           n_offen=len(eigene), n_unbestaetigt=sum(1 for t in eigene if t["status"] == "entwurf"),
+    return render_template("termine.html", key=key, jahr=jahr, jahre=jahre, n_offen=len(eigene),
+                           monate_offen=_nach_monat(eigene), monate_kalender=_nach_monat(im_kalender),
                            vorlage_jahr=vorlage_jahr,
                            vorlage_n=len(db.offene_vorlage(key, D.vorschlaege(vorlage_jahr))), konto=db.konto(key),
                            darf=db.freigegeben(key), runden=[r for r in db.runden_des_vereins(key) if r["status"] == "offen"],
+                           einladungen=db.offene_einladungen(key),
                            fehler=request.args.get("fehler", ""), meldung=request.args.get("meldung", ""),
                            heute=heute, daten_ab=D.daten_ab())
 
@@ -355,7 +357,7 @@ def entwurf_neu(key):
         return _zurueck(None, "neu", fehler=fehler)
     sofort = request.form.get("aktion") == "veroeffentlichen"
     if sofort and not db.freigegeben(key):
-        abort(403, "Veröffentlichen erst nach Freigabe des Kontos – als Entwurf speichern geht schon.")
+        abort(403, "Veröffentlichen erst nach Kontofreigabe – als Entwurf speichern geht schon.")
     ids = [db.entwurf_neu(key, {**felder, "datum": tag}) for tag in tage]
     if sofort:
         db.veroeffentlichen(key, ids)
@@ -382,7 +384,7 @@ def entwurf_aktion(key, eid):
             _verlauf(key, jahr, "bestätigt" if aktion == "bestaetigen" else "Bestätigung zurückgenommen", name)
     elif aktion == "veroeffentlichen":
         if not db.freigegeben(key):
-            abort(403, "Veröffentlichen erst nach Freigabe des Kontos.")
+            abort(403, "Veröffentlichen erst nach Kontofreigabe.")
         if db.veroeffentlichen(key, [eid]):
             _verlauf(key, jahr, "veröffentlicht", name)
     elif aktion == "zurueckziehen":
@@ -419,7 +421,7 @@ def entwuerfe_alle(key):
     jahre = {int(t["datum"][:4]) for t in offen}
     if request.form.get("aktion") == "veroeffentlichen":
         if not db.freigegeben(key):
-            abort(403, "Veröffentlichen erst nach Freigabe des Kontos.")
+            abort(403, "Veröffentlichen erst nach Kontofreigabe.")
         n = db.veroeffentlichen(key, [t["_eid"] for t in offen])
         for j in jahre:
             _verlauf(key, j, "alle veröffentlicht", f"{sum(1 for t in offen if t['datum'][:4] == str(j))} Termine")
@@ -450,17 +452,31 @@ def einstellungen(key):
     labels = D.daten()["labels"]
     gem, lk = D.sitz(key)
     eigene_gemeinde = [(k, n) for k, n in D.vereine_der_gemeinde(gem, lk) if k != key] if gem else []
+    gem_keys = {k for k, _ in eigene_gemeinde}
     if request.method == "POST":
-        dazu = {k for k in request.form.getlist("dazu") if k in labels}
-        ohne = {k for k in request.form.getlist("ohne") if k in {x for x, _ in eigene_gemeinde}}
-        db.pruefkreis_setzen(key, dazu, ohne)
+        # Eine Liste mit Haken (Josef 2026-10-07: einfache Abläufe). Gespeichert wird weiter als Abweichung von
+        # der Gemeinde – so zählen Vereine, die später in der Gemeinde dazukommen, automatisch mit.
+        geprueft = {k for k in request.form.getlist("geprueft") if k in labels and k != key}
+        db.pruefkreis_setzen(key, geprueft - gem_keys, gem_keys - geprueft)
         return redirect(url_for("einstellungen", meldung="Gespeichert. Gilt ab sofort für alle Warnungen."))
     dazu, ohne = db.pruefkreis(key)
-    gruppen = [{**g, "vereine": [x for x in g["vereine"] if x[0] != key and x[0] not in {k for k, _ in eigene_gemeinde}]}
+    gruppen = [{**g, "vereine": [x for x in g["vereine"] if x[0] != key and x[0] not in gem_keys]}
                for g in D.vereine_gruppiert()]
-    return render_template("einstellungen.html", gemeinde=gem, landkreis=lk, eigene_gemeinde=eigene_gemeinde,
-                           gruppen=[g for g in gruppen if g["vereine"]], dazu=dazu, ohne=ohne, labels=labels,
+    if eigene_gemeinde:
+        gruppen.insert(0, {"gemeinde": f"{gem} – eure Gemeinde", "landkreis": "", "vereine": eigene_gemeinde})
+    return render_template("einstellungen.html", gemeinde=gem, gruppen=[g for g in gruppen if g["vereine"]],
+                           geprueft=(gem_keys - ohne) | dazu, dazu=dazu, labels=labels, crawler_aus=db.crawler_aus(key),
                            meldung=request.args.get("meldung", ""))
+
+
+@app.post("/einstellungen/quellen")
+@verein_login
+def einstellungen_quellen(key):
+    """Wer trägt die Termine ein: nur der Verein oder zusätzlich Gemeinde-Webseiten (live: POST /verein/crawler)."""
+    aus = request.form.get("aus") == "1"
+    db.crawler_setzen(key, aus)
+    return redirect(url_for("einstellungen", meldung="Gespeichert. Termine kommen ab jetzt nur noch von euch." if aus
+                            else "Gespeichert. Termine von Gemeinde-Webseiten werden wieder ergänzt.") + "#quellen")
 
 
 # ── 5. Planungsrunden ────────────────────────────────────────────────────────
@@ -490,7 +506,7 @@ def runden_seite(key):
     aktiv = db.runden_des_vereins(key)
     nur_ergebnis = [db.runde(rid) for rid in ergebnisse if rid not in {r["id"] for r in aktiv}]
     return render_template("runden.html", runden=aktiv, nur_ergebnis=[r for r in nur_ergebnis if r],
-                           ergebnisse=ergebnisse, darf=db.freigegeben(key),
+                           ergebnisse=ergebnisse, darf=db.freigegeben(key), einladungen=db.offene_einladungen(key),
                            jahr=date.today().year + 1, fehler=request.args.get("fehler", ""),
                            code=request.args.get("code", ""))
 
@@ -499,7 +515,7 @@ def runden_seite(key):
 @verein_login
 def runde_neu(key):
     if not db.freigegeben(key):
-        abort(403, "Planungsrunden erst nach Freigabe des Kontos.")
+        abort(403, "Planungsrunden erst nach Kontofreigabe.")
     name = request.form.get("name", "").strip()[:TEXT_MAX]
     try:
         jahr = int(request.form.get("jahr", ""))
@@ -510,8 +526,11 @@ def runde_neu(key):
     return redirect(url_for("runde_seite", runde_id=db.runde_starten(name, jahr, key)))
 
 
-def _beitritt_seite(key, r):
-    """Gemeinsame Bestätigungsseite für Link und Code – beitreten nur per aktivem Klick."""
+def _beitritt_seite(key, r, nachweis):
+    """Gemeinsame Bestätigungsseite für Link und Code – beitreten nur per aktivem Klick.
+    Noch nicht freigegeben → Einladung merken, damit sie nach der Freigabe auf „Termine“ erscheint."""
+    if not db.freigegeben(key) and r["status"] == "offen":
+        db.einladung_merken(key, r["id"], nachweis)
     teil = {t["verein_key"]: t for t in db.teilnehmer(r["id"])}
     return render_template("beitreten.html", r=r, darf=db.freigegeben(key),
                            status=(teil[key]["aktiv"] if key in teil else None),
@@ -524,7 +543,7 @@ def runde_link(key, link):
     r = db.runde_per_link(link)
     if not r:
         abort(404, "Diesen Einladungslink gibt es nicht (mehr). Bitte beim Organisator nachfragen.")
-    return _beitritt_seite(key, r)
+    return _beitritt_seite(key, r, r["link"])
 
 
 @app.post("/runde/beitreten-code")
@@ -536,7 +555,7 @@ def runde_code(key):
     if not r:
         session["code_fehler"] = session.get("code_fehler", []) + [datetime.now().timestamp()]
         return redirect(url_for("runden_seite", fehler="Code nicht gefunden.", code=request.form.get("code", "")[:12]))
-    return _beitritt_seite(key, r)
+    return _beitritt_seite(key, r, r["code"])
 
 
 @app.post("/runde/<int:runde_id>/beitreten")
@@ -548,7 +567,7 @@ def runde_beitreten(key, runde_id):
     if not r or nachweis not in (r["link"], r["code"]):
         abort(403, "Einladung nicht (mehr) gültig – Link oder Code beim Organisator neu holen.")
     if not db.freigegeben(key):
-        abort(403, "Beitreten erst nach Freigabe eures Kontos durch VKO.")
+        abort(403, "Beitreten geht erst nach Kontofreigabe.")
     if r["status"] != "offen":
         abort(403, "Diese Planungsrunde ist abgeschlossen.")
     ergebnis = db.beitreten(runde_id, key)
@@ -594,14 +613,15 @@ def _runde_daten(r) -> tuple[list[dict], list[dict], dict]:
 @verein_login
 def runde_seite(key, runde_id):
     r = _runde_fuer(key, runde_id)
-    termine, paare, farben = _runde_daten(r)
+    termine, _, farben = _runde_daten(r)
     stand = defaultdict(lambda: {"entwurf": 0, "bestaetigt": 0, "veroeffentlicht": 0})
     for t in termine:
         stand[t["verein"]][t["status"]] += 1
     return render_template("runde.html", r=r, key=key, organisator=(r["organisator"] == key),
                            stand_kennung=db.stand_version(runde_id, r["jahr"]), ergebnisse=db.ergebnisse(runde_id),
                            verlauf=list(reversed(db.protokoll_liste(runde_id)))[:200],
-                           teilnehmer=db.teilnehmer(r["id"]), stand=stand, paare=paare, farben=farben,
+                           teilnehmer=db.teilnehmer(r["id"]), stand=stand, farben=farben,
+                           n_konflikt=sum(1 for t in termine if t.get("_konflikt_tag")),
                            labels=D.daten()["labels"], monate=_nach_monat(termine),
                            code=db.code_anzeige(r["code"]), basis=request.host_url.rstrip("/"),
                            vorlage_n=len(db.offene_vorlage(key, D.vorschlaege(r["jahr"]))),
@@ -656,7 +676,7 @@ def runde_status(key, runde_id):
         version = db.ergebnis_speichern(runde_id, key, _ergebnis_stand(r, key))
         db.runde_status(runde_id, "abgeschlossen")
         return redirect(url_for("runde_seite", runde_id=runde_id,
-                                meldung=f"Runde abgeschlossen. Das Ergebnis (Version {version}) steht jetzt bei jedem beteiligten Verein im „Planungsmodul“."))
+                                meldung=f"Runde abgeschlossen. Das Ergebnis (Version {version}) steht jetzt bei jedem beteiligten Verein unter „Planungsrunden“."))
     if request.form.get("aktion") == "oeffnen" and r["status"] != "offen":
         db.runde_status(runde_id, "offen")
         db.protokoll(runde_id, key, "Runde wieder geöffnet")
@@ -691,7 +711,7 @@ def _ergebnis_stand(r, key) -> dict:
 
 @app.get("/archiv")
 def archiv():
-    """Früheres eigenes Archiv – die Ergebnisse stehen jetzt bei der Runde im „Planungsmodul“."""
+    """Früheres eigenes Archiv – die Ergebnisse stehen jetzt bei der Runde unter „Planungsrunden“."""
     return redirect(url_for("runden_seite"))
 
 

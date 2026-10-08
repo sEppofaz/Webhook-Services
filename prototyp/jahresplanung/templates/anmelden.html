@@ -5,7 +5,7 @@
 {% if fehler %}<div class="warn rot">{{ fehler }}</div>{% endif %}
 <p><b>Verein in der Liste wählen und rechts auf „Anmelden“ tippen.</b></p>
 <p class="hint">Live ist das der normale Vereins-Login mit E-Mail und Passwort. Im Prototyp wählst du einfach den Verein.
-Jedes neue Konto wartet auf die <b>persönliche Freigabe durch VKO</b> (live: Admin-App oder Telegram, wie heute).</p>
+Jedes neue Konto wartet auf die <b>persönliche Kontofreigabe</b> (live: Admin-App oder Telegram, wie heute).</p>
 
 <h2>Vereine mit Konto</h2>
 <div class="card tabelle-wrap kompakt"><table>
@@ -16,22 +16,22 @@ Jedes neue Konto wartet auf die <b>persönliche Freigabe durch VKO</b> (live: Ad
     <td style="display:flex;gap:6px;justify-content:flex-end">
       {% if k.freigabe == 'ausstehend' %}
       <form method="post" action="{{ url_for('demo_freigeben') }}">{{ csrf()|safe }}<input type="hidden" name="verein" value="{{ key }}">
-        <button class="btn sek klein" title="Simuliert deine Freigabe in der Admin-App bzw. per Telegram">Freigeben (VKO)</button></form>{% endif %}
+        <button class="btn sek klein" title="Simuliert deine Freigabe in der Admin-App bzw. per Telegram">Konto freigeben</button></form>{% endif %}
       <form method="post" action="{{ url_for('anmelden_post') }}">{{ csrf()|safe }}<input type="hidden" name="verein" value="{{ key }}"><input type="hidden" name="weiter" value="{{ weiter }}">
         <button class="btn klein">Anmelden</button></form></td></tr>
   {% else %}
-  <tr><td colspan="3" class="hint">Noch keine. Über die Einladung eines Planungsraums oder unten registrieren.</td></tr>
+  <tr><td colspan="3" class="hint">Noch keine – unten ein Konto anlegen.</td></tr>
   {% endfor %}
 </table></div>
 
-<h2>Registrieren ohne Einladung</h2>
+<h2>Neues Vereinskonto anlegen</h2>
 <form class="card" method="post" action="{{ url_for('anmelden_post') }}">{{ csrf()|safe }}
   <input type="hidden" name="aktion" value="konto"><input type="hidden" name="weiter" value="{{ weiter }}">
   <label>Verein</label>
   <select name="verein">
     {% for g in gruppen %}<optgroup label="{{ g.gemeinde }}">{% for k, n in g.vereine %}{% if k not in konten %}<option value="{{ k }}">{{ n }}</option>{% endif %}{% endfor %}</optgroup>{% endfor %}
   </select>
-  <p class="hint">Bis zur Freigabe kann der Verein eigene Entwürfe anlegen – aber weder veröffentlichen noch an Planungsrunden teilnehmen.</p>
+  <p class="hint">Bis zur Kontofreigabe könnt ihr schon Entwürfe anlegen. Kommt ihr über einen Einladungslink, findet ihr die Einladung danach unter „Termine“.</p>
   <button class="btn">Konto anlegen und anmelden</button>
 </form>
 {% endblock %}

@@ -1,11 +1,13 @@
 {% extends "base.html" %}
 {% from "_termin.html" import termin_karte, neuer_termin with context %}
+{% from "_einladung.html" import einladungen_karten %}
+{% from "_export.html" import download_knoepfe with context %}
 {% block titel %}Termine{% endblock %}
 {% block inhalt %}
 <div class="zeile" style="align-items:end">
   <div style="flex:3 1 300px">
     <h1>Termine</h1>
-    <p class="hint">{{ angemeldet_name }}{% if konto.freigabe != 'vko' %} · {{ FREIGABE[konto.freigabe] }}{% endif %}</p>
+    <p class="hint">{{ angemeldet_name }}</p>
   </div>
   <form method="get" class="zeile" style="flex:0 1 300px;margin:0">
     <div><label>Anzeigen</label>
@@ -18,7 +20,9 @@
 
 {% if fehler %}<div class="warn rot">{{ fehler }}</div>{% endif %}
 {% if meldung %}<div class="ok">{{ meldung }}</div>{% endif %}
-{% if konto.freigabe != 'vko' %}<div class="warn">VKO prüft eure Anmeldung noch. Entwürfe könnt ihr schon anlegen – veröffentlichen und an Planungsrunden teilnehmen erst nach der Freigabe.</div>{% endif %}
+{% if konto.freigabe != 'vko' %}<div class="warn">Eure Anmeldung wird noch geprüft. Entwürfe könnt ihr schon anlegen – veröffentlichen und an Planungsrunden teilnehmen erst nach Kontofreigabe.</div>{% endif %}
+
+{{ einladungen_karten(einladungen, darf, csrf) }}
 
 {% for r in runden %}
   <div class="card zeile" style="align-items:center">
@@ -29,44 +33,47 @@
 {% endfor %}
 
 <div class="aktionen" style="margin:10px 0">
-  <a class="btn" href="#neu">Neuer Termin</a>
-  <a class="btn sek" href="#hochladen">Terminplan hochladen</a>
-  {% if vorlage_n %}
-  <form method="post" action="{{ url_for('entwuerfe_aus_vorjahr') }}">{{ csrf()|safe }}<input type="hidden" name="jahr" value="{{ vorlage_jahr }}">{% if jahr %}<input type="hidden" name="ansicht_jahr" value="{{ jahr }}">{% endif %}
-    <button class="btn sek">Entwürfe {{ vorlage_jahr }} aus dem Vorjahr erzeugen ({{ vorlage_n }})</button></form>
-  {% endif %}
-  {% if n_unbestaetigt %}
-  <form method="post" action="{{ url_for('entwuerfe_alle') }}">{{ csrf()|safe }}{% if jahr %}<input type="hidden" name="jahr" value="{{ jahr }}"><input type="hidden" name="ansicht_jahr" value="{{ jahr }}">{% endif %}
-    <button class="btn sek" name="aktion" value="bestaetigen">Alle {{ n_unbestaetigt }} Entwürfe bestätigen</button></form>
-  {% endif %}
-  {% if darf and n_offen %}
-  <form method="post" action="{{ url_for('entwuerfe_alle') }}" onsubmit="return confirm('Alle {{ n_offen }} Entwürfe veröffentlichen? Sie erscheinen dann im Vereinskalender.')">{{ csrf()|safe }}{% if jahr %}<input type="hidden" name="jahr" value="{{ jahr }}"><input type="hidden" name="ansicht_jahr" value="{{ jahr }}">{% endif %}
-    <button class="btn sek" name="aktion" value="veroeffentlichen">Alle {{ n_offen }} Entwürfe veröffentlichen</button></form>
-  {% endif %}
+  <button class="btn" type="button" data-klappe="neu">Neuer Termin</button>
+  <button class="btn sek" type="button" data-klappe="hochladen">Terminplan hochladen</button>
 </div>
-<p class="hint"><span class="chip kalender">Im Kalender</span> steht schon öffentlich · <span class="chip entwurf">Entwurf</span> noch in Planung ·
-  <span class="chip bestaetigt">Bestätigt</span> steht so (sichtbar in Planungsrunden) · <span class="chip veroeffentlicht">Veröffentlicht</span> neu im Kalender.
-  Rot/gelb markiert: am gleichen Tag bzw. Wochenende hat ein anderer Verein etwas – geprüft wie in den <a href="{{ url_for('einstellungen') }}">Einstellungen</a>.</p>
-{% if daten_ab and (jahr or heute[:4]|int + 1) == daten_ab.year + 1 and daten_ab.month > 1 %}
-<p class="hint">Hinweis: Termine von Januar bis April {{ daten_ab.year }} kennen wir nicht – für {{ daten_ab.year + 1 }} bitte ergänzen (live auch per Upload eures alten Jahresplans).</p>
+<div id="neu" class="klappe" hidden>{{ neuer_termin(csrf, jahr, darf=darf, ansicht_jahr=jahr) }}</div>
+<div id="hochladen" class="klappe card" hidden>
+  <p style="margin-top:0">PDF, Foto (JPG/PNG/HEIC) oder Excel-Vorlage – die KI liest die Termine aus, ihr prüft sie vor dem Speichern. 3 Uploads pro Tag.</p>
+  <p class="hint" style="margin-bottom:0"><span class="chip">aus dem heutigen Dashboard</span> Im Prototyp nicht nachgebaut – live die bestehende Seite <code>/verein/upload</code> samt Excel-Vorlage, nur hierher verschoben.</p>
+</div>
+
+{% if vorlage_n %}
+<div class="card zeile" style="align-items:center">
+  <div style="flex:3 1 260px"><b>Für {{ vorlage_jahr }} könnt ihr {{ vorlage_n }} {{ 'Termin' if vorlage_n == 1 else 'Termine' }} aus {{ vorlage_jahr - 1 }} übernehmen</b>
+    <div class="hint">Sie kommen als Entwurf dazu – Datum passend verschoben, z. B. „2. Samstag im Juli“. Danach prüfen und veröffentlichen.
+    {% if daten_ab and vorlage_jahr == daten_ab.year + 1 and daten_ab.month > 1 %}Januar bis April {{ daten_ab.year }} fehlen – bitte selbst ergänzen.{% endif %}</div></div>
+  <form method="post" action="{{ url_for('entwuerfe_aus_vorjahr') }}" style="flex:0 0 auto;margin:0">{{ csrf()|safe }}<input type="hidden" name="jahr" value="{{ vorlage_jahr }}">{% if jahr %}<input type="hidden" name="ansicht_jahr" value="{{ jahr }}">{% endif %}
+    <button class="btn">Übernehmen</button></form>
+</div>
 {% endif %}
 
-{% for monat, liste in monate %}
-  <h2>{{ monat }}</h2>
+{% if monate_offen %}
+<div class="zeile" style="align-items:center;margin-top:20px">
+  <h2 style="flex:3 1 260px;margin:0">Noch nicht veröffentlicht ({{ n_offen }})</h2>
+  {% if darf and n_offen > 1 %}
+  <form method="post" action="{{ url_for('entwuerfe_alle') }}" style="flex:0 0 auto;margin:0" onsubmit="return confirm('Alle {{ n_offen }} Entwürfe veröffentlichen? Sie erscheinen dann im Vereinskalender.')">{{ csrf()|safe }}{% if jahr %}<input type="hidden" name="jahr" value="{{ jahr }}"><input type="hidden" name="ansicht_jahr" value="{{ jahr }}">{% endif %}
+    <button class="btn sek" name="aktion" value="veroeffentlichen">Alle veröffentlichen</button></form>
+  {% endif %}
+</div>
+<p class="hint">Nur für euch sichtbar – und für die Vereine eurer Planungsrunden.</p>
+{% for monat, liste in monate_offen %}
+  <h3 class="monat">{{ monat }}</h3>
+  {% for t in liste %}{{ termin_karte(t, True, csrf, STATUS, STUFE_TAG, zeit_text, darf=darf, ansicht_jahr=jahr) }}{% endfor %}
+{% endfor %}
+{% endif %}
+
+<h2>Im Kalender</h2>
+{% for monat, liste in monate_kalender %}
+  <h3 class="monat">{{ monat }}</h3>
   {% for t in liste %}{{ termin_karte(t, True, csrf, STATUS, STUFE_TAG, zeit_text, darf=darf, ansicht_jahr=jahr) }}{% endfor %}
 {% else %}
   <p class="hint">{% if jahr %}Keine Termine in {{ jahr }}.{% else %}Keine kommenden Termine.{% endif %}</p>
 {% endfor %}
-
-<h2 id="neu">Neuer Termin</h2>
-{{ neuer_termin(csrf, jahr, darf=darf, ansicht_jahr=jahr) }}
-
-<h2 id="hochladen">Terminplan hochladen</h2>
-<div class="card">
-  <p style="margin-top:0">PDF, Foto (JPG/PNG/HEIC) oder Excel-Vorlage – die KI liest die Termine aus, ihr prüft sie vor dem Speichern.
-  3 Uploads pro Tag. Für die Jahresplanung: den Plan des Vorjahres hochladen, wenn Termine fehlen.</p>
-  <p class="hint" style="margin-bottom:0"><span class="chip">aus dem heutigen Dashboard</span> Im Prototyp nicht nachgebaut – live die bestehende Seite <code>/verein/upload</code> samt Excel-Vorlage, nur hierher verschoben.</p>
-</div>
 
 <details class="card">
   <summary style="font-size:15px;font-weight:600">Hilfe &amp; FAQ</summary>
@@ -78,8 +85,6 @@
 </details>
 
 <h2>Herunterladen</h2>
-<div class="exporte">
-  {% for f, (name_f, _) in FORMATE.items() %}<a class="btn sek klein" href="{{ url_for('termine_export', fmt=f, jahr=jahr) }}">{{ name_f }}</a>{% endfor %}
-</div>
+{{ download_knoepfe('termine_export', {'jahr': jahr} if jahr else {}) }}
 <p class="hint">Die angezeigten Termine ({{ jahr if jahr else 'ab heute' }}).</p>
 {% endblock %}

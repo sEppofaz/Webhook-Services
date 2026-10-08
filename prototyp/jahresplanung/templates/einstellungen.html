@@ -19,45 +19,31 @@
 {{ platzhalter("Mitglieder", "Weitere Vereinsadmins oder Mitglieder einladen und entfernen (max. 3).", "/verein/mitglieder") }}
 {{ platzhalter("Passwort ändern", "Neues Passwort setzen; alle anderen Anmeldungen werden beendet.", "/verein/passwort") }}
 
+<h2 id="quellen">Wer trägt eure Termine ein?</h2>
+<div class="card zeile" style="align-items:center">
+  <div style="flex:3 1 280px">
+    {% if crawler_aus %}<b>Nur wir selbst.</b>
+    <div class="hint">Termine von Gemeinde-Webseiten (z. B. heimat-info.de) werden nicht mehr übernommen. Bestehende Termine bleiben.</div>
+    {% else %}<b>Selber – fehlende Termine von Gemeinde-Webseiten werden ergänzt</b> (z. B. heimat-info.de, einmal pro Woche).
+    <div class="hint">Pflegt ihr alles selbst, schaltet das ab – sonst können Termine doppelt auftauchen.</div>{% endif %}
+  </div>
+  <form method="post" action="{{ url_for('einstellungen_quellen') }}" style="flex:0 0 auto;margin:0">{{ csrf()|safe }}
+    <input type="hidden" name="aus" value="{{ '0' if crawler_aus else '1' }}">
+    <button class="btn sek">{{ 'Gemeinde-Webseiten wieder mitnutzen' if crawler_aus else 'Nur noch selbst eintragen' }}</button></form>
+</div>
+
 <form method="post">{{ csrf()|safe }}
 <h2>Überschneidungen prüfen mit …</h2>
 <div class="card">
-  <p style="margin-top:0"><b>Automatisch:</b> alle Vereine {% if gemeinde %}der Gemeinde <b>{{ gemeinde }}</b>{% else %}eurer Gemeinde{% endif %} – nach Ort des Termins und Vereinssitz, auch Vereine, die später dazukommen.</p>
-  <p class="hint">Gilt für die Warnung beim Anlegen und Ändern und für die Markierungen in „Termine“. In Planungsrunden zählen immer alle Teilnehmer.</p>
+  <p style="margin-top:0">Haken = beim Anlegen eines Termins wird gewarnt, wenn dieser Verein am gleichen Tag oder Wochenende etwas hat.
+  {% if gemeinde %}Die Vereine eurer Gemeinde {{ gemeinde }} sind vorab angehakt – auch neue, die später dazukommen.{% endif %}</p>
+  {% if dazu %}<p class="hint">Außerhalb eurer Gemeinde dabei: {% for k in dazu|sort %}{{ labels.get(k, k) }}{{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
+  {{ vereinsauswahl(gruppen, "geprueft", "pruef-auswahl", geprueft) }}
+  <div class="aktionen"><button class="btn">Speichern</button></div>
 </div>
-
-{% if eigene_gemeinde %}
-<details class="card"{% if ohne %} open{% endif %}>
-  <summary style="font-size:15px;font-weight:600">Vereine der eigenen Gemeinde ausschließen {% if ohne %}({{ ohne|length }}){% endif %}</summary>
-  <p class="hint">Haken = wird <b>nicht</b> geprüft (z. B. ein Verein, dessen Termine euch nie betreffen).</p>
-  <div class="vauswahl-liste">
-    {% for k, n in eigene_gemeinde %}
-    <label class="vauswahl-eintrag"><input type="checkbox" name="ohne" value="{{ k }}"{% if k in ohne %} checked{% endif %}> {{ n }}</label>
-    {% endfor %}
-  </div>
-</details>
-{% endif %}
-
-<details class="card" open>
-  <summary style="font-size:15px;font-weight:600">Weitere Vereine dazunehmen – z. B. aus der Nachbarschaft {% if dazu %}({{ dazu|length }}){% endif %}</summary>
-  <p class="hint">Diese Vereine werden immer geprüft, egal wo ihr Termin stattfindet.</p>
-  {% if dazu %}<p class="hint">Aktuell: {% for k in dazu|sort %}{{ labels.get(k, k) }}{{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
-  {{ vereinsauswahl(gruppen, "dazu", "dazu-auswahl") }}
-</details>
-
-<div class="aktionen"><button class="btn">Speichern</button></div>
 </form>
 
 <h2>Rechtliches</h2>
 <div class="card hint"><a href="https://vereinskalender.online/verein/datenschutz" target="_blank" rel="noopener">Datenschutzerklärung</a> ·
   <a href="https://vereinskalender.online/verein/nutzungsbedingungen" target="_blank" rel="noopener">Nutzungsbedingungen</a></div>
-<script>
-  // Gespeicherte Auswahl in der Vereinsliste anhaken
-  (function () {
-    const gewaehlt = new Set({{ dazu|list|tojson }});
-    const box = document.getElementById("dazu-auswahl");
-    for (const c of box.querySelectorAll("input[name=dazu]")) c.checked = gewaehlt.has(c.value);
-    box.zaehlen && box.zaehlen();
-  })();
-</script>
 {% endblock %}

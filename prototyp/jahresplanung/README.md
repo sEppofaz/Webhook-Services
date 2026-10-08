@@ -29,7 +29,7 @@ Tests: `~/.venvs/vko-jahresplanung/bin/python tests/test_jahresplanung.py`
    treten angemeldet und aktiv bei, sehen alle Entwürfe mit Konflikten, ändern und **bestätigen** ihre eigenen.
 5. **Jeder Verein veröffentlicht selbst** – einzeln oder alle auf einmal.
 6. **Organisator schließt die Runde ab** → Ergebnis (Teilnehmer, Termine mit Status, offene Konflikte, Verlauf)
-   wird eingefroren und steht als **PDF bei der Runde** im „Planungsmodul“ – für jeden beim Abschluss beteiligten
+   wird eingefroren und steht als **PDF bei der Runde** unter „Planungsrunden“ – für jeden beim Abschluss beteiligten
    Verein, auch nach einem Austritt. Erneut abschließen = neue Version, alte bleibt.
 
 **Josef gibt jedes neue Konto persönlich frei** (live: App/Telegram; hier `/anmelden` → „Freigeben (VKO)“). Vorher:

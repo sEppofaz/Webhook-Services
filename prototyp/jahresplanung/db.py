@@ -28,9 +28,9 @@ from daten import DATEN_DIR
 
 DB_FILE = DATEN_DIR / "planung.sqlite"
 
-STATUS = {"entwurf": "Entwurf", "bestaetigt": "Bestätigt", "veroeffentlicht": "Veröffentlicht",
+STATUS = {"entwurf": "Entwurf", "bestaetigt": "Bestätigt", "veroeffentlicht": "Im Kalender",
           "kalender": "Im Kalender"}   # kalender = steht schon live im Kalender (Momentaufnahme, nur lesend)
-FREIGABE = {"vko": "freigegeben", "ausstehend": "wartet auf Freigabe durch VKO"}
+FREIGABE = {"vko": "freigegeben", "ausstehend": "wartet auf Kontofreigabe"}
 # Code zum Beitreten: ohne leicht verwechselbare Zeichen (0/O, 1/I/L), angezeigt als „K7M-4QX“
 CODE_ZEICHEN = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 CODE_LAENGE = 6
@@ -74,6 +74,17 @@ CREATE TABLE IF NOT EXISTS runde_teilnehmer (
     beigetreten_am TEXT NOT NULL,
     aktiv          INTEGER NOT NULL DEFAULT 1,      -- 1 dabei · 0 vom Organisator entfernt · 2 selbst verlassen
     PRIMARY KEY (runde_id, verein_key)
+);
+CREATE TABLE IF NOT EXISTS einladung (         -- Link/Code geöffnet, bevor das Konto freigegeben war
+    verein_key TEXT NOT NULL,
+    runde_id   INTEGER NOT NULL REFERENCES runde(id) ON DELETE CASCADE,
+    nachweis   TEXT NOT NULL,                   -- genutzter Link oder Code (nach „Erneuern“ ungültig)
+    angelegt_am TEXT NOT NULL,
+    PRIMARY KEY (verein_key, runde_id)
+);
+CREATE TABLE IF NOT EXISTS verein_einstellung ( -- live: _meta[key].crawler_aus in vereinstermine.json (v1.66, ADR-027)
+    verein_key  TEXT PRIMARY KEY,
+    crawler_aus INTEGER NOT NULL DEFAULT 0      -- 1 = nur der Verein trägt ein, keine Termine von Gemeinde-Webseiten
 );
 CREATE TABLE IF NOT EXISTS pruefkreis (         -- „Überschneidungen prüfen mit“: Gemeinde automatisch + Anpassungen
     verein_key TEXT NOT NULL,
@@ -359,6 +370,22 @@ def beitreten(runde_id: int, verein_key: str) -> str:
         return "neu"
 
 
+def einladung_merken(verein_key: str, runde_id: int, nachweis: str) -> None:
+    with conn() as c:
+        c.execute("INSERT OR REPLACE INTO einladung VALUES (?,?,?,?)", (verein_key, runde_id, nachweis, jetzt()))
+
+
+def offene_einladungen(verein_key: str) -> list[dict]:
+    """Gemerkte Einladungen zu offenen Runden, solange Link/Code noch gilt und der Verein nie beigetreten ist."""
+    with conn() as c:
+        rows = c.execute(
+            "SELECT r.id, r.name, r.jahr, e.nachweis FROM einladung e JOIN runde r ON r.id = e.runde_id "
+            "WHERE e.verein_key = ? AND r.status = 'offen' AND e.nachweis IN (r.link, r.code) "
+            "AND NOT EXISTS (SELECT 1 FROM runde_teilnehmer t WHERE t.runde_id = r.id AND t.verein_key = e.verein_key) "
+            "ORDER BY r.jahr, r.name", (verein_key,)).fetchall()
+        return [dict(r) for r in rows]
+
+
 def verlassen(runde_id: int, verein_key: str) -> None:
     with conn() as c:
         c.execute("UPDATE runde_teilnehmer SET aktiv = 2 WHERE runde_id = ? AND verein_key = ?", (runde_id, verein_key))
@@ -479,6 +506,18 @@ def pruefkreis(verein_key: str) -> tuple[set, set]:
     with conn() as c:
         rows = c.execute("SELECT ziel_key, art FROM pruefkreis WHERE verein_key = ?", (verein_key,)).fetchall()
     return {r["ziel_key"] for r in rows if r["art"] == "dazu"}, {r["ziel_key"] for r in rows if r["art"] == "ohne"}
+
+
+def crawler_aus(verein_key: str) -> bool:
+    with conn() as c:
+        r = c.execute("SELECT crawler_aus FROM verein_einstellung WHERE verein_key = ?", (verein_key,)).fetchone()
+    return bool(r and r["crawler_aus"])
+
+
+def crawler_setzen(verein_key: str, aus: bool) -> None:
+    with conn() as c:
+        c.execute("INSERT INTO verein_einstellung (verein_key, crawler_aus) VALUES (?,?) "
+                  "ON CONFLICT(verein_key) DO UPDATE SET crawler_aus = excluded.crawler_aus", (verein_key, int(aus)))
 
 
 def pruefkreis_setzen(verein_key: str, dazu: set, ohne: set) -> None:

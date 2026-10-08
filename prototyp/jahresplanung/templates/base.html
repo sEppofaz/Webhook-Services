@@ -72,10 +72,10 @@ td.d{white-space:nowrap;font-variant-numeric:tabular-nums}
 tr.konflikt td:first-child{box-shadow:inset 3px 0 var(--rot)}
 tr.we td:first-child{box-shadow:inset 3px 0 var(--gelb)}
 tr.verworfen td{opacity:.45}
-.konf{font-size:12px;margin-top:3px}.konf .tag{color:var(--rot)}.konf .we{color:var(--gelb)}
+.konf-liste{display:grid;gap:6px;margin:10px 0 2px 20px}.konf-karte{border:1px solid var(--line);border-left:4px solid var(--gelb);border-radius:8px;padding:7px 10px;font-size:14px}.konf-karte.tag{border-left-color:var(--rot)}.konf-karte .hint{margin-top:2px;display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center}.chip.tag{background:var(--rot-bg);color:var(--rot)}.chip.we{background:var(--gelb-bg);color:var(--gelb)}
 .vfarbe{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:middle}
 {% for i in range(8) %}.f{{ i }}{background:var(--v{{ i }})}{% endfor %}
-.exporte{display:flex;gap:6px;flex-wrap:wrap}
+.exporte{display:flex;gap:6px;flex-wrap:wrap;align-items:center}.exporte details.weitere{flex-basis:100%}
 .tabelle-wrap{overflow-x:auto}
 code{background:var(--line);padding:1px 5px;border-radius:4px;font-size:13px}
 details summary{cursor:pointer;color:var(--link);font-size:13px}
@@ -85,9 +85,9 @@ details summary{cursor:pointer;color:var(--link);font-size:13px}
 .vauswahl-eintrag{display:flex;gap:8px;align-items:center;margin:0;padding:5px 0;color:var(--text);font-size:14px;cursor:pointer}
 .chip.nachbar{background:#e0e7ff;color:#3730a3}
 @media (prefers-color-scheme:dark){.chip.nachbar{background:#1e1b4b;color:#c7d2fe}}
-tr.abgewaehlt td{opacity:.5}
+.teiln{display:flex;gap:6px 12px;align-items:center;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--line)}.teiln:last-child{border-bottom:0}.teiln-name{flex:1 1 220px}.teiln.abgewaehlt{opacity:.5}
 .termin{border-left:4px solid transparent}.termin.konflikt{border-left-color:var(--rot)}.termin.we{border-left-color:var(--gelb)}
-.termin.veroeffentlicht:not(.konflikt):not(.we){border-left-color:var(--gruen)}.termin.fremd{background:transparent;box-shadow:none;border:1px solid var(--line)}
+.termin:is(.veroeffentlicht,.kalender):not(.konflikt):not(.we){border-left-color:var(--gruen)}.termin.fremd{background:transparent;box-shadow:none;border:1px solid var(--line)}
 .kopf{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}.kopf b{font-size:16px}
 .aktionen{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center}.aktionen form{margin:0}
 .code{font:700 28px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em}
@@ -96,6 +96,8 @@ tr.abgewaehlt td{opacity:.5}
   background:var(--gelb-bg);color:var(--gelb)}
 .netz.weg{background:var(--rot-bg);color:var(--rot)}
 .btn.speichert{opacity:.7;pointer-events:none}
+h3.monat{font-size:14px;color:var(--text2);margin:16px 0 6px;font-weight:600}
+.btn[aria-expanded=true]{box-shadow:inset 0 0 0 2px var(--accent)}
 body.treffen{font-size:18px}body.treffen .code{font-size:44px}body.treffen main{max-width:1400px}
 @media (max-width:640px){th.optional,td.optional{display:none}}
 {% block css %}{% endblock %}
@@ -116,8 +118,8 @@ body.treffen{font-size:18px}body.treffen .code{font-size:44px}body.treffen main{
   {% set ep = request.endpoint or '' %}
   {% if angemeldet %}
     <a class="hdr-pill {{ 'hdr-pill-pri' if ep in ('termine_seite',) else 'hdr-pill-sec' }}" href="{{ url_for('termine_seite') }}"{{ ' aria-current="page"'|safe if ep == 'termine_seite' }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>Termine</a>
+    <a class="hdr-pill {{ 'hdr-pill-pri' if ep.startswith('runde') else 'hdr-pill-sec' }}" href="{{ url_for('runden_seite') }}"{{ ' aria-current="page"'|safe if ep.startswith('runde') }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Planungsrunden</a>
     <a class="hdr-pill {{ 'hdr-pill-pri' if ep == 'einstellungen' else 'hdr-pill-sec' }}" href="{{ url_for('einstellungen') }}"{{ ' aria-current="page"'|safe if ep == 'einstellungen' }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></svg>Einstellungen</a>
-    <a class="hdr-pill {{ 'hdr-pill-pri' if ep.startswith('runde') else 'hdr-pill-sec' }}" href="{{ url_for('runden_seite') }}"{{ ' aria-current="page"'|safe if ep.startswith('runde') }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Planungsmodul</a>
     <form method="post" action="{{ url_for('abmelden') }}" style="margin:0">{{ csrf()|safe }}<button class="hdr-pill hdr-pill-sec" title="Abmelden"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>Abmelden</button></form>
   {% else %}
     <a class="hdr-pill hdr-pill-pri" href="{{ url_for('anmelden') }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Login</a>
@@ -231,8 +233,32 @@ body.treffen{font-size:18px}body.treffen .code{font-size:44px}body.treffen main{
       if (!["datum", "datum_bis", "uhrzeit", "ort"].includes(e.target.name)) return;
       clearTimeout(timer); timer = setTimeout(pruefen, 400);
     });
-    if (form.dataset.eid) form.closest("details")?.addEventListener("toggle", pruefen, { once: true });
+    if (form.dataset.eid) form.closest(".klappe")?.addEventListener("aufgeklappt", pruefen, { once: true });
   }
+
+  // Aufklappen (Neuer Termin, Hochladen, Bearbeiten): Knopf mit data-klappe="<id>" zeigt/verbirgt das Element.
+  // Knöpfe in derselben Zeile schließen sich gegenseitig – es ist immer nur ein Formular offen.
+  function klappe(knopf, auf) {
+    const ziel = document.getElementById(knopf.dataset.klappe);
+    if (!ziel) return;
+    ziel.hidden = !auf;
+    knopf.setAttribute("aria-expanded", auf);
+    if (auf) {
+      ziel.dispatchEvent(new Event("aufgeklappt"));
+      ziel.querySelector("input:not([type=hidden]),select,textarea")?.focus({ preventScroll: true });
+    }
+  }
+  for (const k of document.querySelectorAll("[data-klappe]")) k.setAttribute("aria-expanded", "false");
+  document.addEventListener("click", (e) => {
+    const knopf = e.target.closest("[data-klappe]");
+    if (!knopf) return;
+    const auf = document.getElementById(knopf.dataset.klappe)?.hidden;
+    for (const n of knopf.parentElement.querySelectorAll("[data-klappe]")) if (n !== knopf) klappe(n, false);
+    klappe(knopf, auf);
+  });
+  // Rücksprung mit Anker (z. B. Fehler bei „Neuer Termin“ → #neu): passendes Formular gleich offen
+  const anker = location.hash && document.querySelector(`[data-klappe="${CSS.escape(location.hash.slice(1))}"]`);
+  if (anker) klappe(anker, true);
 
   // Zurück-Taste (bfcache): Knöpfe wieder freigeben
   window.addEventListener("pageshow", (e) => {

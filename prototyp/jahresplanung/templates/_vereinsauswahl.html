@@ -1,6 +1,6 @@
 {# Durchsuchbare Vereinsauswahl, nach Gemeinde des Sitzes gruppiert (Josef 2026-10-05).
-   gruppen: [{gemeinde, landkreis, vereine:[(key, Name)]}]; name: Formularfeld der Checkboxen. #}
-{% macro vereinsauswahl(gruppen, name, id) %}
+   gruppen: [{gemeinde, landkreis, vereine:[(key, Name)]}]; name: Formularfeld der Checkboxen; gewaehlt: vorab angehakt. #}
+{% macro vereinsauswahl(gruppen, name, id, gewaehlt=()) %}
 <div class="vauswahl" id="{{ id }}">
   <input type="search" class="vauswahl-suche" placeholder="Verein oder Gemeinde suchen …" aria-label="Vereine durchsuchen">
   <div class="vauswahl-liste">
@@ -8,7 +8,7 @@
     <fieldset class="vauswahl-gruppe" data-gemeinde="{{ g.gemeinde|lower }}">
       <legend>{{ g.gemeinde }}{% if g.landkreis %} <span class="hint">· {{ g.landkreis }}</span>{% endif %}</legend>
       {% for k, n in g.vereine %}
-      <label class="vauswahl-eintrag" data-text="{{ n|lower }}"><input type="checkbox" name="{{ name }}" value="{{ k }}"> {{ n }}</label>
+      <label class="vauswahl-eintrag" data-text="{{ n|lower }}"><input type="checkbox" name="{{ name }}" value="{{ k }}"{% if k in gewaehlt %} checked{% endif %}> {{ n }}</label>
       {% endfor %}
     </fieldset>
     {% endfor %}

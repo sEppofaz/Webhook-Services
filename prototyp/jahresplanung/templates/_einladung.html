@@ -1,0 +1,11 @@
+{# Offene Einladungen zu Planungsrunden (Link/Code vor der Kontofreigabe geöffnet) – auf „Termine“ und „Planungsrunden“. #}
+{% macro einladungen_karten(einladungen, darf, csrf) %}
+{% for e in einladungen %}
+  <div class="card zeile" style="align-items:center">
+    <div style="flex:3 1 260px"><b>Ihr seid zur Planungsrunde „{{ e.name }} {{ e.jahr }}“ eingeladen</b>
+      <div class="hint">{% if darf %}Wenn ihr beitretet, seht ihr die Entwürfe der anderen Vereine – und sie eure. Öffentlich wird dadurch nichts.{% else %}Nach der Kontofreigabe könnt ihr hier beitreten.{% endif %}</div></div>
+    {% if darf %}<form method="post" action="{{ url_for('runde_beitreten', runde_id=e.id) }}" style="flex:0 0 auto;margin:0">{{ csrf()|safe }}
+      <input type="hidden" name="nachweis" value="{{ e.nachweis }}"><button class="btn">Jetzt beitreten</button></form>{% endif %}
+  </div>
+{% endfor %}
+{% endmacro %}

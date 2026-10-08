@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_termin.html" import termin_karte, neuer_termin with context %}
+{% from "_export.html" import download_knoepfe with context %}
 {% block titel %}{{ r.name }} {{ r.jahr }}{% endblock %}
 {% block body_klasse %}{{ 'treffen' if treffen }}{% endblock %}
 {% block inhalt %}
@@ -9,18 +10,15 @@
     <h1>{{ r.name }} {{ r.jahr }}</h1>
     <p class="hint">Organisator: {{ labels.get(r.organisator, r.organisator) }}{{ ' (ihr)' if organisator }} · {% if offen %}offen{% else %}<b>abgeschlossen</b>{% endif %}</p>
   </div>
-  <div style="flex:0 0 auto;display:flex;gap:6px;flex-wrap:wrap">
-    {% if treffen %}<a class="btn sek" href="{{ url_for('runde_seite', runde_id=r.id) }}">Normale Ansicht</a>
-    {% else %}<a class="btn sek" href="{{ url_for('runde_seite', runde_id=r.id, ansicht='treffen') }}">Ansicht fürs Treffen</a>{% endif %}
-    <button class="btn sek" type="button" id="nur-konflikte" aria-pressed="false">Nur Konflikte</button>
-  </div>
+  <div style="flex:0 0 auto"><button class="btn sek" type="button" id="gross" aria-pressed="false">Große Schrift</button></div>
 </div>
 {% if fehler %}<div class="warn rot">{{ fehler }}</div>{% endif %}
 {% if meldung %}<div class="ok">{{ meldung }}</div>{% endif %}
 <div id="geaendert" class="warn" hidden>Andere Vereine haben etwas geändert. <a href="" onclick="location.reload();return false">Neu laden</a></div>
+
 {% if ergebnisse %}
 <div class="card">
-  <b>Ergebnis</b> <span class="hint">– jeder beim Abschluss beteiligte Verein findet es im „Planungsmodul“</span>
+  <b>Ergebnis</b> <span class="hint">– steht auch unter „Planungsrunden“ bei der Runde</span>
   {% for e in ergebnisse %}
   <div class="aktionen kompakt"><span>Version {{ e.version }} · {{ e.abgeschlossen_am[:10]|tm }}{{ e.abgeschlossen_am[:4] }}, {{ e.abgeschlossen_am[11:16] }} Uhr</span>
     {% if key in e.daten.teilnehmer|map(attribute='verein')|list %}<a class="btn klein" href="{{ url_for('archiv_ergebnis', eid=e.id, fmt='pdf') }}">Ergebnis als PDF</a>{% else %}<span class="hint">(ihr wart da nicht dabei)</span>{% endif %}</div>
@@ -28,80 +26,78 @@
 </div>
 {% endif %}
 
-{% if organisator and offen %}
+{% if organisator %}
 <div class="card">
-  <b>Vereine einladen</b> <span class="hint">– Link per WhatsApp/Mail schicken oder den Code beim Treffen zeigen. Beitreten geht nur mit freigegebenem Vereinskonto.</span>
-  <div class="zeile kompakt" style="align-items:center;margin-top:8px">
+  <b>Runde verwalten</b>
+  {% if offen %}
+  <p class="hint" style="margin:4px 0 8px">Vereine einladen: Link per WhatsApp/Mail schicken oder den Code beim Treffen zeigen.</p>
+  <div class="zeile kompakt" style="align-items:center">
     <div style="flex:0 0 auto"><span class="hint">Code</span><div class="code">{{ code }}</div></div>
     <div style="flex:3 1 280px;display:flex;gap:4px;align-items:center"><input readonly value="{{ basis }}{{ url_for('runde_link', link=r.link) }}" onfocus="this.select()">
       <button class="btn sek klein" type="button" onclick="navigator.clipboard.writeText(this.previousElementSibling.value);this.textContent='kopiert'">Link kopieren</button></div>
   </div>
-  <div class="aktionen kompakt">
+  <div class="aktionen">
+    <form method="post" action="{{ url_for('runde_status', runde_id=r.id) }}" onsubmit="return confirm('Runde abschließen? Das Ergebnis wird festgehalten und steht danach als PDF bei jedem beteiligten Verein. Danach kann niemand mehr beitreten oder hier ändern; veröffentlichen bleibt Sache jedes Vereins.')">{{ csrf()|safe }}
+      <button class="btn" name="aktion" value="abschliessen">Runde abschließen</button></form>
     <form method="post" action="{{ url_for('runde_erneuern', runde_id=r.id) }}" onsubmit="return confirm('Neuen Link und Code erzeugen? Die alten gelten dann nicht mehr – wer schon dabei ist, bleibt dabei.')">{{ csrf()|safe }}
       <button class="btn sek klein">Link und Code erneuern</button></form>
-    <form method="post" action="{{ url_for('runde_status', runde_id=r.id) }}" onsubmit="return confirm('Runde abschließen? Das Ergebnis wird festgehalten und steht danach als PDF bei jedem beteiligten Verein. Danach kann niemand mehr beitreten oder hier ändern; veröffentlichen bleibt Sache jedes Vereins.')">{{ csrf()|safe }}
-      <button class="btn sek klein" name="aktion" value="abschliessen">Runde abschließen</button></form>
   </div>
+  {% else %}
+  <div class="aktionen"><form method="post" action="{{ url_for('runde_status', runde_id=r.id) }}">{{ csrf()|safe }}
+    <button class="btn sek" name="aktion" value="oeffnen">Runde wieder öffnen</button></form></div>
+  {% endif %}
 </div>
-{% elif organisator %}
-<div class="card"><form method="post" action="{{ url_for('runde_status', runde_id=r.id) }}">{{ csrf()|safe }}
-  <button class="btn sek" name="aktion" value="oeffnen">Runde wieder öffnen</button></form></div>
-{% endif %}
-
-{% if not treffen %}
-<h2 id="teilnehmer">Teilnehmer</h2>
-<div class="card tabelle-wrap kompakt"><table>
-  <tr><th>Verein</th><th>Entwurf</th><th>Bestätigt</th><th>Veröff.</th>{% if organisator %}<th></th>{% endif %}</tr>
-  {% for p in teilnehmer %}{% set s = stand[p.verein_key] %}
-  <tr class="{{ '' if p.aktiv == 1 else 'abgewaehlt' }}">
-    <td><span class="vfarbe f{{ farben[p.verein_key] }}"></span>{{ p.verein_name or labels.get(p.verein_key, p.verein_key) }}
-      {% if p.verein_key == r.organisator %}<span class="chip">Organisator</span>{% endif %}
-      {% if p.verein_key == key %}<span class="chip">ihr</span>{% endif %}
-      {% if p.aktiv == 0 %}<span class="chip">entfernt</span>{% elif p.aktiv == 2 %}<span class="chip">ausgetreten</span>{% endif %}</td>
-    <td>{{ s.entwurf if p.aktiv == 1 else '–' }}</td>
-    <td>{% if p.aktiv == 1 %}{{ s.bestaetigt }}{% if s.entwurf == 0 and (s.bestaetigt + s.veroeffentlicht) %} <span class="chip bestaetigt">alles bestätigt</span>{% endif %}{% else %}–{% endif %}</td>
-    <td>{{ s.veroeffentlicht if p.aktiv == 1 else '–' }}</td>
-    {% if organisator %}<td>{% if p.verein_key != key and offen %}
-      <form method="post" action="{{ url_for('runde_teilnehmer', runde_id=r.id) }}">{{ csrf()|safe }}<input type="hidden" name="verein" value="{{ p.verein_key }}">
-        {% if p.aktiv == 1 %}<button class="btn sek klein" name="aktiv" value="0" onclick="return confirm('Verein aus der Runde entfernen? Er kann dann auch mit Link/Code nicht mehr beitreten.')">Entfernen</button>
-        {% elif p.aktiv == 0 %}<button class="btn klein" name="aktiv" value="1">Wieder aufnehmen</button>{% endif %}
-      </form>{% endif %}</td>{% endif %}
-  </tr>
-  {% endfor %}
-</table></div>
 {% endif %}
 
 {% if offen %}
+{% set mein = stand[key] %}
 <div class="card">
-  <b>Eure Termine</b> <span class="hint">– ändern und bestätigen direkt hier in der Übersicht (auch am Handy).</span>
-  <div class="aktionen">
-    {% if vorlage_n %}<form method="post" action="{{ url_for('entwuerfe_aus_vorjahr', jahr=r.jahr) }}">{{ csrf()|safe }}<input type="hidden" name="runde" value="{{ r.id }}">
-      <button class="btn sek">Entwürfe aus dem Vorjahr erzeugen ({{ vorlage_n }})</button></form>{% endif %}
-    {% if stand[key].entwurf %}<form method="post" action="{{ url_for('entwuerfe_alle', jahr=r.jahr) }}">{{ csrf()|safe }}<input type="hidden" name="runde" value="{{ r.id }}">
-      <button class="btn" name="aktion" value="bestaetigen">Alle {{ stand[key].entwurf }} bestätigen</button></form>{% endif %}
-    <a class="btn sek" href="#neu">Termin ergänzen</a>
+  <b>Eure Termine</b> <span class="hint">– {% if mein.entwurf %}{{ mein.entwurf }} noch nicht bestätigt{% elif mein.bestaetigt + mein.veroeffentlicht %}alle bestätigt{% else %}noch keine{% endif %}</span>
+  {% if vorlage_n %}
+  <div class="zeile" style="align-items:center;margin-top:8px">
+    <div style="flex:3 1 260px" class="hint">Aus {{ r.jahr - 1 }} könnt ihr {{ vorlage_n }} {{ 'Termin' if vorlage_n == 1 else 'Termine' }} übernehmen – als Entwurf.</div>
+    <form method="post" action="{{ url_for('entwuerfe_aus_vorjahr', jahr=r.jahr) }}" style="flex:0 0 auto;margin:0">{{ csrf()|safe }}<input type="hidden" name="runde" value="{{ r.id }}">
+      <button class="btn sek">Übernehmen</button></form>
   </div>
+  {% endif %}
+  <div class="aktionen">
+    {% if mein.entwurf %}<form method="post" action="{{ url_for('entwuerfe_alle', jahr=r.jahr) }}">{{ csrf()|safe }}<input type="hidden" name="runde" value="{{ r.id }}">
+      <button class="btn" name="aktion" value="bestaetigen">Alle {{ mein.entwurf }} bestätigen</button></form>{% endif %}
+    <button class="btn sek" type="button" data-klappe="neu">Neuer Termin</button>
+  </div>
+  <p class="hint" style="margin-bottom:0">Bestätigt = „steht so“ für die Runde. Veröffentlichen bleibt ein eigener Schritt.</p>
 </div>
+<div id="neu" class="klappe" hidden>{{ neuer_termin(csrf, r.jahr, runde_id=r.id, darf=True) }}</div>
 {% endif %}
 
-<h2>Konflikte am gleichen Tag ({{ paare|length }})</h2>
-{% for p in paare %}
-  <div class="card" style="padding:10px 14px">
-    <b>{{ p.a.datum|wochentag_kurz }} {{ p.a.datum|tm }}</b> ·
-    <span class="vfarbe f{{ farben.get(p.a.verein, 0) }}"></span><a href="#t{{ p.a._eid }}">{{ p.a.bezeichnung }}</a> <span class="hint">({{ labels.get(p.a.verein, p.a.verein) }})</span>
-    ↔ {% if p.b.id.startswith('e') %}<span class="vfarbe f{{ farben.get(p.b.verein, 0) }}"></span><a href="#t{{ p.b.id[1:] }}">{{ p.b.bezeichnung }}</a>{% else %}{{ p.b.bezeichnung }} <span class="chip">schon im Kalender</span>{% endif %}
-    <span class="hint">({{ p.b.verein_name }})</span>
-    {% if p.a.verein == key or p.b.verein == key %}<span class="chip vorschlag">betrifft euch</span>{% endif %}
+<h2 id="teilnehmer">Teilnehmer ({{ teilnehmer|selectattr('aktiv', 'equalto', 1)|list|length }})</h2>
+<div class="card kompakt" style="padding:4px 14px">
+  {% for p in teilnehmer %}{% set s = stand[p.verein_key] %}
+  <div class="teiln{{ ' abgewaehlt' if p.aktiv != 1 }}">
+    <div class="teiln-name"><span class="vfarbe f{{ farben[p.verein_key] }}"></span>{{ p.verein_name or labels.get(p.verein_key, p.verein_key) }}
+      {% if p.verein_key == r.organisator %}<span class="chip">Organisator</span>{% endif %}
+      {% if p.verein_key == key %}<span class="chip">ihr</span>{% endif %}</div>
+    <div>{% if p.aktiv == 0 %}<span class="chip">entfernt</span>{% elif p.aktiv == 2 %}<span class="chip">ausgetreten</span>
+      {% elif s.entwurf %}<span class="chip entwurf">noch {{ s.entwurf }} offen</span>
+      {% elif s.bestaetigt + s.veroeffentlicht %}<span class="chip bestaetigt">fertig</span>
+      {% else %}<span class="hint">noch keine Termine</span>{% endif %}</div>
+    {% if organisator and p.verein_key != key and offen %}
+    <form method="post" action="{{ url_for('runde_teilnehmer', runde_id=r.id) }}" style="margin:0">{{ csrf()|safe }}<input type="hidden" name="verein" value="{{ p.verein_key }}">
+      {% if p.aktiv == 1 %}<button class="btn sek klein" name="aktiv" value="0" onclick="return confirm('Verein aus der Runde entfernen? Er kann dann auch mit Link/Code nicht mehr beitreten.')">Entfernen</button>
+      {% elif p.aktiv == 0 %}<button class="btn klein" name="aktiv" value="1">Wieder aufnehmen</button>{% endif %}
+    </form>{% endif %}
   </div>
-{% else %}
-  <p class="ok">Keine Termine am gleichen Tag.</p>
-{% endfor %}
+  {% endfor %}
+</div>
 
-<h2>Alle Termine {{ r.jahr }}</h2>
-<p class="hint"><span style="color:var(--rot)">▍</span> gleicher Tag · <span style="color:var(--gelb)">▍</span> gleiches Wochenende · eure Termine hervorgehoben, die der anderen nur zum Lesen.</p>
+<div class="zeile" style="align-items:center;margin-top:20px">
+  <h2 style="flex:3 1 260px;margin:0">Alle Termine {{ r.jahr }}</h2>
+  {% if n_konflikt %}<button class="btn sek" type="button" id="nur-konflikte" aria-pressed="false" style="flex:0 0 auto">Nur Termine mit Konflikt ({{ n_konflikt }})</button>{% endif %}
+</div>
+{% if not n_konflikt and monate %}<p class="ok">Keine Termine am gleichen Tag.</p>{% endif %}
 <div id="liste">
 {% for monat, liste in monate %}
-  <h2 class="monat">{{ monat }}</h2>
+  <h3 class="monat">{{ monat }}</h3>
   {% for t in liste %}
     {{ termin_karte(t, t.verein == key, csrf, STATUS, STUFE_TAG, zeit_text, runde_id=r.id, aenderbar=offen, darf=True,
                     farbe=farben.get(t.verein, 0), verein_name=labels.get(t.verein, t.verein)) }}
@@ -111,15 +107,8 @@
 {% endfor %}
 </div>
 
-{% if offen %}
-<h2 id="neu">Termin ergänzen</h2>
-{{ neuer_termin(csrf, r.jahr, runde_id=r.id, darf=True) }}
-{% endif %}
-
 <h2>Herunterladen</h2>
-<div class="exporte">
-  {% for f, (name_f, _) in FORMATE.items() %}<a class="btn sek klein" href="{{ url_for('runde_export', runde_id=r.id, fmt=f) }}">{{ name_f }}</a>{% endfor %}
-</div>
+{{ download_knoepfe('runde_export', {'runde_id': r.id}) }}
 <p class="hint">Alle Termine der Teilnehmer {{ r.jahr }} – Entwürfe, bestätigte und veröffentlichte.</p>
 
 <h2>Verlauf</h2>
@@ -153,18 +142,35 @@
   setInterval(pruefen, 15000);
 })();
 (function () {
-  // „Nur Konflikte“: blendet Karten ohne Konflikt und leere Monate aus (fürs Treffen)
+  // „Nur Termine mit Konflikt“: blendet Karten ohne Konflikt am gleichen Tag und leere Monate aus
   const knopf = document.getElementById("nur-konflikte"), liste = document.getElementById("liste");
-  knopf.addEventListener("click", () => {
+  knopf && knopf.addEventListener("click", () => {
     const an = knopf.getAttribute("aria-pressed") !== "true";
     knopf.setAttribute("aria-pressed", an);
     knopf.classList.toggle("sek", !an);
     for (const k of liste.querySelectorAll(".termin")) k.hidden = an && !k.classList.contains("konflikt");
-    for (const h of liste.querySelectorAll("h2.monat")) {
+    for (const h of liste.querySelectorAll("h3.monat")) {
       let n = h.nextElementSibling, sichtbar = false;
-      while (n && !n.matches("h2.monat")) { if (!n.hidden) sichtbar = true; n = n.nextElementSibling; }
+      while (n && !n.matches("h3.monat")) { if (!n.hidden) sichtbar = true; n = n.nextElementSibling; }
       h.hidden = an && !sichtbar;
     }
+  });
+})();
+(function () {
+  // „Große Schrift“ fürs Treffen (Beamer/Bildschirm) – merkt sich das Gerät
+  const knopf = document.getElementById("gross");
+  function setzen(an) {
+    document.body.classList.toggle("treffen", an);
+    knopf.setAttribute("aria-pressed", an);
+    knopf.classList.toggle("sek", !an);
+  }
+  let an = document.body.classList.contains("treffen");
+  try { an = an || localStorage.getItem("vko-gross") === "1"; } catch (e) {}
+  setzen(an);
+  knopf.addEventListener("click", () => {
+    an = !an;
+    setzen(an);
+    try { localStorage.setItem("vko-gross", an ? "1" : "0"); } catch (e) {}
   });
 })();
 </script>

@@ -1,13 +1,16 @@
 {% extends "base.html" %}
-{% block titel %}Planungsmodul{% endblock %}
+{% block titel %}Planungsrunden{% endblock %}
+{% from "_einladung.html" import einladungen_karten %}
+{% from "_export.html" import download_knoepfe with context %}
 {% block inhalt %}
-<h1>Planungsmodul</h1>
-<p class="hint">Eine Planungsrunde bringt die Entwürfe mehrerer Vereine zusammen – z. B. für das Jahresplanungstreffen der Gemeinde.
-Jeder Vereinsadmin kann eine starten – er ist dann Organisator – und die anderen per Link oder Code einladen. Beim Abschluss wird das Ergebnis festgehalten – es steht dann hier bei der Runde als PDF.</p>
+<h1>Planungsrunden</h1>
+<p class="hint">Mehrere Vereine planen gemeinsam – z. B. fürs Jahrestreffen der Gemeinde: Ihr seht die Entwürfe aller und wo sich Termine überschneiden.</p>
 {% if fehler %}<div class="warn rot">{{ fehler }}</div>{% endif %}
 
+{{ einladungen_karten(einladungen, darf, csrf) }}
+
 {% if not darf %}
-  <div class="warn">Planungsrunden starten und beitreten geht erst, wenn VKO euer Konto freigegeben hat.</div>
+  <div class="warn">Planungsrunden starten und beitreten geht erst nach Kontofreigabe.</div>
 {% else %}
 <div class="kacheln">
   <form class="card" method="post" action="{{ url_for('runde_code') }}">{{ csrf()|safe }}
@@ -29,9 +32,8 @@ Jeder Vereinsadmin kann eine starten – er ist dann Organisator – und die and
   {% for e in liste %}
   <div class="aktionen kompakt">
     <span class="hint">Ergebnis Version {{ e.version }} · {{ e.abgeschlossen_am[:10]|tm }}{{ e.abgeschlossen_am[:4] }} · {{ e.daten.termine|length }} Termine · {{ e.daten.konflikte|length }} offene Konflikte</span>
-    <a class="btn klein" href="{{ url_for('archiv_ergebnis', eid=e.id, fmt='pdf') }}">PDF</a>
-    {% for f, (name_f, _) in FORMATE.items() if f != 'pdf' %}<a class="btn sek klein" href="{{ url_for('archiv_ergebnis', eid=e.id, fmt=f) }}">{{ name_f }}</a>{% endfor %}
   </div>
+  {{ download_knoepfe('archiv_ergebnis', {'eid': e.id}) }}
   {% endfor %}
 {% endmacro %}
 <h2>Eure Runden</h2>
