@@ -7,6 +7,7 @@
 - **Auf Server:** `/opt/rename-webhook/` – zieht per `git pull` von GitHub
 - **Credentials:** ausschließlich in `/etc/pka/secrets.env` (via EnvironmentFile im Service)
 - **Deployment-SOP:** `PKA/SOPs/Vereinskalender-Deployment.md`
+- **Laufzeitordner im Repo-Verzeichnis:** `vereinsdokumente/` (ADR-029, Owner `webhook`, 750) und `share/` (venv, von pip) stehen in `.gitignore` – nie einchecken (Pull einer Löschung entfernt die Dateien, Pitfall `heimat_gemeinden.json`).
 - **Server-Arbeitsverzeichnis sauber halten:** `git status` in `/opt/rename-webhook` muss leer sein. Am 2026-09-27 lagen dort vier Monate lang eine Debug-Zeile in `services/rename/routes.py`, eine `routes.py.bak_debug` und eine nicht eingecheckte Modusänderung – der Server lief damit teilweise mit Code, der nicht auf GitHub steht. Bereinigt per `git stash push -u` (liegt als `stash@{0}` weiter auf dem Server, mit #410 im Text), **nicht** per `rm`/`checkout` – so bleibt alles zurückholbar.
 
 ### Deployment-Flow (Mac → GitHub → Hetzner)
@@ -144,7 +145,8 @@ Gottesdienste aus `gottesdienste.json` erreichen die Abonnenten also **nicht**. 
 - `location = /api/termine` → Rate-Limit 30 req/min, Burst 5 (Scraping-Schutz)
 - `location /api/` → Rate-Limit 10 req/s, Burst 30
 - `location = /api/termine/flyer` → `client_max_body_size 10m`, `proxy_read_timeout 60` (seit 2026-10-03, v1.35). Für den Rest von `/api/` gilt das nginx-Standardlimit **1 MB**.
-- `location ~ ^/verein/(termine|upload)` → wie `/verein`, aber `client_max_body_size 45m` + `proxy_read_timeout 120` (seit 2026-10-03). **Pitfall:** Davor galt für alles unter `/verein` 1 MB – Flyer > 1 MB und größere Terminplan-PDFs scheiterten still mit 413, obwohl die Formulare „max. 8 MB“ versprachen. Neues Formular mit Datei-Upload unter `/verein` ⇒ prüfen, ob es unter diese Location fällt.
+- `location ~ ^/verein/(termine|upload|dokumente)` → wie `/verein`, aber `client_max_body_size 45m` + `proxy_read_timeout 120` (seit 2026-10-03). **Pitfall:** Davor galt für alles unter `/verein` 1 MB – Flyer > 1 MB und größere Terminplan-PDFs scheiterten still mit 413, obwohl die Formulare „max. 8 MB“ versprachen. Neues Formular mit Datei-Upload unter `/verein` ⇒ prüfen, ob es unter diese Location fällt.
+- **Seit 2026-10-10 (v1.78):** dieselbe Location deckt auch `/verein/dokumente` ab (`^/verein/(termine|upload|dokumente)`), Uploads bis 20 MB je Datei. Backup `/root/nginx-backups/vereinskalender.bak-2026-10-10-dokumente`.
 - `location /verein` → proxy_pass Flask (Auth-Seiten, Dashboard)
 - `location /telegram` → Telegram Haupt-Bot-Webhook (**Pflicht!** Muss in dieser Config stehen)
 - `location /kalender-bot` → Telegram Kalender-Bot-Webhook
@@ -191,6 +193,8 @@ Gottesdienste aus `gottesdienste.json` erreichen die Abonnenten also **nicht**. 
 | `/verein/login` | Vereins-Login (bcrypt, Brute-Force-Schutz) |
 | `/verein/termine` | Startseite nach dem Login (v1.77, ADR-026): Entwürfe + „Im Kalender“, Vorjahres-Vorlage, Upload-Link, Hilfe |
 | `/verein/runden`, `/verein/runde/<id>` | Planungsrunden (Start, Beitritt per `/verein/r/<token>` oder Code, Verlauf, Ergebnis `/verein/ergebnis/<id>.<fmt>`) |
+| `/verein/dokumente` | Tab Dokumente (v1.78, ADR-029): Liste nach Kategorie/Jahr, Suche; POST = Datei hochladen (nur Admin) |
+| `/verein/dokumente/neu`, `/verein/dokumente/<id>` | Schreiben bzw. Ansehen/Ändern (`?bearbeiten=1`), `/<id>/loeschen` (POST, endgültig), `/<id>/datei` (Download, `?laden=1`), `/<id>.pdf\|.docx` (geschriebene Dokumente) |
 | `/verein/einstellungen` | Profil-/Mitglieder-/Passwort-Links, „Wer trägt eure Termine ein?“ (`/verein/crawler`), Prüfkreis, Rechtliches |
 | `/verein/kollisionen` | GET – Kollisionswarnung im Formular (Sitzung, nur Kalender-Termine, Prüfkreis) |
 | `/verein/dashboard` | leitet seit v1.77 auf `/verein/termine` um (alte Links/Lesezeichen) |
