@@ -193,6 +193,9 @@ def init_db():
                 conn.execute(col_sql)
             except Exception:
                 pass
+        # Entwürfe, Planungsrunden, Prüfkreis (ADR-026, v1.77)
+        from shared.planung_db import SCHEMA as _PLANUNG_SCHEMA
+        conn.executescript(_PLANUNG_SCHEMA)
 
 
 def create_session(user_id: int) -> str:

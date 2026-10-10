@@ -1,0 +1,58 @@
+{% extends "planung/base.html" %}
+{% from "planung/_vereinsauswahl.html" import vereinsauswahl %}
+{% block titel %}Einstellungen{% endblock %}
+{% block inhalt %}
+<h1>Einstellungen</h1>
+{% if fehler %}<div class="warn rot">{{ fehler }}</div>{% endif %}
+{% if meldung %}<div class="ok">{{ meldung }}</div>{% endif %}
+
+<p class="hint">Alles rund um euren Verein. Die Termine selbst pflegt ihr unter „Termine“.</p>
+
+{% macro eintrag(titel, text, href) %}
+<a class="card einst" href="{{ href }}">
+  <span><b>{{ titel }}</b><span class="hint">{{ text }}</span></span>
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+</a>
+{% endmacro %}
+<h2>Verein</h2>
+{% if darf %}
+{{ eintrag("Vereinsprofil", "Name, Rubrik, Ortschaft und PLZ, Ansprechpartner, Telefon, E-Mail-Adresse.", "/verein/profil") }}
+{{ eintrag("Mitglieder", "Weitere Vereinsadmins oder Mitglieder einladen und entfernen.", "/verein/mitglieder") }}
+{% endif %}
+{{ eintrag("Passwort ändern", "Neues Passwort setzen; alle anderen Anmeldungen werden beendet.", "/verein/passwort") }}
+<p class="hint">Angemeldet als {{ email }} · {{ 'Vereinsadmin' if rolle == 'admin' else 'Mitglied' }}</p>
+
+<h2 id="quellen">Wer trägt eure Termine ein?</h2>
+<div class="card zeile" style="align-items:center">
+  <div style="flex:3 1 280px">
+    {% if crawler_aus %}<b>Nur wir selbst.</b>
+    <div class="hint">Termine von Gemeinde-Webseiten (z. B. heimat-info.de) werden nicht mehr übernommen. Bestehende Termine bleiben.</div>
+    {% else %}<b>Selber – fehlende Termine von Gemeinde-Webseiten werden ergänzt</b> (z. B. heimat-info.de, einmal pro Woche).
+    <div class="hint">Pflegt ihr alles selbst, schaltet das ab – sonst können Termine doppelt auftauchen.</div>{% endif %}
+  </div>
+  {% if darf %}
+  <form method="post" action="/verein/crawler" style="flex:0 0 auto;margin:0">{{ csrf()|safe }}
+    <input type="hidden" name="aus" value="{{ '0' if crawler_aus else '1' }}">
+    <button class="btn sek">{{ 'Gemeinde-Webseiten wieder mitnutzen' if crawler_aus else 'Nur noch selbst eintragen' }}</button></form>
+  {% endif %}
+</div>
+
+<form method="post" id="pruefkreis">{{ csrf()|safe }}
+<h2>Überschneidungen prüfen mit …</h2>
+<div class="card">
+  <p style="margin-top:0">Haken = beim Anlegen eines Termins wird gewarnt, wenn dieser Verein am gleichen Tag oder Wochenende etwas hat.
+  {% if gemeinde %}Die Vereine eurer Gemeinde {{ gemeinde }} sind vorab angehakt – auch neue, die später dazukommen.{% endif %}</p>
+  {% if dazu %}<p class="hint">Außerhalb eurer Gemeinde dabei: {% for k in dazu|sort %}{{ labels.get(k, k) }}{{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
+  {{ vereinsauswahl(gruppen, "geprueft", "pruef-auswahl", geprueft) }}
+  {% if darf %}<div class="aktionen"><button class="btn">Speichern</button></div>{% endif %}
+</div>
+</form>
+
+<h2>Rechtliches</h2>
+<div class="card hint"><a href="/verein/datenschutz">Datenschutzerklärung</a> · <a href="/verein/nutzungsbedingungen">Nutzungsbedingungen</a></div>
+{% endblock %}
+{% block css %}
+.einst{display:flex;align-items:center;gap:12px;color:inherit;text-decoration:none}
+.einst>span{flex:1;display:flex;flex-direction:column;gap:2px}.einst svg{color:var(--text2);flex-shrink:0}
+.einst:hover{outline:2px solid var(--accent)}
+{% endblock %}

@@ -1,0 +1,12 @@
+{% extends "planung/base.html" %}
+{% block titel %}{{ titel }}{% endblock %}
+{% block inhalt %}
+<h1>{{ titel }}</h1>
+<div class="card" style="max-width:620px">
+  {% if text %}<p style="margin-top:0">{{ text }}</p>{% endif %}
+  <div class="aktionen">
+    <a class="btn" href="{{ url_for('planung.termine_seite') }}">{{ 'Zu den Terminen' if angemeldet else 'Zur Anmeldung' }}</a>
+    <a class="btn sek" href="javascript:history.back()">Zurück</a>
+  </div>
+</div>
+{% endblock %}

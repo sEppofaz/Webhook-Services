@@ -1,0 +1,56 @@
+{% extends "planung/base.html" %}
+{% block titel %}Planungsrunden{% endblock %}
+{% from "planung/_export.html" import download_knoepfe with context %}
+{% block inhalt %}
+<h1>Planungsrunden</h1>
+<p class="hint">Mehrere Vereine planen gemeinsam – z. B. fürs Jahrestreffen der Gemeinde: Ihr seht die Entwürfe aller und wo sich Termine überschneiden.</p>
+{% if fehler %}<div class="warn rot">{{ fehler }}</div>{% endif %}
+
+{% if not darf %}
+  <div class="warn">Planungsrunden starten und beitreten können die Vereinsadmins.</div>
+{% else %}
+<div class="kacheln">
+  <form class="card" method="post" action="{{ url_for('planung.runde_code') }}">{{ csrf()|safe }}
+    <b>Mit Code beitreten</b>
+    <label>Code vom Organisator</label>
+    <input name="code" value="{{ code }}" placeholder="z.B. K7M-4QX" maxlength="12" autocomplete="off" autocapitalize="characters" required>
+    <div class="aktionen"><button class="btn">Weiter</button></div>
+  </form>
+  <form class="card" method="post" action="{{ url_for('planung.runde_neu') }}">{{ csrf()|safe }}
+    <b>Neue Planungsrunde starten</b>
+    <label>Name</label><input name="name" maxlength="200" required placeholder="z.B. Jahresplanung Ergoldsbach">
+    <label>Jahr</label><input name="jahr" type="number" value="{{ jahr }}" min="{{ jahr - 1 }}" max="2040" required>
+    <div class="aktionen"><button class="btn">Starten</button></div>
+  </form>
+</div>
+{% endif %}
+
+{% macro ergebnis_knoepfe(liste) %}
+  {% for e in liste %}
+  <div class="aktionen kompakt">
+    <span class="hint">Ergebnis Version {{ e.version }} · {{ e.abgeschlossen_am[:10]|tm }}{{ e.abgeschlossen_am[:4] }} · {{ e.daten.termine|length }} Termine · {{ e.daten.konflikte|length }} offene Konflikte</span>
+  </div>
+  {{ download_knoepfe('ergebnis_export', {'eid': e.id}) }}
+  {% endfor %}
+{% endmacro %}
+<h2>Eure Runden</h2>
+{% for r in runden %}
+  <div class="card">
+    <div class="zeile" style="align-items:center">
+      <div style="flex:3 1 260px"><b>{{ r.name }} {{ r.jahr }}</b>
+        <div class="hint">{{ r.anzahl }} Vereine · {{ 'Organisator: ihr' if r.organisator == angemeldet else 'ihr seid dabei' }}{{ ' · abgeschlossen' if r.status != 'offen' }}</div></div>
+      <div style="flex:0 0 auto"><a class="btn sek" href="{{ url_for('planung.runde_seite', runde_id=r.id) }}">Öffnen</a></div>
+    </div>
+    {{ ergebnis_knoepfe(ergebnisse.get(r.id, [])) }}
+  </div>
+{% else %}
+  <p class="hint">Noch keine.</p>
+{% endfor %}
+{% if nur_ergebnis %}
+<h2>Frühere Runden</h2>
+<p class="hint">Runden, die ihr inzwischen verlassen habt – das Ergebnis vom Abschluss bleibt euch.</p>
+{% for r in nur_ergebnis %}
+  <div class="card"><b>{{ r.name }} {{ r.jahr }}</b>{{ ergebnis_knoepfe(ergebnisse[r.id]) }}</div>
+{% endfor %}
+{% endif %}
+{% endblock %}

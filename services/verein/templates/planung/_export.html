@@ -1,0 +1,11 @@
+{# Herunterladen: PDF und Excel sichtbar, die übrigen Formate unter „Weitere Formate“ (Josef 2026-10-07: einfache Abläufe).
+   endpunkt + kw: Route, die `fmt` erwartet. #}
+{% macro download_knoepfe(endpunkt, kw={}) %}
+<div class="exporte">
+  <a class="btn klein" href="{{ url_for('planung.' ~ endpunkt, fmt='pdf', **kw) }}">PDF</a>
+  <a class="btn sek klein" href="{{ url_for('planung.' ~ endpunkt, fmt='xlsx', **kw) }}">Excel</a>
+  <details class="weitere"><summary>Weitere Formate</summary>
+    <div class="exporte" style="margin-top:6px">{% for f, (name_f, _) in FORMATE.items() if f not in ('pdf', 'xlsx') %}<a class="btn sek klein" href="{{ url_for('planung.' ~ endpunkt, fmt=f, **kw) }}">{{ name_f }}</a>{% endfor %}</div>
+  </details>
+</div>
+{% endmacro %}

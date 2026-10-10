@@ -1,0 +1,89 @@
+{% extends "planung/base.html" %}
+{% from "planung/_termin.html" import termin_karte with context %}
+{% from "planung/_export.html" import download_knoepfe with context %}
+{% block titel %}Termine{% endblock %}
+{% block inhalt %}
+<div class="zeile" style="align-items:end">
+  <div style="flex:3 1 300px">
+    <h1>Termine</h1>
+    <p class="hint">{{ angemeldet_name }}</p>
+  </div>
+  <form method="get" class="zeile" style="flex:0 1 300px;margin:0">
+    <div><label for="jahr-filter">Anzeigen</label>
+      <select id="jahr-filter" name="jahr" onchange="this.form.submit()">
+        <option value="">ab heute</option>
+        {% for j in jahre %}<option value="{{ j }}"{% if j == jahr %} selected{% endif %}>{{ j }}</option>{% endfor %}
+      </select></div>
+  </form>
+</div>
+
+{% if fehler %}<div class="warn rot">{{ fehler }}</div>{% endif %}
+{% if meldung %}<div class="ok">{{ meldung }}</div>{% endif %}
+{% if upload_ok and upload_ok.isdigit() %}<div class="ok">{{ upload_ok }} Termine aus dem Terminplan übernommen.</div>{% endif %}
+
+{% for r in runden %}
+  <div class="card zeile" style="align-items:center">
+    <div style="flex:3 1 260px"><b>Planungsrunde: {{ r.name }} {{ r.jahr }}</b> <span class="hint">· {{ r.anzahl }} Vereine</span>
+      <div class="hint">Dort seht ihr die Entwürfe der anderen Vereine und die Konflikte.</div></div>
+    <div style="flex:0 0 auto"><a class="btn sek" href="{{ url_for('planung.runde_seite', runde_id=r.id) }}">Zur Runde</a></div>
+  </div>
+{% endfor %}
+
+{% if darf %}
+<div class="aktionen" style="margin:10px 0">
+  <a class="btn" href="/verein/termine/neu{% if jahr %}?jahr={{ jahr }}{% endif %}">Neuer Termin</a>
+  <a class="btn sek" href="/verein/upload">Terminplan hochladen</a>
+  <span class="hint">noch {{ upload_rest }} von {{ upload_limit }} Uploads heute</span>
+</div>
+
+{% if vorlage_n %}
+<div class="card zeile" style="align-items:center">
+  <div style="flex:3 1 260px"><b>Für {{ vorlage_jahr }} könnt ihr {{ vorlage_n }} {{ 'Termin' if vorlage_n == 1 else 'Termine' }} aus {{ vorlage_jahr - 1 }} übernehmen</b>
+    <div class="hint">Sie kommen als Entwurf dazu – Datum passend verschoben, z. B. „2. Samstag im Juli“. Danach prüfen und veröffentlichen.
+    {% if daten_ab and vorlage_jahr == daten_ab.year + 1 and daten_ab.month > 1 %}Termine vor {{ ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'][daten_ab.month - 1] }} {{ daten_ab.year }} kennt der Kalender noch nicht – bitte selbst ergänzen.{% endif %}</div></div>
+  <form method="post" action="{{ url_for('planung.entwuerfe_aus_vorjahr') }}" style="flex:0 0 auto;margin:0">{{ csrf()|safe }}<input type="hidden" name="jahr" value="{{ vorlage_jahr }}">{% if jahr %}<input type="hidden" name="ansicht_jahr" value="{{ jahr }}">{% endif %}
+    <button class="btn">Übernehmen</button></form>
+</div>
+{% endif %}
+{% endif %}
+
+{% if monate_offen %}
+<div class="zeile" style="align-items:center;margin-top:20px">
+  <h2 style="flex:3 1 260px;margin:0">Noch nicht veröffentlicht ({{ n_offen }})</h2>
+  {% if darf and n_offen > 1 %}
+  <form method="post" action="{{ url_for('planung.entwuerfe_alle') }}" style="flex:0 0 auto;margin:0" onsubmit="return confirm('Alle {{ n_offen }} Entwürfe veröffentlichen? Sie erscheinen dann im Vereinskalender.')">{{ csrf()|safe }}{% if jahr %}<input type="hidden" name="jahr" value="{{ jahr }}"><input type="hidden" name="ansicht_jahr" value="{{ jahr }}">{% endif %}
+    <button class="btn sek" name="aktion" value="veroeffentlichen">Alle veröffentlichen</button></form>
+  {% endif %}
+</div>
+<p class="hint">Nur für euch sichtbar – und für die Vereine eurer Planungsrunden.</p>
+{% for monat, liste in monate_offen %}
+  <h3 class="monat">{{ monat }}</h3>
+  {% for t in liste %}{{ termin_karte(t, True, csrf, STATUS, STUFE_TAG, zeit_text, darf=darf, ansicht_jahr=jahr) }}{% endfor %}
+{% endfor %}
+{% endif %}
+
+<h2>Im Kalender</h2>
+{% for monat, liste in monate_kalender %}
+  <h3 class="monat">{{ monat }}</h3>
+  {% for t in liste %}{{ termin_karte(t, True, csrf, STATUS, STUFE_TAG, zeit_text, darf=darf, ansicht_jahr=jahr) }}{% endfor %}
+{% else %}
+  <p class="hint">{% if jahr %}Keine Termine in {{ jahr }}.{% else %}Keine kommenden Termine.{% endif %}</p>
+{% endfor %}
+
+{% if darf %}
+<details class="card">
+  <summary style="font-size:15px;font-weight:600">Hilfe &amp; FAQ</summary>
+  <p><b>Veröffentlichen oder als Entwurf?</b> Unter dem Jahr meist gleich „Veröffentlichen“. „Als Entwurf speichern“ für die Jahresplanung – Entwürfe sieht niemand außer euch und den Vereinen eurer Planungsrunden.</p>
+  <p><b>Warnung „Am selben Tag schon geplant“</b> ist nur ein Hinweis. Welche Vereine geprüft werden, stellt ihr unter „Einstellungen“ ein.</p>
+  <p><b>Mehrtägig:</b> „bis Datum“ ausfüllen – je Tag entsteht ein eigener Termin (max. 16), jeweils mit eigener Beschreibung und eigenem Flyer.</p>
+  <p><b>Vorschau:</b> Beim Anlegen und Bearbeiten zeigt „Vorschau“ den Termin so, wie er im Kalender erscheint. Es wird dabei nichts gespeichert oder hochgeladen.</p>
+  <p><b>Terminplan hochladen:</b> PDF oder Foto (JPG, PNG, HEIC) – eine KI liest die Termine aus, z. B. aus Jahresprogrammen, Pfarrbriefen oder Plakaten (ca. 15–60 Sekunden). Oder die Excel-Vorlage ausfüllen und hochladen – das geht sofort. Datum in Excel: <code>TT.MM.JJJJ</code> oder <code>JJJJ-MM-TT</code>, kein Text wie „ca.“ in der Datumsspalte. {{ upload_limit }} Uploads pro Tag und Verein, ab Mitternacht wieder frei.</p>
+  <p><b>Upload fehlgeschlagen?</b> PDF: Seite abfotografieren und als JPG hochladen. Excel: Datumsspalte prüfen. Sonst die Datei an <a href="mailto:Vereinskalender@icloud.com">Vereinskalender@icloud.com</a> schicken – wir tragen sie ein.</p>
+  <p style="margin-bottom:0"><b>Flyer:</b> Bild oder PDF (max. 8 MB) zuerst auf dem Gerät speichern und dann hochladen – direkt aus Outlook oder einer E-Mail gezogen klappt nicht.</p>
+</details>
+{% endif %}
+
+<h2>Herunterladen</h2>
+{{ download_knoepfe('termine_export', {'jahr': jahr} if jahr else {}) }}
+<p class="hint">Die angezeigten Termine ({{ jahr if jahr else 'ab heute' }}){{ ' – Entwürfe eingeschlossen' if monate_offen }}.</p>
+{% endblock %}

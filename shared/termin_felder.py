@@ -1,9 +1,21 @@
 """Gemeinsame Prüfregeln für Termin-Felder (Vereinsformular + Admin-PATCH)."""
 import re
+from datetime import date
 
 BESCHREIBUNG_MAX = 1000
 UHRZEIT_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 DATUM_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def datum_ok(s: str) -> bool:
+    """Format **und** Kalender: „2027-13-01“ oder „2027-02-30“ passen auf DATUM_RE, sind aber kein Datum (#435)."""
+    if not DATUM_RE.match(s or ""):
+        return False
+    try:
+        date.fromisoformat(s)
+    except ValueError:
+        return False
+    return True
 
 
 def zeit_fehler(uhrzeit: str, uhrzeit_bis: str) -> str:

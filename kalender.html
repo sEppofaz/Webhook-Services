@@ -500,7 +500,7 @@ input.mt-feld{height:40px}textarea.mt-feld{resize:vertical;line-height:1.45}
     <a class="hdr-pill hdr-pill-sec" id="verein-login-btn" href="/verein/login" title="Vereins-Login oder Registrierung"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Login</a>
     <button class="hdr-pill hdr-pill-sec" onclick="showInfoModal()" title="Info"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>Info</button>
     <button class="refresh-btn" id="admin-import-btn" onclick="toggleImport()" title="Import" style="display:none"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
-    <a class="refresh-btn" id="verein-admin-btn" href="/verein/dashboard" title="Mein Verein" style="display:none;text-decoration:none"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></a>
+    <a class="refresh-btn" id="verein-admin-btn" href="/verein/termine" title="Mein Verein" style="display:none;text-decoration:none"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></a>
   </div>
 </header>
 
@@ -4338,6 +4338,10 @@ function showInfoModal(){
         <div><strong><a href="/verein/register" style="color:var(--accent);text-decoration:none">Euren Verein eintragen</a></strong><span>Termine selbst eintragen und verwalten &ndash; kostenlos, direkt, ohne Wartezeit. <a href="/verein/register" style="color:var(--accent);font-weight:600">Jetzt registrieren &rarr;</a><br><span style="color:var(--text3);font-size:.9em">Bereits registriert? <a href="/verein/login" style="color:var(--accent)">Zum Login &rarr;</a> (auch oben rechts: &bdquo;Login&ldquo;)</span></span></div>
       </div>
       <div class="help-row" style="padding:8px 0 12px;border-bottom:1.5px solid var(--border);margin-bottom:4px">
+        <span class="help-icon">${icon("users",20)}</span>
+        <div><strong>Jahresplanung mit anderen Vereinen</strong><span>Im Vereinsbereich Termine erst als Entwurf anlegen &ndash; auch aus dem Vorjahr &uuml;bernommen &ndash; und in einer <b>Planungsrunde</b> mit den Vereinen der Gemeinde abstimmen: Jeder sieht die Entw&uuml;rfe der anderen und wo sich Termine &uuml;berschneiden. Eine Runde startet jeder Verein selbst und l&auml;dt per Link oder Code ein. Ver&ouml;ffentlicht wird erst, wenn ihr es wollt.</span></div>
+      </div>
+      <div class="help-row" style="padding:8px 0 12px;border-bottom:1.5px solid var(--border);margin-bottom:4px">
         <span class="help-icon">${icon("mail",20)}</span>
         <div><strong>Eure Termine eintragen lassen</strong><span>Jahresprogramm als PDF mit PLZ an <a href="mailto:Vereinskalender@icloud.com" style="color:var(--accent);text-decoration:none;font-weight:600">Vereinskalender@icloud.com</a> schicken &ndash; wir k&uuml;mmern uns zeitnah. Auch Pfarrbriefe m&ouml;glich.</span></div>
       </div>
@@ -4413,7 +4417,7 @@ function showInfoModal(){
         <span class="help-icon">${icon("scale",20)}</span>
         <div><strong>Impressum</strong><span>Josef Fischer &middot; H&ouml;lskofen 13 &middot; 84092 Bayerbach b. Ergoldsbach<br><a href="mailto:Vereinskalender@icloud.com" style="color:var(--accent);text-decoration:none">Vereinskalender@icloud.com</a></span></div>
       </div>
-      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.76 &middot; 2026-10-10 &middot; a sEpp-App</p>
+      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.77 &middot; 2026-10-10 &middot; a sEpp-App</p>
       <button onclick="document.getElementById('info-modal').remove()" style="width:100%;margin-top:16px;padding:12px;background:none;border:1.5px solid var(--border2);border-radius:12px;font-size:14px;color:var(--text2);cursor:pointer">Schlie&szlig;en</button>
     </div>`;
   document.body.appendChild(m);

@@ -26,12 +26,15 @@ from services.auth.routes import (
     _telegram_ortschaft_hinweis, ortschaft_geo, require_verein_login,
 )
 from shared.geo import plz_gueltig
-from shared.termin_felder import BESCHREIBUNG_MAX as _BESCHREIBUNG_MAX, zeit_fehler as _zeit_fehler
+from shared.termin_felder import BESCHREIBUNG_MAX as _BESCHREIBUNG_MAX, datum_ok, zeit_fehler as _zeit_fehler
+from services.verein.planung import KOLLISION_JS
 
 verein_bp = Blueprint("verein", __name__)
 
 _BACK_PROFIL = '<a class="btn btn-sec" href="/verein/profil" style="margin-top:.75rem">← Zurück zum Profil</a>'
-_BACK_DASH = '<a class="btn btn-sec" href="/verein/dashboard" style="margin-top:.75rem">← Zurück</a>'
+_BACK_DASH = '<a class="btn btn-sec" href="/verein/termine" style="margin-top:.75rem">← Zurück zu den Terminen</a>'
+_BACK_EINST = '<a class="btn btn-sec" href="/verein/einstellungen" style="margin-top:.75rem">← Zurück zu den Einstellungen</a>'
+_BACK_HISTORY = '<a class="btn btn-sec" href="javascript:history.back()" style="margin-top:.75rem">← Zurück</a>'
 _UPLOAD_LIMIT = 3
 _MAX_UPLOAD_MB = 40  # Summe aller Flyer je Formular; nginx /verein/(termine|upload) erlaubt 45m
 _MAX_PLAN_MB = 20    # Terminplan-Upload (PDF/Bild/Excel), wie Admin-/upload
@@ -51,131 +54,14 @@ def _get_verein_termine(verein_key: str) -> list:
     return [t for t in alle if not t.get("geloescht") and not t.get("deleted")]
 
 
-# ── Dashboard ────────────────────────────────────────────────────────────────
+# ── Dashboard → „Termine“ (v1.77, ADR-026) ───────────────────────────────────
 
 @verein_bp.route("/verein/dashboard")
-@require_verein_login
-def dashboard(user):
-    verein_key = user["verein_key"]
-    verein_name = user["verein_name"]
-    termine = _get_verein_termine(verein_key)
-    heute = date.today().isoformat()
-    crawler_block = _crawler_block(user)
-
-    rows = ""
-    for t in sorted(termine, key=lambda x: x.get("datum", "")):
-        past = t.get("datum", "") < heute
-        style = "opacity:.5" if past else ""
-        edit_btn = ""
-        if user["role"] == "admin":
-            edit_btn = (f'<a href="/verein/termine/{html.escape(t["id"])}" style="margin-left:.5rem;color:#0a84ff;text-decoration:none;font-size:.9rem">Bearbeiten</a>'
-                        if t.get("id") else "")
-        rows += f"""<div class="card" style="{style}">
-  <div style="display:flex;justify-content:space-between;align-items:start">
-    <div>
-      <div style="font-weight:600">{html.escape(t.get('bezeichnung',''))}</div>
-      <div style="color:#aeaeb2;font-size:.85rem">{html.escape(t.get('datum',''))} {html.escape(t.get('uhrzeit',''))}{('–' + html.escape(t['uhrzeit_bis'])) if t.get('uhrzeit_bis') else ''}</div>
-      <div style="color:#aeaeb2;font-size:.85rem">{html.escape(t.get('ort',''))}</div>
-      {'<div style="color:#8e8e93;font-size:.8rem">mit Beschreibung</div>' if t.get('beschreibung') else ''}
-    </div>
-    <div>{edit_btn}</div>
-  </div>
-</div>"""
-
-    if not rows:
-        rows = '<p style="color:#aeaeb2">Noch keine Termine eingetragen.</p>'
-
-    neu_btn = ""
-    upload_btn = ""
-    mitglieder_link = ""
-    profil_link = ""
-    if user["role"] == "admin":
-        neu_btn = '<a class="btn" href="/verein/termine/neu">+ Neuer Termin</a>'
-        remaining = _quota_remaining(user["verein_id"])
-        used = _UPLOAD_LIMIT - remaining
-        upload_btn = (
-            f'<a class="btn btn-sec" href="/verein/upload" style="margin-top:.5rem">'
-            f'Terminplan hochladen ({used}/{_UPLOAD_LIMIT} heute)</a>'
-        )
-        mitglieder_link = '<a class="btn btn-sec" href="/verein/mitglieder" style="margin-top:.5rem">Mitglieder</a>'
-        profil_link = '<a class="btn btn-sec" href="/verein/profil" style="margin-top:.5rem">Vereinsprofil</a>'
-
-    upload_ok = request.args.get("upload_ok", "")
-    upload_banner = ""
-    if upload_ok and upload_ok.isdigit():
-        upload_banner = f'<p class="ok">{upload_ok} Termine erfolgreich importiert.</p>'
-
-    hilfe_block = ""
-    if user["role"] == "admin":
-        hilfe_block = """
-<details style="margin-top:1rem;border:1px solid #3a3a3c;border-radius:.625rem;overflow:hidden">
-  <summary style="padding:.75rem 1rem;cursor:pointer;background:#2c2c2e;color:#f2f2f7;font-size:.9rem;font-weight:600;list-style:none;display:flex;justify-content:space-between;align-items:center">
-    Hilfe &amp; FAQ <span style="color:#aeaeb2;font-weight:400;font-size:.8rem">▾</span>
-  </summary>
-  <div style="padding:1rem;display:flex;flex-direction:column;gap:.85rem;background:#1c1c1e">
-
-    <div>
-      <div style="font-weight:600;font-size:.9rem;margin-bottom:.25rem">PDF oder Foto hochladen</div>
-      <div style="color:#aeaeb2;font-size:.85rem">Claude KI liest das Dokument und extrahiert Termine automatisch. Funktioniert mit Jahresprogrammen, Pfarrbriefen und Fotos von Plakaten (JPG, PNG, HEIC). Dauer: ca. 15–60 Sek.</div>
-    </div>
-
-    <div>
-      <div style="font-weight:600;font-size:.9rem;margin-bottom:.25rem">Excel-Vorlage</div>
-      <div style="color:#aeaeb2;font-size:.85rem">Vorlage herunterladen, ausfüllen und hochladen – kein KI-Call, sofortige Verarbeitung.<br>
-      Datumsformat: <code style="background:#3a3a3c;padding:0 4px;border-radius:3px">TT.MM.JJJJ</code> oder <code style="background:#3a3a3c;padding:0 4px;border-radius:3px">JJJJ-MM-TT</code> – kein Text wie „ca." oder Leerzeichen in der Datumsspalte.</div>
-    </div>
-
-    <div>
-      <div style="font-weight:600;font-size:.9rem;margin-bottom:.25rem">Tageslimit</div>
-      <div style="color:#aeaeb2;font-size:.85rem">3 Uploads pro Tag – Zurücksetzung um Mitternacht. Das Limit gilt pro Verein.</div>
-    </div>
-
-    <div>
-      <div style="font-weight:600;font-size:.9rem;margin-bottom:.25rem">Upload fehlgeschlagen?</div>
-      <div style="color:#aeaeb2;font-size:.85rem">
-        <b style="color:#f2f2f7">PDF:</b> Seite als Foto abfotografieren und als JPG hochladen.<br>
-        <b style="color:#f2f2f7">Excel:</b> Datumsspalte prüfen – nur reines Datum, kein zusätzlicher Text.<br>
-        <b style="color:#f2f2f7">Allgemein:</b> Datei erneut hochladen oder per Mail an
-        <a href="mailto:Vereinskalender@icloud.com" style="color:#0a84ff">Vereinskalender@icloud.com</a> schicken – wir importieren manuell.
-      </div>
-    </div>
-
-    <div>
-      <div style="font-weight:600;font-size:.9rem;margin-bottom:.25rem">Vorschau vor dem Speichern</div>
-      <div style="color:#aeaeb2;font-size:.85rem">Beim Anlegen und Bearbeiten zeigt „Vorschau“ den Termin so, wie er im Kalender erscheint – bei mehrtägigen Terminen alle Tage. Termin antippen zeigt die Beschreibung, die Büroklammer den Flyer. Es wird dabei nichts gespeichert oder hochgeladen.</div>
-    </div>
-
-    <div>
-      <div style="font-weight:600;font-size:.9rem;margin-bottom:.25rem">Flyer-Upload bei einem Termin</div>
-      <div style="color:#aeaeb2;font-size:.85rem">Bild oder PDF (max. 8 MB) zuerst auf dem Gerät speichern und von dort hochladen. Ein Bild direkt aus Outlook/einer E-Mail in das Upload-Feld zu ziehen funktioniert nicht (Outlook gibt dabei nur einen internen Bild-Verweis statt der echten Datei weiter).</div>
-    </div>
-
-  </div>
-</details>"""
-
-    body = f"""
-{upload_banner}<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
-  <div>
-    <div style="font-weight:600">{html.escape(verein_name)}</div>
-    <div style="color:#aeaeb2;font-size:.85rem">{html.escape(user['email'])} · {html.escape(user['role'])}</div>
-  </div>
-  <form method="post" action="/verein/logout">
-    <button class="btn btn-sec" style="width:auto;padding:.5rem .875rem;font-size:.85rem">Logout</button>
-  </form>
-</div>
-{neu_btn}
-{upload_btn}
-{crawler_block}
-<h2 style="font-size:1rem;margin:1rem 0 .5rem">Termine ({len(termine)})</h2>
-{rows}
-{mitglieder_link}
-{profil_link}
-{hilfe_block}
-<hr>
-<a class="btn btn-sec" href="/verein/passwort" style="margin-top:.5rem">Passwort ändern</a>
-<a class="btn btn-sec" href="/" style="margin-top:.5rem">← Zurück zum Kalender</a>
-<p class="hint" style="margin-top:1rem"><a href="/verein/datenschutz">Datenschutzerklärung</a> · <a href="/verein/nutzungsbedingungen">Nutzungsbedingungen</a></p>"""
-    return _page(f"Dashboard – {verein_name}", body)
+def dashboard():
+    """Frühere Startseite. Das Dashboard ist aufgeteilt auf Termine · Planungsrunden · Einstellungen
+    (`services/verein/planung.py`); alte Lesezeichen, Mails und Links landen auf „Termine“."""
+    ok = request.args.get("upload_ok", "")
+    return redirect("/verein/termine" + (f"?upload_ok={ok}" if ok.isdigit() else ""))
 
 
 # ── Abruf von Gemeinde-Webseiten an/aus (ADR-027) ───────────────────────────
@@ -189,30 +75,6 @@ def _crawler_aus(verein_key: str | None) -> bool:
         return False
 
 
-def _crawler_block(user) -> str:
-    """Karte im Dashboard: Status + (nur Vereinsadmin) Knopf zum Umschalten."""
-    if not user.get("verein_key"):
-        return ""
-    aus = _crawler_aus(user["verein_key"])
-    status = ('<b style="color:#ff9f0a">Aus</b> – neue Termine kommen nur noch von euch.' if aus else
-              '<b style="color:#34c759">An</b> – neue Termine von Gemeinde-Webseiten werden ergänzt.')
-    knopf = ""
-    if user["role"] == "admin":
-        knopf = f"""<form method="post" action="/verein/crawler" style="margin-top:.6rem">
-  {csrf_field(get_csrf_token())}
-  <input type="hidden" name="aus" value="{'0' if aus else '1'}">
-  <button class="btn btn-sec" type="submit" style="margin:0">{'Abruf wieder einschalten' if aus else 'Abruf ausschalten'}</button>
-</form>"""
-    return f"""<div class="card" style="margin-top:1rem">
-  <div style="font-weight:600;margin-bottom:.25rem">Termine von Gemeinde-Webseiten übernehmen</div>
-  <div style="color:#aeaeb2;font-size:.85rem">Vereinskalender liest wöchentlich die Veranstaltungsseiten der Gemeinden
-  (z.&nbsp;B. heimat-info.de) und ergänzt dort gefundene Termine eures Vereins. Pflegt ihr eure Termine selbst,
-  könnt ihr das ausschalten – bestehende Termine bleiben unverändert.</div>
-  <div style="font-size:.9rem;margin-top:.5rem">Status: {status}</div>
-  {knopf}
-</div>"""
-
-
 @verein_bp.route("/verein/crawler", methods=["POST"])
 @require_verein_login
 def crawler_schalten(user):
@@ -222,7 +84,7 @@ def crawler_schalten(user):
         return _page("Fehler", '<p class="err">Ungültige Anfrage. Bitte Seite neu laden.</p>'), 403
     verein_key = user.get("verein_key")
     if not verein_key:
-        return redirect("/verein/dashboard")
+        return redirect("/verein/einstellungen")
     aus = request.form.get("aus") == "1"
 
     def _mut(d):
@@ -235,7 +97,9 @@ def crawler_schalten(user):
 
     KalenderStore.update(_mut)
     log_audit("crawler_aus" if aus else "crawler_an", "", verein_key, user["id"])
-    return redirect("/verein/dashboard")
+    meldung = ("Gespeichert.+Termine+kommen+ab+jetzt+nur+noch+von+euch." if aus
+               else "Gespeichert.+Termine+von+Gemeinde-Webseiten+werden+wieder+erg%C3%A4nzt.")
+    return redirect(f"/verein/einstellungen?meldung={meldung}#quellen")
 
 
 # ── Neuer Termin ─────────────────────────────────────────────────────────────
@@ -407,19 +271,57 @@ _VORSCHAU_JS = """<style>
 </script>"""
 
 
+def _runde_ziel(user) -> int | None:
+    """Parameter/Feld `runde`: Formular wurde aus einer Planungsrunde geöffnet, in der der Verein dabei ist."""
+    from shared.planung_db import aktive_teilnehmer
+    rid = request.values.get("runde", "")
+    if rid.isdigit() and user.get("verein_key") in aktive_teilnehmer(int(rid)):
+        return int(rid)
+    return None
+
+
+def _nach_speichern(user, meldung: str):
+    """Zurück zur Runde, aus der das Formular kam, sonst zu „Termine“ – mit Rückmeldung."""
+    from urllib.parse import quote
+    rid = _runde_ziel(user)
+    ziel = f"/verein/runde/{rid}" if rid else "/verein/termine"
+    return redirect(f"{ziel}?meldung={quote(meldung)}")
+
+
+def _zurueck_link(user) -> str:
+    rid = _runde_ziel(user)
+    if rid:
+        return f'<a class="btn btn-sec" href="/verein/runde/{rid}" style="margin-top:.75rem">← Zurück zur Planungsrunde</a>'
+    return _BACK_DASH
+
+
+def _verlauf(user, datum: str, aktion: str, details: str) -> None:
+    """Terminänderung im Verlauf offener Planungsrunden des Vereins für dieses Jahr (ADR-026)."""
+    from services.verein.planung import verlauf
+    try:
+        verlauf(user["verein_key"], int(datum[:4]), aktion, details)
+    except (ValueError, TypeError):
+        pass
+
+
 @verein_bp.route("/verein/termine/neu", methods=["GET", "POST"])
 @require_verein_login
 def termin_neu(user):
     if user["role"] != "admin":
-        return redirect("/verein/dashboard")
+        return redirect("/verein/termine")
 
     error = ""
-    f = {"datum": date.today().isoformat(), "datum_bis": "", "uhrzeit": "", "uhrzeit_bis": "",
+    # Aus „Termine“ mit Jahr-Filter oder aus einer Planungsrunde: Datum leer statt heute, wenn es ein anderes Jahr ist
+    jahr = request.values.get("jahr", "")
+    vorbelegt = date.today().isoformat() if not jahr.isdigit() or int(jahr) == date.today().year else ""
+    f = {"datum": vorbelegt, "datum_bis": "", "uhrzeit": "", "uhrzeit_bis": "",
          "bezeichnung": "", "ort": ""}
     beschreibungen = [""]
+    runde_id = _runde_ziel(user)
     if request.method == "POST":
         if not validate_csrf():
             return _page("Fehler", '<p class="err">Ungültige Anfrage. Bitte Seite neu laden.</p>'), 403
+        als_entwurf = request.form.get("aktion") == "entwurf"
         f = {k: request.form.get(k, "").strip() for k in f}
         datum, datum_bis = f["datum"], f["datum_bis"]
         tage = []
@@ -447,6 +349,20 @@ def termin_neu(user):
         beschreibungen = [request.form.get(f"beschreibung_{i}", "").strip() for i in range(n)]
         if not error and any(len(b) > _BESCHREIBUNG_MAX for b in beschreibungen):
             error = f"Beschreibung höchstens {_BESCHREIBUNG_MAX} Zeichen."
+        if not error and (len(f["bezeichnung"]) > 200 or len(f["ort"]) > 200):
+            error = "Bezeichnung und Ort höchstens 200 Zeichen."
+        if not error and als_entwurf and any(d.filename for d in request.files.values()):
+            # Flyer liegen per Dropbox-Link öffentlich – ein Entwurf ist es nicht (ADR-026)
+            error = "Flyer könnt ihr erst nach dem Veröffentlichen beim Termin ergänzen. Bitte ohne Flyer als Entwurf speichern."
+        if not error and als_entwurf:
+            from shared.planung_db import entwurf_neu
+            for i, tag in enumerate(tage):
+                entwurf_neu(user["verein_key"], {**f, "datum": tag, "beschreibung": beschreibungen[i],
+                                                 "uhrzeit_bis": f["uhrzeit_bis"]})
+            _verlauf(user, tage[0], "Termin ergänzt", f"{f['bezeichnung']}: {_tag_label(tage[0])}"
+                     + (f" bis {_tag_label(tage[-1])}" if len(tage) > 1 else ""))
+            n = len(tage)
+            return _nach_speichern(user, f"{f['bezeichnung']}: {n} {'Tag' if n == 1 else 'Tage'} als Entwurf gespeichert.")
 
         # Erst alle Flyer prüfen, dann hochladen – kein halb angelegter Termin-Satz
         flyer_bytes = {}
@@ -509,7 +425,12 @@ def termin_neu(user):
                 raise
             for t in neue:
                 log_audit("erstellt", t["id"], verein_key, user["id"])
-            return redirect("/verein/dashboard")
+            _verlauf(user, tage[0], "Termin veröffentlicht", f"{f['bezeichnung']}: {_tag_label(tage[0])}"
+                     + (f" bis {_tag_label(tage[-1])}" if len(tage) > 1 else ""))
+            from services.verein.planung import cache_leeren
+            cache_leeren()
+            n = len(neue)
+            return _nach_speichern(user, f"{f['bezeichnung']}: {n} {'Tag' if n == 1 else 'Tage'} im Kalender.")
         if request.files and any(d.filename for d in request.files.values()):
             error += " Ausgewählte Flyer bitte erneut auswählen."
 
@@ -521,8 +442,9 @@ def termin_neu(user):
     tok = get_csrf_token()
     form = f"""
 {'<p class="err">'+e(error)+'</p>' if error else ''}
-<form id="termin-form" method="post" enctype="multipart/form-data" autocomplete="off" data-verein-key="{e(user.get('verein_key',''))}" data-verein-name="{e(user.get('verein_name',''))}">
+<form id="termin-form" class="kollision-pruefen" method="post" enctype="multipart/form-data" autocomplete="off" data-verein-key="{e(user.get('verein_key',''))}" data-verein-name="{e(user.get('verein_name',''))}">
   {csrf_field(tok)}
+  {f'<input type="hidden" name="runde" value="{runde_id}">' if runde_id else ''}
   <label>Datum *</label>
   <input name="datum" type="date" required value="{e(f['datum'])}">
   <label>bis Datum (optional)</label>
@@ -537,14 +459,18 @@ def termin_neu(user):
   <input name="bezeichnung" type="text" required placeholder="z.B. Jahreshauptversammlung" value="{e(f['bezeichnung'])}">
   <label>Ort / Veranstaltungsort</label>
   <input name="ort" type="text" placeholder="z.B. Gasthaus zur Post" value="{e(f['ort'])}">
+  <div class="kollision-hinweis" aria-live="polite"></div>
   <div id="tage">{tage_html}</div>
   <p id="tage-info" class="hint" style="color:#ff9f0a"></p>
   {_VORSCHAU_BTN}
-  <button class="btn" type="submit">Termin speichern</button>
+  <button class="btn" type="submit" name="aktion" value="veroeffentlichen">Veröffentlichen</button>
+  <button class="btn btn-sec" type="submit" name="aktion" value="entwurf">Als Entwurf speichern</button>
+  <p class="hint">Entwurf = noch nicht öffentlich, z.&nbsp;B. für die Jahresplanung. Sehen können ihn nur ihr und die Vereine eurer Planungsrunden. Flyer erst nach dem Veröffentlichen.</p>
 </form>
 {_TAGE_JS % (_MAX_TAGE, _MAX_UPLOAD_MB * 1024 * 1024, _MAX_UPLOAD_MB)}
 {_VORSCHAU_JS}
-{_BACK_DASH}"""
+{KOLLISION_JS}
+{_zurueck_link(user)}"""
     return _page("Neuer Termin", form)
 
 
@@ -554,7 +480,7 @@ def termin_neu(user):
 @require_verein_login
 def termin_edit(user, termin_id):
     if user["role"] != "admin":
-        return redirect("/verein/dashboard")
+        return redirect("/verein/termine")
 
     verein_key = user["verein_key"]
     data = _load_data()
@@ -562,7 +488,7 @@ def termin_edit(user, termin_id):
     termin = next((t for t in termine_list if t.get("id") == termin_id and not t.get("geloescht") and not t.get("deleted")), None)
 
     if not termin:
-        return redirect("/verein/dashboard")
+        return redirect("/verein/termine")
 
     edit_error = ""
     if request.method == "POST":
@@ -587,7 +513,13 @@ def termin_edit(user, termin_id):
             for pfad in flyer_pfade:
                 delete_flyer(pfad)
             log_audit("geloescht", termin_id, verein_key, user["id"])
-            return redirect("/verein/dashboard")
+            from shared.planung_db import kalender_termin_geloescht
+            kalender_termin_geloescht(verein_key, termin_id)   # auch aus den Planungsrunden
+            _verlauf(user, termin.get("datum", ""), "Termin gelöscht",
+                     f"{termin.get('bezeichnung', '')}: {_tag_label(termin['datum']) if datum_ok(termin.get('datum', '')) else ''}")
+            from services.verein.planung import cache_leeren
+            cache_leeren()
+            return _nach_speichern(user, f"{termin.get('bezeichnung', 'Termin')} gelöscht.")
         elif aktion == "flyer_entfernen":
             alter_pfad = termin.get("flyer_path", "")
             if alter_pfad:
@@ -600,7 +532,8 @@ def termin_edit(user, termin_id):
                 return d
             KalenderStore.update(flyer_del_updater)
             log_audit("flyer_entfernt", termin_id, verein_key, user["id"])
-            return redirect(f"/verein/termine/{termin_id}")
+            rid = _runde_ziel(user)
+            return redirect(f"/verein/termine/{termin_id}" + (f"?runde={rid}" if rid else ""))
         else:
             datum = request.form.get("datum", "").strip()
             uhrzeit = request.form.get("uhrzeit", "").strip()
@@ -610,8 +543,8 @@ def termin_edit(user, termin_id):
             beschreibung = request.form.get("beschreibung", "").strip()
             if not datum or not bezeichnung:
                 edit_error = "Datum und Bezeichnung sind Pflichtfelder."
-            elif not re.match(r"^\d{4}-\d{2}-\d{2}$", datum):
-                edit_error = "Datum muss im Format YYYY-MM-DD sein."
+            elif not datum_ok(datum):
+                edit_error = "Bitte ein gültiges Datum angeben."
             else:
                 edit_error = _zeit_fehler(uhrzeit, uhrzeit_bis)
             if not edit_error and len(beschreibung) > _BESCHREIBUNG_MAX:
@@ -655,11 +588,26 @@ def termin_edit(user, termin_id):
                 if alter_pfad:
                     delete_flyer(alter_pfad)
                 log_audit("geaendert", termin_id, verein_key, user["id"])
-                return redirect("/verein/dashboard")
+                aenderung = []
+                if datum != termin.get("datum"):
+                    aenderung.append(f"{_tag_label(termin['datum']) if datum_ok(termin.get('datum', '')) else termin.get('datum', '')} → {_tag_label(datum)}")
+                if uhrzeit != termin.get("uhrzeit", ""):
+                    aenderung.append(f"{termin.get('uhrzeit') or 'ohne Uhrzeit'} → {uhrzeit or 'ohne Uhrzeit'}")
+                if bezeichnung != termin.get("bezeichnung"):
+                    aenderung.append(f"neuer Titel „{bezeichnung}“")
+                if ort != termin.get("ort", ""):
+                    aenderung.append("Ort geändert")
+                if aenderung:
+                    _verlauf(user, datum, "Termin geändert", f"{termin.get('bezeichnung', '')}: " + ", ".join(aenderung))
+                from services.verein.planung import cache_leeren
+                cache_leeren()
+                return _nach_speichern(user, f"{bezeichnung} gespeichert.")
             termin = {**termin, "datum": datum, "uhrzeit": uhrzeit, "uhrzeit_bis": uhrzeit_bis,
                       "bezeichnung": bezeichnung, "ort": ort, "beschreibung": beschreibung}
 
     tok = get_csrf_token()
+    rid = _runde_ziel(user)
+    runde_feld = f'<input type="hidden" name="runde" value="{rid}">' if rid else ""
     flyer_url = termin.get("flyer_url", "")
     flyer_section = ""
     if flyer_url:
@@ -673,8 +621,9 @@ def termin_edit(user, termin_id):
 </div>"""
     form = f"""
 {'<p class="err">'+html.escape(edit_error)+'</p>' if edit_error else ''}
-<form id="termin-form" method="post" enctype="multipart/form-data" data-verein-key="{html.escape(verein_key)}" data-verein-name="{html.escape(user.get('verein_name',''))}" data-flyer-url="{html.escape(flyer_url)}">
+<form id="termin-form" class="kollision-pruefen" data-sofort="1" data-termin-id="{html.escape(termin_id)}" method="post" enctype="multipart/form-data" data-verein-key="{html.escape(verein_key)}" data-verein-name="{html.escape(user.get('verein_name',''))}" data-flyer-url="{html.escape(flyer_url)}">
   {csrf_field(tok)}
+  {runde_feld}
   <label>Datum</label>
   <input name="datum" type="date" required value="{html.escape(termin.get('datum',''))}">
   <label>Uhrzeit</label>
@@ -686,6 +635,7 @@ def termin_edit(user, termin_id):
   <input name="bezeichnung" type="text" required value="{html.escape(termin.get('bezeichnung',''))}">
   <label>Ort</label>
   <input name="ort" type="text" value="{html.escape(termin.get('ort',''))}">
+  <div class="kollision-hinweis" aria-live="polite"></div>
   <label>Beschreibung (optional)</label>
   <textarea name="beschreibung" rows="3" maxlength="{_BESCHREIBUNG_MAX}" placeholder="Wird beim Antippen des Termins angezeigt">{html.escape(termin.get('beschreibung',''))}</textarea>
   {flyer_section}
@@ -696,12 +646,14 @@ def termin_edit(user, termin_id):
   <button class="btn" type="submit" name="aktion" value="speichern">Änderungen speichern</button>
 </form>
 {_VORSCHAU_JS}
+{KOLLISION_JS}
 <hr>
 <form method="post" onsubmit="return confirm('Termin wirklich löschen?')">
   {csrf_field(tok)}
+  {runde_feld}
   <button class="btn btn-danger" type="submit" name="aktion" value="loeschen">Termin löschen</button>
 </form>
-{_BACK_DASH}"""
+{_zurueck_link(user)}"""
     return _page("Termin bearbeiten", form)
 
 
@@ -751,7 +703,7 @@ def change_password(user):
   <input name="password_neu2" type="password" required autocomplete="new-password">
   <button class="btn" type="submit">Passwort ändern</button>
 </form>
-{_BACK_PROFIL if request.args.get("von") == "profil" else _BACK_DASH}"""
+{_BACK_PROFIL if request.args.get("von") == "profil" else _BACK_EINST}"""
     return _page("Passwort ändern", form)
 
 
@@ -761,7 +713,7 @@ def change_password(user):
 @require_verein_login
 def mitglieder(user):
     if user["role"] != "admin":
-        return redirect("/verein/dashboard")
+        return redirect("/verein/einstellungen")
 
     import secrets as _sec
     from shared.vk_mail import send_invite_email
@@ -866,7 +818,7 @@ def mitglieder(user):
 {rows}
 <hr>
 {invite_form}
-{_BACK_DASH}"""
+{_BACK_EINST}"""
     return _page("Mitglieder", body)
 
 
@@ -970,7 +922,7 @@ def upload_template(user):
 @require_verein_login
 def upload_page(user):
     if user["role"] != "admin":
-        return redirect("/verein/dashboard")
+        return redirect("/verein/termine")
 
     remaining = _quota_remaining(user["verein_id"])
     used = _UPLOAD_LIMIT - remaining
@@ -1022,7 +974,7 @@ def upload_page(user):
 @require_verein_login
 def upload_process(user):
     if user["role"] != "admin":
-        return redirect("/verein/dashboard")
+        return redirect("/verein/termine")
     if not validate_csrf():
         return _page("Fehler", '<p class="err">Ungültige Anfrage. Bitte Seite neu laden.</p>'), 403
 
@@ -1099,7 +1051,7 @@ def upload_process(user):
     def _sv_up(d): d.setdefault("_meta", {}).setdefault(verein_key, {})["selbstverwaltung"] = True; return d
     KalenderStore.update(_sv_up)
     log_audit("upload", f"bulk_{total}", verein_key, user["id"], anzahl=total)
-    return redirect(f"/verein/dashboard?upload_ok={total}")
+    return redirect(f"/verein/termine?upload_ok={total}")
 
 
 # /verein/confirm-upload entfernt (Review 2026-10-04): Vereins-Uploads speichern direkt,
@@ -1134,6 +1086,10 @@ def datenschutz():
 <p>E-Mails werden über Brevo (Sendinblue SAS, Frankreich) versendet. Dabei wird die Ziel-E-Mail-Adresse an Brevo übermittelt.</p>
 </div>
 <div class="card">
+<h2 style="font-size:1rem;margin-top:0">4a. Entwürfe und Planungsrunden</h2>
+<p>Termine, die ein Verein als Entwurf speichert, sind nicht öffentlich. Sie sehen nur der Verein selbst und die Vereine einer Planungsrunde, der er beigetreten ist. In einer Planungsrunde wird ein Verlauf geführt (welcher Verein wann beigetreten ist, Termine geändert, bestätigt oder veröffentlicht hat) – nur mit Vereinsnamen und Terminen, ohne Personendaten. Schließt der Organisator die Runde ab, wird dieser Stand als Ergebnis für die beteiligten Vereine festgehalten.</p>
+</div>
+<div class="card">
 <h2 style="font-size:1rem;margin-top:0">5a. Telegram-Terminerinnerungen (freiwillig)</h2>
 <p>Wer den Telegram-Bot für Terminerinnerungen nutzt, speichert damit freiwillig seine Telegram-Chat-ID sowie die ausgewählten Vereins-Abonnements auf unserem Server. Diese Daten werden ausschließlich zum Versand der gewünschten Erinnerungen verwendet. Abmelden ist jederzeit mit dem Befehl /stop im Bot möglich – dabei werden alle gespeicherten Daten gelöscht. Eine Löschung ist auch per E-Mail möglich.</p>
 </div>
@@ -1141,7 +1097,7 @@ def datenschutz():
 <h2 style="font-size:1rem;margin-top:0">6. Rechte</h2>
 <p>Auskunft, Berichtigung, Löschung deiner Daten: Schreib an <a href="mailto:Vereinskalender@icloud.com">Vereinskalender@icloud.com</a>. Beschwerderecht bei der zuständigen Datenschutz-Aufsichtsbehörde.</p>
 </div>
-{_BACK_DASH}"""
+{_BACK_HISTORY}"""
     return _page("Datenschutzerklärung", body)
 
 
@@ -1165,7 +1121,7 @@ def nutzungsbedingungen():
 <h2 style="font-size:1rem;margin-top:0">4. Kündigung</h2>
 <p>Der Betreiber kann Accounts bei Verstoß gegen diese Bedingungen ohne Vorankündigung sperren oder löschen.</p>
 </div>
-{_BACK_DASH}"""
+{_BACK_HISTORY}"""
     return _page("Nutzungsbedingungen", body)
 
 
@@ -1178,7 +1134,7 @@ def verein_profil(user):
     Ansprechpartner (vk_users des eingeloggten Admins). Die E-Mail ist Login und
     Reset-Ziel – sie wechselt erst nach Klick auf den Link an die neue Adresse."""
     if user["role"] != "admin":
-        return redirect("/verein/dashboard")
+        return redirect("/verein/einstellungen")
 
     from services.auth.routes import (
         _ansprechpartner_felder, _check_pw, _valid_email, ansprechpartner_fehler,
@@ -1199,7 +1155,7 @@ def verein_profil(user):
         ).fetchone()
 
     if not va or not usr:
-        return redirect("/verein/dashboard")
+        return redirect("/verein/einstellungen")
 
     verein_name = va["verein_name"]
     rubrik      = va["rubrik"] or "Verein"
@@ -1337,7 +1293,7 @@ def verein_profil(user):
   <button class="btn" type="submit">Speichern</button>
 </form>
 <a class="btn btn-sec" href="/verein/passwort?von=profil" style="margin-top:.75rem">Passwort ändern</a>
-{_BACK_DASH}
+{_BACK_EINST}
 {_PLZ_QUELLE}
 {_ORTSCHAFT_JS}"""
     return _page("Vereinsprofil", body)

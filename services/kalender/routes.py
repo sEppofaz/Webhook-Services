@@ -15,7 +15,7 @@ from flask import Blueprint, Response, request
 from shared.admin_aufgaben import offene_orte, register_pruefung
 from shared.geo import geo_fuer_termin, termin_orte_misch, abo_treffer, region_of, eintrag_fuer, _lade as _geo_register, _gem_norm, _ort_norm, ORTE_FREI_FILE
 from shared.flyer_store import upload_flyer, delete_flyer
-from shared.termin_felder import BESCHREIBUNG_MAX, DATUM_RE, zeit_fehler
+from shared.termin_felder import BESCHREIBUNG_MAX, datum_ok, zeit_fehler
 from shared.vk_db import db_conn
 from shared.kalender_core import (
     ICON_192_FILE,
@@ -889,10 +889,21 @@ def api_vereine_delete(key):
 def api_termine():
     if VKO_MAINTENANCE_FILE.exists():
         return json.dumps({"error": "Wartung"}), 503, {"Content-Type": "application/json"}
-    try:
-        raw = json.loads(VEREINSTERMINE_FILE.read_text())
-    except Exception:
-        raw = {}
+    return (
+        json.dumps(oeffentliche_termine(), ensure_ascii=False),
+        200,
+        {"Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-cache, must-revalidate"},
+    )
+
+
+def oeffentliche_termine(raw: dict | None = None) -> dict:
+    """{labels, termine, meta, rubriken} wie `/api/termine` – auch für den Vereinsbereich (Kollisionen,
+    Vorjahres-Vorlage, Planungsrunden), damit dort dieselbe Sicht gilt wie im Kalender."""
+    if raw is None:
+        try:
+            raw = json.loads(VEREINSTERMINE_FILE.read_text())
+        except Exception:
+            raw = {}
     labels = raw.get("_labels", {})
     labels.setdefault("ff", "FF Hölskofen")
     labels.setdefault("kp", "Königstreue Patrioten Hölskofen")
@@ -930,12 +941,7 @@ def api_termine():
         if g is not None:
             t["_geo"] = g
 
-    return (
-        json.dumps({"labels": labels, "termine": termine, "meta": merged_meta,
-                    "rubriken": rubriken}, ensure_ascii=False),
-        200,
-        {"Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-cache, must-revalidate"},
-    )
+    return {"labels": labels, "termine": termine, "meta": merged_meta, "rubriken": rubriken}
 
 
 def _termin_passt(t: dict, termin_id: str, datum: str, bezeichnung: str) -> bool:
@@ -976,8 +982,8 @@ def api_termine_patch():
                                         changes.get("uhrzeit_bis", t.get("uhrzeit_bis", "")))
                 if len(changes.get("beschreibung", "")) > BESCHREIBUNG_MAX:
                     fehler[0] = f"Beschreibung höchstens {BESCHREIBUNG_MAX} Zeichen."
-                if "datum" in changes and not DATUM_RE.match(changes["datum"]):
-                    fehler[0] = "Datum muss im Format YYYY-MM-DD sein."
+                if "datum" in changes and not datum_ok(changes["datum"]):
+                    fehler[0] = "Datum muss ein gültiges Datum im Format YYYY-MM-DD sein."
                 found[0] = True
                 if fehler[0]:
                     return

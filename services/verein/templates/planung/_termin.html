@@ -1,0 +1,68 @@
+{# Terminkarte für „Termine“ und Planungsrunde.
+   eigen: Termin des angemeldeten Vereins; runde_id: Aktion kommt aus einer Runde (Rücksprung); aenderbar: Runde offen
+   bzw. Termin-Seite; darf: Vereinsadmin (ändern, veröffentlichen); ansicht_jahr: Jahr-Filter der Termin-Seite
+   (Rücksprung); farbe/verein_name für fremde. Status „kalender“ = Termin aus dem Kalender, „veroeffentlicht“ =
+   aus einem Entwurf veröffentlicht – beide bearbeitet man im bekannten Formular „Termin bearbeiten“. #}
+{% macro rueck(runde_id, ansicht_jahr) %}{% if runde_id %}<input type="hidden" name="runde" value="{{ runde_id }}">{% endif %}{% if ansicht_jahr %}<input type="hidden" name="ansicht_jahr" value="{{ ansicht_jahr }}">{% endif %}{% endmacro %}
+
+{% macro termin_karte(t, eigen, csrf, STATUS, STUFE_TAG, zeit_text, runde_id=None, aenderbar=True, darf=False, farbe=None, verein_name="", ansicht_jahr=None) %}
+{% set st = 'entwurf' if (t.status == 'bestaetigt' and not runde_id) else t.status %}
+{% set offen = t.status in ('entwurf', 'bestaetigt') %}
+<div id="t{{ t._eid }}" class="card termin {{ t.status }} {{ 'konflikt' if t._konflikt_tag else ('we' if t._konflikte else '') }} {{ 'fremd' if not eigen }}">
+  <div class="kopf">
+    <b>{{ t.datum|wochentag_kurz }} {{ t.datum|tm }}{{ t.datum[:4] }}{% if t.uhrzeit %}, {{ zeit_text(t) }}{% endif %}</b>
+    <span>{{ t.bezeichnung }}</span>
+    <span class="chip {{ st }}">{{ STATUS[st] }}</span>
+  </div>
+  {% if not eigen %}<div class="hint"><span class="vfarbe f{{ farbe or 0 }}"></span>{{ verein_name }}</div>{% endif %}
+  {% if t.ort %}<div class="hint">{{ t.ort }}</div>{% endif %}
+  {% if eigen and t.regel and offen %}<div class="hint">{{ t.regel }}</div>{% endif %}
+  {% if t._konflikte %}
+  <div class="konf-liste">
+    {% for k in t._konflikte %}{% set tag = k.stufe == STUFE_TAG %}
+    <div class="konf-karte {{ 'tag' if tag else 'we' }}">
+      <div><b>{{ k.datum|wochentag_kurz }} {{ k.datum|tm }}{% if k.uhrzeit %}, {{ k.uhrzeit }}{% endif %}</b> {{ k.bezeichnung }}</div>
+      <div class="hint">{{ k.verein_name }}
+        <span class="chip {{ 'tag' if tag else 'we' }}">{{ 'Gleicher Tag' if tag else 'Gleiches Wochenende' }}</span>{% if k.quelle == 'Entwurf' %} <span class="chip entwurf">Entwurf</span>{% endif %}{% if k.nachbar %} <span class="chip nachbar">Nachbarschaft</span>{% endif %}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if eigen and aenderbar and darf %}
+  <div class="aktionen kompakt">
+    {% if offen %}
+      <button class="btn sek klein" type="button" data-klappe="b{{ t._eid }}">Bearbeiten</button>
+      {% if runde_id %}<form method="post" action="{{ url_for('planung.entwurf_aktion', eid=t._eid) }}">{{ csrf()|safe }}{{ rueck(runde_id, ansicht_jahr) }}
+        {% if t.status == 'entwurf' %}<button class="btn klein" name="aktion" value="bestaetigen">Bestätigen</button>
+        {% else %}<button class="btn sek klein" name="aktion" value="nicht_bestaetigen">Bestätigung zurücknehmen</button>{% endif %}
+      </form>{% endif %}
+      <form method="post" action="{{ url_for('planung.entwurf_aktion', eid=t._eid) }}" onsubmit="return confirm('Termin veröffentlichen? Er erscheint dann im Vereinskalender.')">{{ csrf()|safe }}{{ rueck(runde_id, ansicht_jahr) }}
+        <button class="btn {{ 'sek' if runde_id }} klein" name="aktion" value="veroeffentlichen">Veröffentlichen</button></form>
+    {% elif t.termin_id %}
+      <a class="btn sek klein" href="/verein/termine/{{ t.termin_id|urlencode }}{% if runde_id %}?runde={{ runde_id }}{% endif %}">Bearbeiten</a>
+    {% endif %}
+  </div>
+  {% if offen %}
+  <div id="b{{ t._eid }}" class="klappe" hidden>
+    <form class="kollision-pruefen" data-sofort="1" method="post" action="{{ url_for('planung.entwurf_aktion', eid=t._eid) }}">{{ csrf()|safe }}{{ rueck(runde_id, ansicht_jahr) }}
+      <div class="zeile">
+        <div><label>Datum</label><input type="date" name="datum" value="{{ t.datum }}" required></div>
+        <div><label>Uhrzeit</label><input type="time" name="uhrzeit" value="{{ t.uhrzeit }}"></div>
+        <div><label>bis</label><input type="time" name="uhrzeit_bis" value="{{ t.uhrzeit_bis }}"></div>
+      </div>
+      <label>Bezeichnung</label><input name="bezeichnung" value="{{ t.bezeichnung }}" maxlength="200" required>
+      <label>Ort</label><input name="ort" value="{{ t.ort }}" maxlength="200">
+      <label>Beschreibung (optional)</label><textarea name="beschreibung" rows="2" maxlength="1000" placeholder="Wird beim Antippen des Termins angezeigt">{{ t.beschreibung }}</textarea>
+      <div class="kollision-hinweis" aria-live="polite"></div>
+      {% if runde_id and t.status == 'bestaetigt' %}<p class="hint">Nach dem Speichern bitte neu bestätigen.</p>{% endif %}
+      <p class="hint">Einen Flyer könnt ihr nach dem Veröffentlichen beim Termin ergänzen.</p>
+      <div class="aktionen">
+        <button class="btn" name="aktion" value="speichern">Speichern</button>
+        <button class="btn sek" name="aktion" value="loeschen" formnovalidate onclick="return confirm('Entwurf löschen?')">Löschen</button>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+  {% endif %}
+</div>
+{% endmacro %}

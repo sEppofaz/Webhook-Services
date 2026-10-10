@@ -146,6 +146,16 @@ def _page(title: str, body: str) -> str:
 <body><h1>{title}</h1>{body}{_PW_TOGGLE_JS}</body></html>"""
 
 
+_WEITER_RE = re.compile(r"^/verein/r/[A-Za-z0-9_-]{8,64}$")
+
+
+def _weiter_ziel() -> str:
+    """Einladungslink zu einer Planungsrunde, der vor dem Login geöffnet wurde (Cookie `vk_weiter`, gesetzt in
+    `services/verein/planung.py`). Nur dieser eine Pfadtyp – kein offener Redirect."""
+    ziel = request.cookies.get("vk_weiter", "")
+    return ziel if _WEITER_RE.match(ziel) else ""
+
+
 def _session_token() -> str:
     return request.cookies.get("vk_session", "")
 
@@ -651,7 +661,10 @@ def login():
         "verify":  '<p class="hint">Bitte bestätige zuerst deine E-Mail-Adresse.</p>',
         "pending": '<p class="hint">Dein Konto wartet noch auf Freigabe durch den Administrator.</p>',
         "reset":   '<p class="ok">Passwort wurde geändert. Bitte jetzt einloggen.</p>',
+        "einladung": '<p class="hint">Ihr seid zu einer Planungsrunde eingeladen. Bitte meldet euch an – danach geht es direkt weiter.</p>',
     }.get(hint, "")
+    if hint == "pending" and _weiter_ziel():
+        hint_msg += '<p class="hint">Eure Einladung zur Planungsrunde bleibt gemerkt – nach der Freigabe einfach anmelden.</p>'
 
     error = ""
     login_user_id = None
@@ -729,7 +742,7 @@ def login():
 
         if login_user_id is not None:
             session_token = create_session(login_user_id)
-            resp = make_response(redirect("/verein/dashboard"))
+            resp = make_response(redirect(_weiter_ziel() or "/verein/termine"))
             resp.set_cookie("vk_session", session_token, httponly=True, secure=_COOKIE_SECURE, samesite="Lax", max_age=SESSION_TIMEOUT_HOURS * 3600)
             return resp
 
@@ -771,7 +784,7 @@ def login_verein_waehlen():
         if chosen_id not in valid_ids:
             return redirect("/verein/login")
         session_token = create_session(chosen_id)
-        resp = make_response(redirect("/verein/dashboard"))
+        resp = make_response(redirect(_weiter_ziel() or "/verein/termine"))
         resp.set_cookie("vk_session", session_token, httponly=True, secure=_COOKIE_SECURE, samesite="Lax", max_age=SESSION_TIMEOUT_HOURS * 3600)
         resp.delete_cookie("vk_preauth")
         return resp

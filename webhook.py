@@ -12,6 +12,7 @@ from services.kalender.routes import kalender_bp
 from services.kalender_bot.routes import kalender_bot_bp
 from services.rename.routes import rename_bp
 from services.telegram.routes import freigabe_gruppe_ankuendigen, telegram_bp
+from services.verein.planung import planung_bp
 from services.verein.routes import verein_bp
 from services.verkehr.routes import verkehr_bp
 
@@ -63,6 +64,7 @@ def create_app() -> Flask:
     app.register_blueprint(rename_bp)
     app.register_blueprint(telegram_bp)
     app.register_blueprint(verein_bp)
+    app.register_blueprint(planung_bp)
     app.register_blueprint(verkehr_bp)
     threading.Thread(target=freigabe_gruppe_ankuendigen, daemon=True).start()
     return app

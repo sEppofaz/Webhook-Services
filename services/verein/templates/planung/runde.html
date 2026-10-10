@@ -1,0 +1,175 @@
+{% extends "planung/base.html" %}
+{% from "planung/_termin.html" import termin_karte with context %}
+{% from "planung/_export.html" import download_knoepfe with context %}
+{% block titel %}{{ r.name }} {{ r.jahr }}{% endblock %}
+{% block inhalt %}
+{% set offen = r.status == 'offen' %}
+<div class="zeile" style="align-items:center">
+  <div style="flex:3 1 300px">
+    <h1>{{ r.name }} {{ r.jahr }}</h1>
+    <p class="hint">Organisator: {{ organisator_name }}{{ ' (ihr)' if organisator }} · {% if offen %}offen{% else %}<b>abgeschlossen</b>{% endif %}</p>
+  </div>
+  <div style="flex:0 0 auto"><button class="btn sek" type="button" id="gross" aria-pressed="false">Große Schrift</button></div>
+</div>
+{% if fehler %}<div class="warn rot">{{ fehler }}</div>{% endif %}
+{% if meldung %}<div class="ok">{{ meldung }}</div>{% endif %}
+<div id="geaendert" class="warn" hidden>Andere Vereine haben etwas geändert. <a href="" onclick="location.reload();return false">Neu laden</a></div>
+
+{% if ergebnisse %}
+<div class="card">
+  <b>Ergebnis</b> <span class="hint">– steht auch unter „Planungsrunden“ bei der Runde</span>
+  {% for e in ergebnisse %}
+  <div class="aktionen kompakt"><span>Version {{ e.version }} · {{ e.abgeschlossen_am[:10]|tm }}{{ e.abgeschlossen_am[:4] }}, {{ e.abgeschlossen_am[11:16] }} Uhr</span>
+    {% if key in e.daten.teilnehmer|map(attribute='verein')|list %}<a class="btn klein" href="{{ url_for('planung.ergebnis_export', eid=e.id, fmt='pdf') }}">Ergebnis als PDF</a>{% else %}<span class="hint">(ihr wart da nicht dabei)</span>{% endif %}</div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if organisator and darf %}
+<div class="card">
+  <b>Runde verwalten</b>
+  {% if offen %}
+  <p class="hint" style="margin:4px 0 8px">Vereine einladen: Link per WhatsApp/Mail schicken oder den Code beim Treffen zeigen.</p>
+  <div class="zeile kompakt" style="align-items:center">
+    <div style="flex:0 0 auto"><span class="hint">Code</span><div class="code">{{ code }}</div></div>
+    <div style="flex:3 1 280px;display:flex;gap:4px;align-items:center"><input readonly value="{{ basis }}{{ url_for('planung.runde_link', link=r.link) }}" onfocus="this.select()">
+      <button class="btn sek klein" type="button" onclick="navigator.clipboard.writeText(this.previousElementSibling.value);this.textContent='kopiert'">Link kopieren</button></div>
+  </div>
+  <div class="aktionen">
+    <form method="post" action="{{ url_for('planung.runde_status', runde_id=r.id) }}" onsubmit="return confirm('Runde abschließen? Das Ergebnis wird festgehalten und steht danach als PDF bei jedem beteiligten Verein. Danach kann niemand mehr beitreten oder hier ändern; veröffentlichen bleibt Sache jedes Vereins.')">{{ csrf()|safe }}
+      <button class="btn" name="aktion" value="abschliessen">Runde abschließen</button></form>
+    <form method="post" action="{{ url_for('planung.runde_erneuern', runde_id=r.id) }}" onsubmit="return confirm('Neuen Link und Code erzeugen? Die alten gelten dann nicht mehr – wer schon dabei ist, bleibt dabei.')">{{ csrf()|safe }}
+      <button class="btn sek klein">Link und Code erneuern</button></form>
+  </div>
+  {% else %}
+  <div class="aktionen"><form method="post" action="{{ url_for('planung.runde_status', runde_id=r.id) }}">{{ csrf()|safe }}
+    <button class="btn sek" name="aktion" value="oeffnen">Runde wieder öffnen</button></form></div>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if offen and darf %}
+{% set mein = stand[key] %}
+<div class="card">
+  <b>Eure Termine</b> <span class="hint">– {% if mein.entwurf %}{{ mein.entwurf }} noch nicht bestätigt{% elif mein.bestaetigt + mein.veroeffentlicht %}alle bestätigt{% else %}noch keine{% endif %}</span>
+  {% if vorlage_n %}
+  <div class="zeile" style="align-items:center;margin-top:8px">
+    <div style="flex:3 1 260px" class="hint">Aus {{ r.jahr - 1 }} könnt ihr {{ vorlage_n }} {{ 'Termin' if vorlage_n == 1 else 'Termine' }} übernehmen – als Entwurf.</div>
+    <form method="post" action="{{ url_for('planung.entwuerfe_aus_vorjahr', jahr=r.jahr) }}" style="flex:0 0 auto;margin:0">{{ csrf()|safe }}<input type="hidden" name="runde" value="{{ r.id }}">
+      <button class="btn sek">Übernehmen</button></form>
+  </div>
+  {% endif %}
+  <div class="aktionen">
+    {% if mein.entwurf %}<form method="post" action="{{ url_for('planung.entwuerfe_alle', jahr=r.jahr) }}">{{ csrf()|safe }}<input type="hidden" name="runde" value="{{ r.id }}">
+      <button class="btn" name="aktion" value="bestaetigen">Alle {{ mein.entwurf }} bestätigen</button></form>{% endif %}
+    <a class="btn sek" href="/verein/termine/neu?runde={{ r.id }}&amp;jahr={{ r.jahr }}">Neuer Termin</a>
+  </div>
+  <p class="hint" style="margin-bottom:0">Bestätigt = „steht so“ für die Runde. Veröffentlichen bleibt ein eigener Schritt.</p>
+</div>
+{% endif %}
+
+<h2 id="teilnehmer">Teilnehmer ({{ teilnehmer|selectattr('aktiv', 'equalto', 1)|list|length }})</h2>
+<div class="card kompakt" style="padding:4px 14px">
+  {% for p in teilnehmer %}{% set s = stand[p.verein_key] %}
+  <div class="teiln{{ ' abgewaehlt' if p.aktiv != 1 }}">
+    <div class="teiln-name"><span class="vfarbe f{{ farben[p.verein_key] }}"></span>{{ p.verein_name }}
+      {% if p.verein_key == r.organisator %}<span class="chip">Organisator</span>{% endif %}
+      {% if p.verein_key == key %}<span class="chip">ihr</span>{% endif %}</div>
+    <div>{% if p.aktiv == 0 %}<span class="chip">entfernt</span>{% elif p.aktiv == 2 %}<span class="chip">ausgetreten</span>
+      {% elif s.entwurf %}<span class="chip entwurf">noch {{ s.entwurf }} offen</span>
+      {% elif s.bestaetigt + s.veroeffentlicht %}<span class="chip bestaetigt">fertig</span>
+      {% else %}<span class="hint">noch keine Termine</span>{% endif %}</div>
+    {% if organisator and p.verein_key != key and offen %}
+    <form method="post" action="{{ url_for('planung.runde_teilnehmer', runde_id=r.id) }}" style="margin:0">{{ csrf()|safe }}<input type="hidden" name="verein" value="{{ p.verein_key }}">
+      {% if p.aktiv == 1 %}<button class="btn sek klein" name="aktiv" value="0" onclick="return confirm('Verein aus der Runde entfernen? Er kann dann auch mit Link/Code nicht mehr beitreten.')">Entfernen</button>
+      {% elif p.aktiv == 0 %}<button class="btn klein" name="aktiv" value="1">Wieder aufnehmen</button>{% endif %}
+    </form>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<div class="zeile" style="align-items:center;margin-top:20px">
+  <h2 style="flex:3 1 260px;margin:0">Alle Termine {{ r.jahr }}</h2>
+  {% if n_konflikt %}<button class="btn sek" type="button" id="nur-konflikte" aria-pressed="false" style="flex:0 0 auto">Nur Termine mit Konflikt ({{ n_konflikt }})</button>{% endif %}
+</div>
+{% if not n_konflikt and monate %}<p class="ok">Keine Termine am gleichen Tag.</p>{% endif %}
+<div id="liste">
+{% for monat, liste in monate %}
+  <h3 class="monat">{{ monat }}</h3>
+  {% for t in liste %}
+    {{ termin_karte(t, t.verein == key, csrf, STATUS, STUFE_TAG, zeit_text, runde_id=r.id, aenderbar=offen, darf=darf,
+                    farbe=farben.get(t.verein, 0), verein_name=namen.get(t.verein, t.verein)) }}
+  {% endfor %}
+{% else %}
+  <p class="hint">Noch keine Termine in dieser Runde.</p>
+{% endfor %}
+</div>
+
+<h2>Herunterladen</h2>
+{{ download_knoepfe('runde_export', {'runde_id': r.id}) }}
+<p class="hint">Alle Termine der Teilnehmer {{ r.jahr }} – Entwürfe, bestätigte und veröffentlichte.</p>
+
+<h2>Verlauf</h2>
+<details class="card"><summary>Wer hat wann was gemacht ({{ verlauf|length }} Einträge)</summary>
+  <div class="tabelle-wrap"><table>
+    <tr><th>Zeit</th><th>Verein</th><th>Was</th></tr>
+    {% for v in verlauf %}
+    <tr><td class="d">{{ v.zeit[:10]|tm }} {{ v.zeit[11:16] }}</td><td>{{ namen.get(v.verein_key, v.verein_key) }}</td>
+      <td>{{ v.aktion }}{% if v.details %}: <span class="hint">{{ v.details }}</span>{% endif %}</td></tr>
+    {% endfor %}
+  </table></div>
+</details>
+
+{% if not organisator and darf %}
+<form method="post" action="{{ url_for('planung.runde_verlassen', runde_id=r.id) }}" onsubmit="return confirm('Runde verlassen? Ihr könnt mit Link oder Code wieder beitreten.')" style="margin-top:20px">{{ csrf()|safe }}
+  <button class="btn sek klein">Runde verlassen</button></form>
+{% endif %}
+
+<script>
+(function () {
+  // Andere ändern während des Treffens: alle 15 s den Stand abfragen. Die Abfrage misst nebenbei das Netz
+  // (siehe Netz-Hinweis in base.html). Nicht im Hintergrund-Tab, nicht bei eigenem Speichern.
+  let bekannt = {{ stand_kennung|tojson }};
+  async function pruefen() {
+    if (document.hidden || window.vkoSpeichert) return;
+    const r = await window.vkoAbruf("{{ url_for('planung.runde_stand', runde_id=r.id) }}");
+    if (!r || !r.ok) return;
+    const j = await r.json();
+    if (j.stand !== bekannt) document.getElementById("geaendert").hidden = false;
+  }
+  setInterval(pruefen, 15000);
+})();
+(function () {
+  // „Nur Termine mit Konflikt“: blendet Karten ohne Konflikt am gleichen Tag und leere Monate aus
+  const knopf = document.getElementById("nur-konflikte"), liste = document.getElementById("liste");
+  knopf && knopf.addEventListener("click", () => {
+    const an = knopf.getAttribute("aria-pressed") !== "true";
+    knopf.setAttribute("aria-pressed", an);
+    knopf.classList.toggle("sek", !an);
+    for (const k of liste.querySelectorAll(".termin")) k.hidden = an && !k.classList.contains("konflikt");
+    for (const h of liste.querySelectorAll("h3.monat")) {
+      let n = h.nextElementSibling, sichtbar = false;
+      while (n && !n.matches("h3.monat")) { if (!n.hidden) sichtbar = true; n = n.nextElementSibling; }
+      h.hidden = an && !sichtbar;
+    }
+  });
+})();
+(function () {
+  // „Große Schrift“ fürs Treffen (Beamer/Bildschirm) – merkt sich das Gerät
+  const knopf = document.getElementById("gross");
+  function setzen(an) {
+    document.body.classList.toggle("treffen", an);
+    knopf.setAttribute("aria-pressed", an);
+    knopf.classList.toggle("sek", !an);
+  }
+  let an = document.body.classList.contains("treffen");
+  try { an = an || localStorage.getItem("vko-gross") === "1"; } catch (e) {}
+  setzen(an);
+  knopf.addEventListener("click", () => {
+    an = !an;
+    setzen(an);
+    try { localStorage.setItem("vko-gross", an ? "1" : "0"); } catch (e) {}
+  });
+})();
+</script>
+{% endblock %}
