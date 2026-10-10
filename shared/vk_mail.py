@@ -35,6 +35,8 @@ _STYLE = """
        padding:13px 28px;border-radius:10px;font-weight:600;font-size:15px;margin:8px 0 16px}
   .hint{color:#8e8e93;font-size:.82rem;line-height:1.5}
   .footer{text-align:center;margin-top:20px;color:#aeaeb2;font-size:.78rem}
+  .pitch{border-top:1px solid #e5e5ea;margin-top:20px;padding-top:14px}
+  .pitch p{color:#6e6e73;font-size:13px;line-height:1.5;margin:0 0 8px}
 </style>
 """
 
@@ -159,6 +161,16 @@ PLATZHALTER = {
 _LINKS = {"link", "login_link", "profil_link", "upload_link", "kalender_link"}
 
 STANDARD = {
+    # Kein eigener Versand: Kurzvorstellung am Ende JEDER Mail (v1.72), bearbeitbar wie ein Mail-Text.
+    # `felder` begrenzt die Felder dieses Eintrags; Mails haben alle FELDER.
+    "pitch": {
+        "zweck": "Steht unten in allen E-Mails an Vereine",
+        "titel": "Kurzvorstellung (alle E-Mails)",
+        "felder": ["text"], "platzhalter": [], "knopf_link": None, "anrede": False,
+        "betreff": "", "ueberschrift": "", "knopf": "", "hinweis": "",
+        "text": ("Vereinskalender.online ist die Plattform, auf der man Termine und Veranstaltungen der Region "
+                 "schnell und übersichtlich findet. Vereine und Veranstalter können ihre Termine dort selbst pflegen."),
+    },
     "verify": {
         "zweck": "Nach der Registrierung – E-Mail-Adresse bestätigen (auch nach der Freigabe, wenn noch offen)",
         "platzhalter": ["link"], "knopf_link": "link", "anrede": True,
@@ -183,10 +195,7 @@ STANDARD = {
         "betreff": "Einladung: {verein} – Vereinskalender",
         "ueberschrift": "Einladung zur Mitarbeit",
         "text": ("**{eingeladen_von}** hat dich eingeladen, die Termine von **{verein}** im Vereinskalender "
-                 "mitzuverwalten.\n\n"
-                 "Vereinskalender.online ist eine Plattform, auf der jeder die Termine und Veranstaltungen "
-                 "der Vereine unserer Region schnell und übersichtlich findet. Vereine und Veranstalter "
-                 "pflegen ihre Termine dort selbst."),
+                 "mitzuverwalten."),
         "knopf": "Einladung annehmen",
         "hinweis": "Der Link ist **48 Stunden** gültig.",
     },
@@ -255,17 +264,26 @@ def _lade_datei() -> dict:
         return {}
 
 
+def felder(art: str) -> list[str]:
+    """Bearbeitbare Felder eines Eintrags – Mails alle, die Kurzvorstellung nur `text`."""
+    return STANDARD[art].get("felder") or list(FELDER)
+
+
+def standard_texte(art: str) -> dict:
+    return {f: STANDARD[art][f] for f in felder(art)}
+
+
 def texte(art: str) -> dict:
     """Aktuelle Texte einer Mail: Standard, überschrieben von Josefs Fassung."""
     eigen = (_lade_datei().get("texte") or {}).get(art) or {}
-    return {f: (eigen[f] if isinstance(eigen.get(f), str) else STANDARD[art][f]) for f in FELDER}
+    return {f: (eigen[f] if isinstance(eigen.get(f), str) else STANDARD[art][f]) for f in felder(art)}
 
 
 def pruefe_texte(art: str, werte: dict) -> str:
     """Fehlertext für die Admin-Oberfläche, leer = in Ordnung."""
     erlaubt = set(STANDARD[art]["platzhalter"])
-    for feld, maximal in FELDER.items():
-        wert = werte.get(feld, "")
+    for feld in felder(art):
+        maximal, wert = FELDER[feld], werte.get(feld, "")
         if not isinstance(wert, str):
             return f"„{feld}“ fehlt."
         if len(wert) > maximal:
@@ -274,7 +292,7 @@ def pruefe_texte(art: str, werte: dict) -> str:
             if name not in erlaubt:
                 moeglich = ", ".join("{" + p + "}" for p in STANDARD[art]["platzhalter"]) or "keine"
                 return f"Platzhalter {{{name}}} gibt es in dieser Mail nicht. Möglich: {moeglich}."
-    if not werte.get("betreff", "").strip() or not werte.get("ueberschrift", "").strip():
+    if "betreff" in felder(art) and (not werte.get("betreff", "").strip() or not werte.get("ueberschrift", "").strip()):
         return "Betreff und Überschrift dürfen nicht leer sein."
     if STANDARD[art]["knopf_link"] and not werte.get("knopf", "").strip():
         return "Die Beschriftung des Knopfs darf nicht leer sein – sonst fehlt der Link."
@@ -294,8 +312,8 @@ def speichere_texte(art: str, werte: dict) -> None:
     verlauf = d.setdefault("verlauf", {}).setdefault(art, [])
     verlauf.insert(0, {"zeit": datetime.now().isoformat(timespec="seconds"), "texte": alt})
     del verlauf[VERLAUF_MAX:]
-    neu = {f: werte[f] for f in FELDER}
-    if neu == {f: STANDARD[art][f] for f in FELDER}:
+    neu = {f: werte[f] for f in felder(art)}
+    if neu == standard_texte(art):
         d.setdefault("texte", {}).pop(art, None)          # gleich Standard → nichts überschreiben
     else:
         d.setdefault("texte", {})[art] = neu
@@ -344,8 +362,10 @@ def _bloecke(text: str, werte: dict) -> str:
     return "\n".join(teile)
 
 
-def baue_mail(art: str, werte: dict, gruss: str = "", eigene: dict | None = None) -> tuple[str, str]:
-    """(Betreff, HTML) einer Mail. `eigene` = Texte aus dem Formular (Vorschau vor dem Speichern)."""
+def baue_mail(art: str, werte: dict, gruss: str = "", eigene: dict | None = None,
+              pitch: str | None = None) -> tuple[str, str]:
+    """(Betreff, HTML) einer Mail. `eigene` = Texte aus dem Formular (Vorschau vor dem Speichern),
+    `pitch` = Entwurf der Kurzvorstellung (Vorschau), sonst die gespeicherte."""
     t = eigene or texte(art)
     werte = {"login_link": f"{BASE_URL}/verein/login", "profil_link": f"{BASE_URL}/verein/profil",
              "upload_link": f"{BASE_URL}/verein/upload", "kalender_link": BASE_URL, "kontakt": KONTAKT, **werte}
@@ -359,6 +379,9 @@ def baue_mail(art: str, werte: dict, gruss: str = "", eigene: dict | None = None
         body += f'\n<p class="hint">{hinweis}</p>'
     if STANDARD[art]["anrede"]:
         body = _mit_gruss(body, gruss)
+    pitch = texte("pitch")["text"] if pitch is None else pitch
+    if pitch.strip():                                     # leer = Kurzvorstellung abgeschaltet
+        body += f'\n<div class="pitch">{_bloecke(pitch, {})}</div>'
     titel = html.escape(_ersetzen(t["ueberschrift"], werte, False))
     return _ersetzen(t["betreff"], werte, False), _html_wrap(titel, body)
 

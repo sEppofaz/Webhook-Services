@@ -1079,7 +1079,7 @@ def test_mailtexte():
     cl = app.test_client()
     pruefe(cl.get("/api/admin/mailtexte").status_code == 401, "nur mit Admin-Token")
     liste = cl.get("/api/admin/mailtexte", headers=ADMIN).get_json()
-    pruefe(len(liste) == 7 and not any(m["geaendert"] for m in liste), "7 Mails, nichts geändert", [m["art"] for m in liste])
+    pruefe(len(liste) == 8 and liste[0]["art"] == "pitch" and not any(m["geaendert"] for m in liste), "Kurzvorstellung + 7 Mails, nichts geändert", [m["art"] for m in liste])
     w = dict(liste[[m["art"] for m in liste].index("welcome")]["texte"])
     w["text"] = "Hallo **{verein}**!\n\n- eins <script>x</script>\n- zwei {profil_link}"
     r = cl.put("/api/admin/mailtexte/welcome", json={**w, "text": "{gibtsnicht}"}, headers=ADMIN)
@@ -1124,12 +1124,50 @@ def test_mailtexte():
     pruefe("switchAdmTab('txt')" in src and 'class="mt-eintrag" data-art=' in src, "Admin: Reiter Texte, Werte per data-Attribut")
 
 
+def test_pitch():
+    print("\nM5 · Kurzvorstellung in allen Mails (v1.72)")
+    from shared import vk_mail
+    vk_mail.MAIL_TEXTE_FILE = TMP / "mail_texte.json"
+    if vk_mail.MAIL_TEXTE_FILE.exists():
+        vk_mail.MAIL_TEXTE_FILE.unlink()
+    standard = vk_mail.STANDARD["pitch"]["text"]
+    mails = [a for a in vk_mail.STANDARD if a != "pitch"]
+    alle = all(vk_mail.baue_mail(a, vk_mail.BEISPIEL, "Hallo,")[1].count("Vereine und Veranstalter") == 1 for a in mails)
+    pruefe(len(mails) == 7 and alle, "Kurzvorstellung genau einmal in allen 7 Mails (auch Einladung)")
+    pruefe("Vereine und Veranstalter" not in vk_mail._html_wrap("Lebenszeichen", "<p>x</p>"), "Lebenszeichen ohne Kurzvorstellung")
+    cl = app.test_client()
+    liste = cl.get("/api/admin/mailtexte", headers=ADMIN).get_json()
+    p = next(m for m in liste if m["art"] == "pitch")
+    pruefe(p["felder"] == ["text"] and p["titel"].startswith("Kurzvorstellung") and not p["geaendert"], "Eintrag auf der Texte-Seite", p)
+    r = cl.put("/api/admin/mailtexte/pitch", json={"text": "Neu {verein}"}, headers=ADMIN)
+    pruefe(r.status_code == 400, "keine Platzhalter in der Kurzvorstellung")
+    r = cl.post("/api/admin/mailtexte/pitch/vorschau", json={"text": "Entwurf <b>x</b> **fett**"}, headers=ADMIN).get_json()
+    pruefe("Entwurf &lt;b&gt;x&lt;/b&gt; <strong>fett</strong>" in r["html"] and "hat dich eingeladen" in r["html"],
+           "Vorschau zeigt Entwurf an der Einladung (escapt)")
+    m = cl.put("/api/admin/mailtexte/pitch", json={"text": "Eigene Vorstellung."}, headers=ADMIN).get_json()
+    pruefe(m["geaendert"] and "Eigene Vorstellung." in vk_mail.baue_mail("reset", vk_mail.BEISPIEL, "Hallo,")[1],
+           "gespeicherte Fassung gilt in allen Mails")
+    cl.put("/api/admin/mailtexte/pitch", json={"text": "  "}, headers=ADMIN)
+    pruefe('class="pitch"' not in vk_mail.baue_mail("welcome", vk_mail.BEISPIEL, "Hallo,")[1], "leer = weggelassen")
+    m = cl.post("/api/admin/mailtexte/pitch/zuruecksetzen", json={"auf": "standard"}, headers=ADMIN).get_json()
+    pruefe(not m["geaendert"] and m["texte"]["text"] == standard, "zurück auf Standard")
+    gesendet = []
+    alt = vk_mail._send
+    vk_mail._send = lambda to, sub, body: gesendet.append(sub) or True
+    try:
+        r = cl.post("/api/admin/mailtexte/pitch/test", headers=ADMIN).get_json()
+        pruefe(r["ok"] and gesendet and gesendet[-1].startswith("[Test] Einladung"), "Testmail = Einladung", gesendet)
+    finally:
+        vk_mail._send = alt
+    vk_mail.MAIL_TEXTE_FILE.unlink(missing_ok=True)
+
+
 TESTS = [test_xss, test_telegram_secret, test_vereine_api_lock, test_erinnerung, test_sessions,
          test_admin_loeschen, test_admin_verein_meta, test_verknuepfen,
          test_ical_uids, test_registrierung_key, test_fremde_endpunkte,
          test_pending_atomar, test_import_vergangenheit, test_stats_zeit, test_cookies,
          test_freigabe_nachricht, test_store_mehrprozess, test_bot_tastatur, test_abo_mischregel, test_chips_ohne_onclick, test_rename_relevanz, test_import_ortschaft, test_register_pruefen, test_plz_check, test_quelle_pfarrbrief,
-         test_verdacht_und_schalter, test_mail_rueckmeldung, test_mail_lebenszeichen, test_freigabe_gruppe, test_mailtexte]
+         test_verdacht_und_schalter, test_mail_rueckmeldung, test_mail_lebenszeichen, test_freigabe_gruppe, test_mailtexte, test_pitch]
 
 if __name__ == "__main__":
     for t in TESTS:

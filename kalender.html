@@ -2513,14 +2513,14 @@ async function loadMailTexte(){
   _mtArt=null;
   el.innerHTML=`<p style="font-size:13px;color:var(--text2);margin:0 0 10px">Diese E-Mails verschickt der Vereinskalender automatisch. Antippen zum Bearbeiten – Änderungen gelten ab dem Speichern.</p>`
     +_mailTexte.map(m=>`<button type="button" class="mt-eintrag" data-art="${escHtml(m.art)}">
-        <span style="font-weight:600;color:var(--text)">${escHtml(m.texte.betreff)}</span>${m.geaendert?'<span class="mt-chip">geändert</span>':""}
+        <span style="font-weight:600;color:var(--text)">${escHtml(m.titel)}</span>${m.geaendert?'<span class="mt-chip">geändert</span>':""}
         <span style="display:block;font-size:12px;color:var(--text3);margin-top:2px">${escHtml(m.zweck)}</span></button>`).join("");
 }
 function _mtOeffnen(art){
   const m=_mailTexte.find(x=>x.art===art);if(!m)return;
   _mtArt=art;_mtFeld=null;
   const el=document.getElementById("txt-tab-content");
-  const felder=_MT_FELDER.filter(([f])=>f!=="knopf"||m.knopf).map(([f,label,typ])=>`
+  const felder=_MT_FELDER.filter(([f])=>m.felder.includes(f)&&(f!=="knopf"||m.knopf)).map(([f,label,typ])=>`
     <label class="mt-label" for="mt-${f}">${label}</label>
     ${typ==="input"?`<input id="mt-${f}" class="mt-feld" data-feld="${f}" value="${escHtml(m.texte[f])}">`
       :`<textarea id="mt-${f}" class="mt-feld" data-feld="${f}" rows="${f==="text"?8:3}">${escHtml(m.texte[f])}</textarea>`}`).join("");
@@ -2528,6 +2528,7 @@ function _mtOeffnen(art){
   el.innerHTML=`
     <button type="button" class="mt-zurueck">&larr; Alle E-Mails</button>
     <div style="font-size:15px;font-weight:700;color:var(--text);margin:8px 0 2px">${escHtml(m.zweck)}</div>
+    ${m.art==="pitch"?'<div style="font-size:13px;color:var(--text2);margin-bottom:6px">Steht grau unter jeder E-Mail an Vereine. Leer lassen = weglassen. Vorschau und Testmail zeigen sie an der Einladung.</div>':""}
     <div style="font-size:12px;color:var(--text3);margin-bottom:8px">Leerzeile = neuer Absatz · „- “ am Zeilenanfang = Aufzählung · „1. “ = nummeriert · **fett**</div>
     ${felder}
     ${chips?`<div class="mt-label">Platzhalter – antippen fügt ihn an der Schreibmarke ein</div><div style="display:flex;flex-wrap:wrap;gap:6px">${chips}</div>
@@ -2545,7 +2546,7 @@ function _mtOeffnen(art){
 }
 function _mtWerte(){
   const m=_mailTexte.find(x=>x.art===_mtArt),w={};
-  _MT_FELDER.forEach(([f])=>{const e=document.getElementById("mt-"+f);w[f]=e?e.value:m.texte[f];});
+  m.felder.forEach(f=>{const e=document.getElementById("mt-"+f);w[f]=e?e.value:m.texte[f];});
   return w;
 }
 function _mtMeldung(text,farbe){const e=document.getElementById("mt-meldung");if(e){e.textContent=text;e.style.color=farbe||"var(--text2)";}}
@@ -4412,7 +4413,7 @@ function showInfoModal(){
         <span class="help-icon">${icon("scale",20)}</span>
         <div><strong>Impressum</strong><span>Josef Fischer &middot; H&ouml;lskofen 13 &middot; 84092 Bayerbach b. Ergoldsbach<br><a href="mailto:Vereinskalender@icloud.com" style="color:var(--accent);text-decoration:none">Vereinskalender@icloud.com</a></span></div>
       </div>
-      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.71 &middot; 2026-10-10 &middot; a sEpp-App</p>
+      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.72 &middot; 2026-10-10 &middot; a sEpp-App</p>
       <button onclick="document.getElementById('info-modal').remove()" style="width:100%;margin-top:16px;padding:12px;background:none;border:1.5px solid var(--border2);border-radius:12px;font-size:14px;color:var(--text2);cursor:pointer">Schlie&szlig;en</button>
     </div>`;
   document.body.appendChild(m);

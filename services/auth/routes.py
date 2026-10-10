@@ -1071,19 +1071,22 @@ def _admin_ok() -> bool:
     return bool(UPLOAD_TOKEN) and hmac.compare_digest(token, UPLOAD_TOKEN)
 
 
+PITCH, PITCH_BEISPIEL = "pitch", "invite"      # Kurzvorstellung (v1.72): kein eigener Versand, gezeigt an der Einladung
+
+
 def _mailtext_eintrag(art: str) -> dict:
     s = vk_mail.STANDARD[art]
     aktuell = vk_mail.texte(art)
-    return {"art": art, "zweck": s["zweck"], "texte": aktuell,
-            "standard": {f: s[f] for f in vk_mail.FELDER},
-            "geaendert": aktuell != {f: s[f] for f in vk_mail.FELDER},
+    return {"art": art, "zweck": s["zweck"], "titel": s.get("titel") or aktuell["betreff"], "texte": aktuell,
+            "felder": vk_mail.felder(art), "standard": vk_mail.standard_texte(art),
+            "geaendert": aktuell != vk_mail.standard_texte(art),
             "platzhalter": [{"name": p, "info": vk_mail.PLATZHALTER[p]} for p in s["platzhalter"]],
             "knopf": bool(s["knopf_link"]), "verlauf": len(vk_mail.verlauf(art))}
 
 
 def _formular_texte(art: str):
     body = request.get_json(silent=True) or {}
-    werte = {f: body.get(f, "") for f in vk_mail.FELDER}
+    werte = {f: body.get(f, "") for f in vk_mail.felder(art)}
     return werte, vk_mail.pruefe_texte(art, werte)
 
 
@@ -1117,7 +1120,10 @@ def admin_mailtext_vorschau(art: str):
     werte, fehler = _formular_texte(art)
     if fehler:
         return {"error": fehler}, 400
-    betreff, inhalt = vk_mail.baue_mail(art, vk_mail.BEISPIEL, "Hallo Erika Muster,", eigene=werte)
+    if art == PITCH:                                      # Kurzvorstellung: Vorschau an der Einladungsmail
+        betreff, inhalt = vk_mail.baue_mail(PITCH_BEISPIEL, vk_mail.BEISPIEL, "Hallo,", pitch=werte["text"])
+    else:
+        betreff, inhalt = vk_mail.baue_mail(art, vk_mail.BEISPIEL, "Hallo Erika Muster,", eigene=werte)
     return {"betreff": betreff, "html": inhalt}
 
 
@@ -1128,7 +1134,7 @@ def admin_mailtext_test(art: str):
         return {"error": "Unauthorized"}, 401
     if art not in vk_mail.STANDARD:
         return {"error": "Unbekannte Mail"}, 404
-    betreff, inhalt = vk_mail.baue_mail(art, vk_mail.BEISPIEL, "Hallo Erika Muster,")
+    betreff, inhalt = vk_mail.baue_mail(PITCH_BEISPIEL if art == PITCH else art, vk_mail.BEISPIEL, "Hallo Erika Muster,")
     ok = vk_mail._send(vk_mail.KONTAKT, "[Test] " + betreff, inhalt)
     return {"ok": ok, "an": vk_mail.KONTAKT}
 
@@ -1147,7 +1153,7 @@ def admin_mailtext_zuruecksetzen(art: str):
             return {"error": "Es gibt keine vorige Fassung."}, 409
         werte = v[0]["texte"]
     else:
-        werte = {f: vk_mail.STANDARD[art][f] for f in vk_mail.FELDER}
+        werte = vk_mail.standard_texte(art)
     vk_mail.speichere_texte(art, werte)
     return _mailtext_eintrag(art)
 
