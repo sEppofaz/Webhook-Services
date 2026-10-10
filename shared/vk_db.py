@@ -204,6 +204,8 @@ def init_db():
             "ALTER TABLE vk_users ADD COLUMN hinweis_dokumente INTEGER NOT NULL DEFAULT 0",
             # Vorstand (v1.83): sieht zusätzlich Dokumente „nur Vorstand“; bewusst keine neue role
             "ALTER TABLE vk_users ADD COLUMN vorstand INTEGER NOT NULL DEFAULT 0",
+            # 2FA: zuletzt benutzter TOTP-Zeitschritt – jeder Code gilt nur einmal (Review 2026-10-10)
+            "ALTER TABLE vk_users ADD COLUMN totp_letzt INTEGER",
         ]:
             try:
                 conn.execute(col_sql)

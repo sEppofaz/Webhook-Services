@@ -736,7 +736,7 @@ def login():
         with db_conn() as conn:
             rows = conn.execute(
                 """SELECT u.id, u.password_hash, u.aktiv, u.email_verified,
-                          u.login_attempts, u.locked_until, u.role,
+                          u.login_attempts, u.locked_until, u.role, u.totp_secret,
                           v.status as verein_status, v.verein_name
                    FROM vk_users u
                    JOIN vereine_accounts v ON v.id = u.verein_id
@@ -771,12 +771,15 @@ def login():
                         )
                         error = "E-Mail oder Passwort falsch."
                     else:
-                        # Erfolg: Zähler aller gematchten Rows zurücksetzen
-                        matched_ids = [r["id"] for r in matched]
-                        conn.execute(
-                            f"UPDATE vk_users SET login_attempts=0, locked_until=NULL WHERE id IN ({','.join('?'*len(matched_ids))})",
-                            matched_ids,
-                        )
+                        # Erfolg: Zähler aller gematchten Rows zurücksetzen – aber NICHT bei Konten mit
+                        # Authenticator-App: dort erst nach dem richtigen Code (Review 2026-10-10: sonst ließe
+                        # sich die Code-Sperre durch erneutes Passwort-Login endlos umgehen)
+                        matched_ids = [r["id"] for r in matched if not r["totp_secret"]]
+                        if matched_ids:
+                            conn.execute(
+                                f"UPDATE vk_users SET login_attempts=0, locked_until=NULL WHERE id IN ({','.join('?'*len(matched_ids))})",
+                                matched_ids,
+                            )
                         # Nur vollständig nutzbare Accounts weiter beachten
                         usable = [r for r in matched if r["aktiv"] and r["email_verified"] and r["verein_status"] == "aktiv"]
 
@@ -947,13 +950,31 @@ def _ersatzcodes() -> tuple[list[str], str]:
     return codes, _json.dumps([bcrypt.hashpw(c.encode(), bcrypt.gensalt(10)).decode() for c in codes])
 
 
-def _code_pruefen(conn, uid: int, secret: str, hashes_json: str | None, code: str) -> bool:
-    """TOTP (±30 s) oder ein Ersatzcode – der wird dabei verbraucht."""
-    import json as _json
+def _totp_schritt(secret: str, code: str) -> int | None:
+    """Zeitschritt (30 s), zu dem der Code passt (±1 Schritt), sonst None."""
+    import time
+
     import pyotp
+    if not secret:
+        return None
+    t, jetzt = pyotp.TOTP(secret), int(time.time()) // 30
+    for schritt in (jetzt - 1, jetzt, jetzt + 1):
+        if hmac.compare_digest(t.at(schritt * 30), code):
+            return schritt
+    return None
+
+
+def _code_pruefen(conn, uid: int, secret: str, hashes_json: str | None, code: str) -> bool:
+    """TOTP (±30 s, jeder Code nur einmal – `totp_letzt`) oder ein Ersatzcode, der dabei verbraucht wird."""
+    import json as _json
     code = "".join(code.split()).lower()
     if code.isdigit() and len(code) == 6:
-        return bool(secret) and pyotp.TOTP(secret).verify(code, valid_window=1)
+        schritt = _totp_schritt(secret, code)
+        letzt = conn.execute("SELECT totp_letzt FROM vk_users WHERE id = ?", (uid,)).fetchone()[0]
+        if schritt is None or (letzt is not None and schritt <= letzt):
+            return False
+        conn.execute("UPDATE vk_users SET totp_letzt = ? WHERE id = ?", (schritt, uid))
+        return True
     if len(code) == 8 and "-" not in code:
         code = code[:4] + "-" + code[4:]
     hashes = _json.loads(hashes_json or "[]")
@@ -987,7 +1008,9 @@ def login_2fa():
             elif _code_pruefen(conn, uid, row["totp_secret"], row["totp_recovery_hashes"], request.form.get("code", "")):
                 conn.execute("UPDATE vk_users SET login_attempts = 0, locked_until = NULL WHERE id = ?", (uid,))
             else:
-                versuche = (row["login_attempts"] or 0) + 1
+                # abgelaufene Sperre zählt neu (wie beim Passwort), sonst sperrte der erste Fehlversuch sofort wieder
+                alt = 0 if row["locked_until"] and datetime.fromisoformat(row["locked_until"]) <= now else (row["login_attempts"] or 0)
+                versuche = alt + 1
                 gesperrt = (now + timedelta(minutes=LOCKOUT_MINUTES)).isoformat() if versuche >= MAX_LOGIN_ATTEMPTS else None
                 conn.execute("UPDATE vk_users SET login_attempts = ?, locked_until = ? WHERE id = ?", (versuche, gesperrt, uid))
                 error = "Der Code stimmt nicht. Bitte den aktuellen Code aus der App eingeben."
@@ -1042,11 +1065,12 @@ def zwei_faktor(user):
         aktion, code = request.form.get("aktion", ""), request.form.get("code", "")
         if aktion == "einrichten" and not aktiv:
             secret = session.get("totp_neu", "")
-            if secret and pyotp.TOTP(secret).verify("".join(code.split()), valid_window=1):
+            schritt = _totp_schritt(secret, "".join(code.split()))
+            if schritt is not None:
                 codes, hashes = _ersatzcodes()
                 with db_conn() as conn:
-                    conn.execute("UPDATE vk_users SET totp_secret = ?, totp_recovery_hashes = ? WHERE id = ?",
-                                 (secret, hashes, user["id"]))
+                    conn.execute("UPDATE vk_users SET totp_secret = ?, totp_recovery_hashes = ?, totp_letzt = ? WHERE id = ?",
+                                 (secret, hashes, schritt, user["id"]))
                 session.pop("totp_neu", None)
                 log_audit("2fa_eingerichtet", f"user_{user['id']}", user["verein_key"] or "", user["id"])
                 return codes_seite(codes, "Authenticator-App eingerichtet")
@@ -1055,7 +1079,7 @@ def zwei_faktor(user):
             with db_conn() as conn:
                 ok = _code_pruefen(conn, user["id"], row["totp_secret"], row["totp_recovery_hashes"], code)
                 if ok and aktion == "aus":
-                    conn.execute("UPDATE vk_users SET totp_secret = NULL, totp_recovery_hashes = NULL WHERE id = ?",
+                    conn.execute("UPDATE vk_users SET totp_secret = NULL, totp_recovery_hashes = NULL, totp_letzt = NULL WHERE id = ?",
                                  (user["id"],))
             if ok and aktion == "aus":
                 log_audit("2fa_abgeschaltet", f"user_{user['id']}", user["verein_key"] or "", user["id"])
@@ -1108,7 +1132,7 @@ def admin_2fa_reset(user_id: int):
     if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
         return {"error": "Unauthorized"}, 401
     with db_conn() as conn:
-        n = conn.execute("UPDATE vk_users SET totp_secret = NULL, totp_recovery_hashes = NULL, login_attempts = 0,"
+        n = conn.execute("UPDATE vk_users SET totp_secret = NULL, totp_recovery_hashes = NULL, totp_letzt = NULL, login_attempts = 0,"
                          " locked_until = NULL WHERE id = ? AND totp_secret IS NOT NULL", (user_id,)).rowcount
     return ({"ok": True}, 200) if n else ({"error": "Für dieses Konto ist keine Authenticator-App eingerichtet."}, 404)
 

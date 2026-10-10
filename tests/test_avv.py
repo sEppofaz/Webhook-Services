@@ -202,10 +202,27 @@ with vk_db.db_conn() as c:
               " ('dokument_angesehen', 'dok_1', 'va', ?, '2024-01-01 10:00:00')", (uid_a,))
     c.execute("INSERT INTO vk_audit (aktion, termin_id, verein_key, user_id, timestamp) VALUES"
               " ('dokument_angesehen', 'dok_1', 'vb', ?, '2024-01-01 10:00:00')", (uid_b,))
-A.get("/verein/dokumente/verlauf")
+    c.execute("INSERT INTO vk_audit (aktion, termin_id, verein_key, user_id, timestamp) VALUES"
+              " ('avv_abgeschlossen', '2024-01', 'vb', ?, '2024-01-01 10:00:00')", (uid_b,))
+import services.verein.dokumente as VD0
+VD0._aufgeraeumt["tag"] = ""
+client().get("/verein/datenschutz")                  # irgendein Aufruf → tägliches Aufräumen für alle Vereine
 with vk_db.db_conn() as c:
-    alt = c.execute("SELECT verein_key FROM vk_audit WHERE timestamp < '2025-01-01'").fetchall()
-pruefe([r[0] for r in alt] == ["vb"], "Einträge älter als 12 Monate gelöscht – nur beim eigenen Verein")
+    alt = [tuple(r) for r in c.execute("SELECT verein_key, aktion FROM vk_audit WHERE timestamp < '2025-01-01'")]
+pruefe(alt == [("vb", "avv_abgeschlossen")], f"alte Einträge aller Vereine gelöscht, AVV-Nachweis bleibt, war {alt}")
+# Ansicht lässt sich nicht per URL-Parameter verstecken
+with vk_db.db_conn() as c:
+    vorher = c.execute("SELECT COUNT(*) FROM vk_audit WHERE aktion = 'dokument_angesehen' AND user_id = ?", (uid_am,)).fetchone()[0]
+AM.get(f"/verein/dokumente/{fa['id']}?meldung=x")
+with vk_db.db_conn() as c:
+    nachher = c.execute("SELECT COUNT(*) FROM vk_audit WHERE aktion = 'dokument_angesehen' AND user_id = ?", (uid_am,)).fetchone()[0]
+pruefe(nachher == vorher + 1, "Ansicht mit ?meldung= wird trotzdem protokolliert")
+r = A.post(f"/verein/dokumente/{fa['id']}", data={"_csrf": T, "kategorie": "sonstiges", "titel": "Für alle", "datum": "",
+                                               "text": "Hallo neu", "sichtbar": "alle"})
+A.get(r.headers["Location"])
+with vk_db.db_conn() as c:
+    letzte = c.execute("SELECT aktion FROM vk_audit WHERE termin_id = ? ORDER BY id DESC LIMIT 1", (f"dok_{fa['id']}",)).fetchone()[0]
+pruefe(letzte == "dokument_geaendert", f"eigene Ansicht direkt nach dem Speichern zählt nicht, war {letzte}")
 
 print("Export ZIP")
 pruefe(AM.get("/verein/dokumente/export.zip").status_code == 403, "Mitglied: kein Export")

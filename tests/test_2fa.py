@@ -109,6 +109,17 @@ def cookie(r, name):
     return any(h.startswith(name + "=") and not h.startswith(name + "=;") for h in r.headers.getlist("Set-Cookie"))
 
 
+def frisch(uid):
+    """Einmal-Sperre für den nächsten Code im Test aufheben (sonst gilt derselbe 30-s-Code nur einmal)."""
+    with vk_db.db_conn() as conn:
+        conn.execute("UPDATE vk_users SET totp_letzt = NULL WHERE id = ?", (uid,))
+
+
+def code(secret, uid):
+    frisch(uid)
+    return pyotp.TOTP(secret).now()
+
+
 def login(c, email):
     return c.post("/verein/login", data={"_csrf": T, "email": email, "password": PW})
 
@@ -157,12 +168,22 @@ pruefe(r.headers["Location"] == "/verein/login/2fa" and not cookie(r, "vk_sessio
 pruefe(d.get("/verein/termine").headers["Location"] == "/verein/login", "ohne Code kein Vereinsbereich")
 r = d.post("/verein/login/2fa", data={"_csrf": T, "code": "123456" if pyotp.TOTP(secret).now() != "123456" else "654321"})
 pruefe("stimmt nicht" in r.get_data(as_text=True) and not cookie(r, "vk_session"), "falscher Code abgelehnt")
-r = d.post("/verein/login/2fa", data={"_csrf": T, "code": pyotp.TOTP(secret).now()})
+r = d.post("/verein/login/2fa", data={"_csrf": T, "code": code(secret, uid_a)})
 pruefe(r.status_code == 302 and r.headers["Location"] == "/verein/termine" and cookie(r, "vk_session"), "richtiger Code → Sitzung")
 pruefe(d.get("/verein/termine").status_code == 200, "Vereinsbereich erreichbar")
 with vk_db.db_conn() as conn:
     pruefe(conn.execute("SELECT login_attempts FROM vk_users WHERE id = ?", (uid_a,)).fetchone()[0] == 0, "Fehlversuche zurückgesetzt")
 pruefe(neu_client().get("/verein/login/2fa").headers["Location"] == "/verein/login", "Code-Seite ohne Pre-Auth → Login")
+
+print("Jeder Code nur einmal")
+k = code(secret, uid_a)
+x1 = neu_client(); login(x1, "a@example.org")
+pruefe(cookie(x1.post("/verein/login/2fa", data={"_csrf": T, "code": k}), "vk_session"), "Code einmal verwendet")
+x2 = neu_client(); login(x2, "a@example.org")
+r = x2.post("/verein/login/2fa", data={"_csrf": T, "code": k})
+pruefe(not cookie(r, "vk_session") and "stimmt nicht" in r.get_data(as_text=True), "derselbe Code ein zweites Mal abgelehnt")
+with vk_db.db_conn() as conn:
+    conn.execute("UPDATE vk_users SET login_attempts = 0, locked_until = NULL WHERE id = ?", (uid_a,))
 
 print("Ersatzcodes")
 e = neu_client(); login(e, "a@example.org")
@@ -180,11 +201,32 @@ with vk_db.db_conn() as conn:
 f = neu_client(); login(f, "a@example.org")
 for _ in range(5):
     f.post("/verein/login/2fa", data={"_csrf": T, "code": "000000"})
-r = f.post("/verein/login/2fa", data={"_csrf": T, "code": pyotp.TOTP(secret).now()})
+r = f.post("/verein/login/2fa", data={"_csrf": T, "code": code(secret, uid_a)})
 pruefe("Zu viele Fehlversuche" in r.get_data(as_text=True) and not cookie(r, "vk_session"), "nach 5 Fehlversuchen gesperrt")
 pruefe("Zu viele Fehlversuche" in login(neu_client(), "a@example.org").get_data(as_text=True), "Sperre gilt auch fürs Passwort")
 with vk_db.db_conn() as conn:
     conn.execute("UPDATE vk_users SET login_attempts = 0, locked_until = NULL WHERE id = ?", (uid_a,))
+
+print("Sperre lässt sich nicht per erneutem Passwort-Login umgehen")
+for runde in range(2):
+    y = neu_client(); login(y, "a@example.org")
+    for _ in range(4 if runde == 0 else 1):
+        y.post("/verein/login/2fa", data={"_csrf": T, "code": "000000"})
+with vk_db.db_conn() as conn:
+    row = conn.execute("SELECT login_attempts, locked_until FROM vk_users WHERE id = ?", (uid_a,)).fetchone()
+pruefe(row[0] == 5 and row[1], f"Passwort-Login setzt den Code-Zähler nicht zurück → nach 5 gesperrt, war {tuple(row)}")
+pruefe("Zu viele Fehlversuche" in login(neu_client(), "a@example.org").get_data(as_text=True), "… und das Passwort-Login ist gesperrt")
+with vk_db.db_conn() as conn:
+    conn.execute("UPDATE vk_users SET login_attempts = 5, locked_until = '2000-01-01T00:00:00' WHERE id = ?", (uid_a,))
+z_ = neu_client(); login(z_, "a@example.org")
+z_.post("/verein/login/2fa", data={"_csrf": T, "code": "000000"})
+with vk_db.db_conn() as conn:
+    row = conn.execute("SELECT login_attempts, locked_until FROM vk_users WHERE id = ?", (uid_a,)).fetchone()
+pruefe(row[0] == 1 and row[1] is None, f"nach abgelaufener Sperre zählt es neu, war {tuple(row)}")
+r = z_.post("/verein/login/2fa", data={"_csrf": T, "code": code(secret, uid_a)})
+pruefe(cookie(r, "vk_session"), "danach mit richtigem Code angemeldet")
+with vk_db.db_conn() as conn:
+    pruefe(conn.execute("SELECT login_attempts FROM vk_users WHERE id = ?", (uid_a,)).fetchone()[0] == 0, "Zähler erst nach dem Code zurück")
 
 print("Mehrere Vereine")
 vid_b, uid_b = konto("Verein B", "vb", "a@example.org")      # gleiche E-Mail, ohne 2FA
@@ -196,7 +238,7 @@ pruefe(cookie(r, "vk_session") and r.headers["Location"] == "/verein/termine", "
 h = neu_client(); login(h, "a@example.org")
 r = h.post("/verein/login/verein-waehlen", data={"_csrf": T, "user_id": uid_a})
 pruefe(r.headers["Location"] == "/verein/login/2fa" and not cookie(r, "vk_session"), "Verein mit 2FA: Code-Abfrage")
-r = h.post("/verein/login/2fa", data={"_csrf": T, "code": pyotp.TOTP(secret).now()})
+r = h.post("/verein/login/2fa", data={"_csrf": T, "code": code(secret, uid_a)})
 pruefe(cookie(r, "vk_session"), "… mit Code angemeldet")
 
 print("Josef setzt zurück, Abschalten")
@@ -218,7 +260,7 @@ with c.session_transaction() as sess:
 c.post("/verein/2fa", data={"_csrf": T, "aktion": "einrichten", "code": pyotp.TOTP(secret2).now()})
 r = c.post("/verein/2fa", data={"_csrf": T, "aktion": "aus", "code": "000000"})
 pruefe("stimmt nicht" in r.get_data(as_text=True), "Abschalten mit falschem Code abgelehnt")
-r = c.post("/verein/2fa", data={"_csrf": T, "aktion": "aus", "code": pyotp.TOTP(secret2).now()})
+r = c.post("/verein/2fa", data={"_csrf": T, "aktion": "aus", "code": code(secret2, uid_a)})
 with vk_db.db_conn() as conn:
     pruefe(conn.execute("SELECT totp_secret FROM vk_users WHERE id = ?", (uid_a,)).fetchone()[0] is None
            and "abgeschaltet" in r.get_data(as_text=True), "Abschalten mit Code")

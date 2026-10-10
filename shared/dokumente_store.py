@@ -52,7 +52,8 @@ def erkenne(data: bytes) -> str | None:
             with zipfile.ZipFile(io.BytesIO(data)) as z:
                 namen = set(z.namelist())
                 if "mimetype" in namen:
-                    mt = z.read("mimetype")[:100].decode("ascii", "replace").strip()
+                    with z.open("mimetype") as f:          # nur der Anfang – kein Entpacken einer Riesendatei
+                        mt = f.read(100).decode("ascii", "replace").strip()
                     return {"application/vnd.oasis.opendocument.text": "odt",
                             "application/vnd.oasis.opendocument.spreadsheet": "ods"}.get(mt)
                 if "[Content_Types].xml" in namen:

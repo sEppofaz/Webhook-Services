@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import csv
 import io
+import tempfile
 import zipfile
 from datetime import datetime, timedelta
 from urllib.parse import quote
@@ -39,6 +40,20 @@ def _audit(aktion: str, did: int, key: str) -> None:
         log_audit(aktion, f"dok_{did}", key, g.user["id"])
     except Exception:
         pass
+
+
+def _gerade_selbst_gespeichert(did: int) -> bool:
+    """Ansicht direkt nach dem eigenen Anlegen/Ändern nicht als „angesehen“ zählen – geprüft am Protokoll selbst,
+    nicht an einem URL-Parameter (Review 2026-10-10: `?meldung=` hätte jede Ansicht unsichtbar gemacht)."""
+    with db_conn() as c:
+        r = c.execute("SELECT aktion, timestamp FROM vk_audit WHERE termin_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1",
+                      (f"dok_{did}", g.user["id"])).fetchone()
+    if not r or r["aktion"] not in ("dokument_neu", "dokument_geaendert"):
+        return False
+    try:
+        return datetime.utcnow() - datetime.fromisoformat(r["timestamp"]) < timedelta(seconds=60)
+    except (TypeError, ValueError):
+        return False
 
 
 def _mb(n: int) -> str:
@@ -301,7 +316,7 @@ def dokument_seite(key, did):
     if dok["art"] == "formular" and request.args.get("bearbeiten") and _ist_admin():
         _schreiben()
         return _formular_seite(key, dok)
-    if not request.args.get("meldung"):          # nicht direkt nach dem eigenen Speichern zählen
+    if not _gerade_selbst_gespeichert(did):
         _audit("dokument_angesehen", did, key)
     return render_template("planung/dokument.html", dok=dok, KATEGORIEN=D.kategorien(key), EINZAHL=D.einzahl(key), NEU=NEU,
                            SICHTBAR=D.SICHTBAR,
@@ -422,7 +437,9 @@ def hinweis_dokumente_weg(key):
 def dokumente_zip(key):
     _nur_admin()
     kats = D.kategorien(key)
-    buf, namen = io.BytesIO(), set()
+    # In eine Temp-Datei statt in den Speicher (bis 200 MB je Verein, ein Prozess für alles – Review 2026-10-10);
+    # send_file schließt sie nach dem Senden, TemporaryFile ist dann gelöscht.
+    buf, namen = tempfile.TemporaryFile(), set()
     zeilen = [["Kategorie", "Titel", "Datum", "Art", "Sichtbar", "Datei im Archiv", "Angelegt", "Geändert"]]
 
     def eindeutig(pfad: str) -> str:
@@ -456,11 +473,12 @@ def dokumente_zip(key):
         csv.writer(tab, delimiter=";").writerows(zeilen)
         z.writestr("uebersicht.csv", "\ufeff" + tab.getvalue())
     _audit("dokumente_export", 0, key)
-    name = dateiname(f"Dokumente {g.user['verein_name']} {datetime.now():%Y-%m-%d}", "zip")
-    ersatz = name.encode("ascii", "replace").decode().replace("?", "_")
-    return Response(buf.getvalue(), mimetype="application/zip",
-                    headers={"Content-Disposition": f"attachment; filename=\"{ersatz}\"; filename*=UTF-8''{quote(name)}",
-                             "Cache-Control": "private, no-store"})
+    buf.seek(0)
+    r = send_file(buf, mimetype="application/zip", as_attachment=True,
+                  download_name=dateiname(f"Dokumente {g.user['verein_name']} {datetime.now():%Y-%m-%d}", "zip"),
+                  conditional=False, etag=False, max_age=0)
+    r.headers["Cache-Control"] = "private, no-store"
+    return r
 
 
 # ── Zugriffsprotokoll für Vereinsadmins (v1.83) ──────────────────────────────
@@ -469,17 +487,38 @@ VERLAUF_AKTIONEN = {"dokument_neu": "angelegt", "dokument_geaendert": "geändert
                     "dokument_angesehen": "angesehen", "dokument_heruntergeladen": "heruntergeladen",
                     "dokumente_export": "alle exportiert (ZIP)", "avv_abgeschlossen": "AV-Vertrag abgeschlossen"}
 VERLAUF_TAGE = 365
+_aufgeraeumt = {"tag": ""}
+
+
+def protokoll_aufraeumen() -> int:
+    """Einträge des Zugriffsprotokolls älter als 12 Monate löschen – für alle Vereine (AVV/Datenschutz 4b).
+    `avv_abgeschlossen` bleibt als Nachweis."""
+    grenze = (datetime.utcnow() - timedelta(days=VERLAUF_TAGE)).strftime("%Y-%m-%d %H:%M:%S")
+    weg = [a for a in VERLAUF_AKTIONEN if a != "avv_abgeschlossen"]
+    with db_conn() as c:
+        return c.execute(f"DELETE FROM vk_audit WHERE aktion IN ({','.join('?' * len(weg))}) AND timestamp < ?",
+                         (*weg, grenze)).rowcount
+
+
+@planung_bp.before_app_request
+def _taeglich_aufraeumen():
+    """Einmal am Tag beim ersten Aufruf der App (die Seite hat täglich Besucher; kein eigener Cron nötig)."""
+    heute = datetime.utcnow().strftime("%Y-%m-%d")
+    if _aufgeraeumt["tag"] != heute:
+        _aufgeraeumt["tag"] = heute
+        try:
+            protokoll_aufraeumen()
+        except Exception:
+            pass
 
 
 @planung_bp.route("/verein/dokumente/verlauf")
 @verein_login
 def dokumente_verlauf(key):
     _nur_admin()
-    grenze = (datetime.utcnow() - timedelta(days=VERLAUF_TAGE)).strftime("%Y-%m-%d %H:%M:%S")
     ph = ",".join("?" * len(VERLAUF_AKTIONEN))
+    protokoll_aufraeumen()
     with db_conn() as c:
-        c.execute(f"DELETE FROM vk_audit WHERE verein_key = ? AND aktion IN ({ph}) AND aktion != 'avv_abgeschlossen'"
-                  " AND timestamp < ?", (key, *VERLAUF_AKTIONEN, grenze))
         rows = c.execute(
             f"SELECT a.aktion, a.termin_id, a.timestamp AS zeitpunkt, u.email, u.vorname, u.nachname, u.name"
             f" FROM vk_audit a LEFT JOIN vk_users u ON u.id = a.user_id"
