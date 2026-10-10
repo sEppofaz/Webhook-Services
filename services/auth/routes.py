@@ -320,13 +320,13 @@ def _telegram_ortschaft_hinweis(verein_name: str, plz: str, ort: str, hinweise: 
 
 
 def _ansprechpartner_felder(anrede: str, vorname: str, nachname: str) -> str:
-    """Anrede, Vor- und Nachname – alle Pflicht. Für die Begrüßung in den Mails."""
+    """Anrede (freiwillig, seit v1.69 in keiner Mail genutzt), Vor- und Nachname (Pflicht, Begrüßung in den Mails)."""
     opts = "".join(
         f'<option value="{a}"{" selected" if anrede == a else ""}>{a}</option>' for a in ANREDEN
     )
     return f"""
-  <label>Anrede</label>
-  <select name="anrede" required><option value="">– bitte wählen –</option>{opts}</select>
+  <label>Anrede <span class="hint">(freiwillig)</span></label>
+  <select name="anrede"><option value="">– bitte wählen –</option>{opts}</select>
   <label>Vorname Ansprechpartner</label>
   <input name="vorname" type="text" required autocomplete="given-name" placeholder="z.B. Maria" value="{html.escape(vorname)}">
   <label>Nachname Ansprechpartner</label>
@@ -334,8 +334,8 @@ def _ansprechpartner_felder(anrede: str, vorname: str, nachname: str) -> str:
 
 
 def ansprechpartner_fehler(anrede: str, vorname: str, nachname: str) -> str:
-    if anrede not in ANREDEN:
-        return "Bitte die Anrede wählen."
+    if anrede and anrede not in ANREDEN:
+        return "Bitte eine gültige Anrede wählen."
     if not vorname or not nachname:
         return "Bitte Vor- und Nachname des Ansprechpartners angeben."
     if len(vorname) > 60 or len(nachname) > 60:
@@ -470,7 +470,7 @@ def register():
                                   rubrik=rubrik, heimatort=heimatort, telefon=telefon,
                                   plz=plz, gemeinde=gemeinde, landkreis=landkreis,
                                   hinweise=hinweise,
-                                  ansprechpartner=f"{anrede} {vorname} {nachname}".replace("keine Angabe ", ""))
+                                  ansprechpartner=f"{anrede} {vorname} {nachname}".replace("keine Angabe ", "").strip())
             threading.Thread(
                 target=_telegram_suggest_links,
                 args=(verein_id, verein_name, verein_key),
@@ -1117,7 +1117,7 @@ def admin_mailtext_vorschau(art: str):
     werte, fehler = _formular_texte(art)
     if fehler:
         return {"error": fehler}, 400
-    betreff, inhalt = vk_mail.baue_mail(art, vk_mail.BEISPIEL, "Hallo Frau Muster,", eigene=werte)
+    betreff, inhalt = vk_mail.baue_mail(art, vk_mail.BEISPIEL, "Hallo Erika Muster,", eigene=werte)
     return {"betreff": betreff, "html": inhalt}
 
 
@@ -1128,7 +1128,7 @@ def admin_mailtext_test(art: str):
         return {"error": "Unauthorized"}, 401
     if art not in vk_mail.STANDARD:
         return {"error": "Unbekannte Mail"}, 404
-    betreff, inhalt = vk_mail.baue_mail(art, vk_mail.BEISPIEL, "Hallo Frau Muster,")
+    betreff, inhalt = vk_mail.baue_mail(art, vk_mail.BEISPIEL, "Hallo Erika Muster,")
     ok = vk_mail._send(vk_mail.KONTAKT, "[Test] " + betreff, inhalt)
     return {"ok": ok, "an": vk_mail.KONTAKT}
 

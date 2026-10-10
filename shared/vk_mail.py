@@ -109,10 +109,9 @@ ANREDEN = ["Herr", "Frau", "keine Angabe"]
 
 
 def begruessung(anrede: str | None = "", vorname: str | None = "", nachname: str | None = "") -> str:
-    """„Hallo Herr Huber," – bei „keine Angabe" mit vollem Namen, ohne Namen nur „Hallo,"."""
-    anrede, vorname, nachname = (anrede or "").strip(), (vorname or "").strip(), (nachname or "").strip()
-    if anrede in ("Herr", "Frau") and nachname:
-        return f"Hallo {anrede} {html.escape(nachname)},"
+    """„Hallo Maria Huber," – immer Vor- und Nachname, die Anrede bleibt ungenutzt (v1.69, Josef: kein
+    „Herr/Frau" vor dem Du). Ohne Namen nur „Hallo,"."""
+    vorname, nachname = (vorname or "").strip(), (nachname or "").strip()
     name = " ".join(x for x in (vorname, nachname) if x)
     return f"Hallo {html.escape(name)}," if name else "Hallo,"
 
