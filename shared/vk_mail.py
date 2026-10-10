@@ -28,7 +28,7 @@ _STYLE = """
   .hdr{background:#6D28D9;border-radius:10px 10px 0 0;margin:-32px -32px 24px;
        padding:20px 32px;color:#fff}
   .hdr h1{margin:0;font-size:18px;font-weight:700}
-  .hdr p{margin:4px 0 0;font-size:12px;opacity:.75}
+  .hdr p{margin:4px 0 0;font-size:12px;color:#ede9fe}   /* eigene Farbe – sonst greift p{color:#3c3c43} (v1.74) */
   h2{color:#1c1c1e;margin:0 0 12px;font-size:17px}
   p{color:#3c3c43;line-height:1.6;margin:0 0 12px}
   .btn{display:inline-block;background:#6D28D9;color:#fff !important;text-decoration:none;

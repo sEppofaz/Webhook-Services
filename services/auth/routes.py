@@ -1074,6 +1074,11 @@ def _admin_ok() -> bool:
 PITCH, PITCH_BEISPIEL = "pitch", "invite"      # Kurzvorstellung (v1.72): kein eigener Versand, gezeigt an der Einladung
 
 
+def _beispiel_gruss(art: str) -> str:
+    """Begrüßung in Vorschau/Testmail wie im echten Versand: Eingeladene kennen wir nur per Adresse (v1.74)."""
+    return "Hallo," if art in (PITCH, "invite") else "Hallo Erika Muster,"
+
+
 def _mailtext_eintrag(art: str) -> dict:
     s = vk_mail.STANDARD[art]
     aktuell = vk_mail.texte(art)
@@ -1123,7 +1128,7 @@ def admin_mailtext_vorschau(art: str):
     if art == PITCH:                                      # Kurzvorstellung: Vorschau an der Einladungsmail
         betreff, inhalt = vk_mail.baue_mail(PITCH_BEISPIEL, vk_mail.BEISPIEL, "Hallo,", pitch=werte["text"])
     else:
-        betreff, inhalt = vk_mail.baue_mail(art, vk_mail.BEISPIEL, "Hallo Erika Muster,", eigene=werte)
+        betreff, inhalt = vk_mail.baue_mail(art, vk_mail.BEISPIEL, _beispiel_gruss(art), eigene=werte)
     return {"betreff": betreff, "html": inhalt}
 
 
@@ -1134,7 +1139,7 @@ def admin_mailtext_test(art: str):
         return {"error": "Unauthorized"}, 401
     if art not in vk_mail.STANDARD:
         return {"error": "Unbekannte Mail"}, 404
-    betreff, inhalt = vk_mail.baue_mail(PITCH_BEISPIEL if art == PITCH else art, vk_mail.BEISPIEL, "Hallo Erika Muster,")
+    betreff, inhalt = vk_mail.baue_mail(PITCH_BEISPIEL if art == PITCH else art, vk_mail.BEISPIEL, _beispiel_gruss(art))
     ok = vk_mail._send(vk_mail.KONTAKT, "[Test] " + betreff, inhalt)
     return {"ok": ok, "an": vk_mail.KONTAKT}
 
