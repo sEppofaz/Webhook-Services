@@ -547,6 +547,15 @@ def api_admin_stats_geo():
     }
 
 
+def _dokumente_statistik() -> dict | None:
+    """Nur Zahlen (Anzahl, Vereine, MB) – Inhalte der Vereinsdokumente sieht der Admin nicht (ADR-029)."""
+    try:
+        from shared.dokumente_db import statistik
+        return statistik()
+    except Exception:
+        return None
+
+
 @kalender_bp.route("/api/admin/stats", methods=["GET"])
 def api_admin_stats():
     token = request.headers.get("X-Upload-Token", "")
@@ -670,6 +679,7 @@ def api_admin_stats():
         "ical_30d":           ical_30d,
         "ical_vereine_count": ical_vereine_count,
         "ical_ranking":       ical_ranking,
+        "dokumente":          _dokumente_statistik(),
     }, ensure_ascii=False), 200, {"Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store"}
 
 

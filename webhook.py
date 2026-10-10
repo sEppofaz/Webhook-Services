@@ -13,6 +13,7 @@ from services.kalender_bot.routes import kalender_bot_bp
 from services.rename.routes import rename_bp
 from services.telegram.routes import freigabe_gruppe_ankuendigen, telegram_bp
 from services.verein.planung import planung_bp
+import services.verein.dokumente  # noqa: F401,E402  Routen „Dokumente“ am planung_bp (ADR-029)
 from services.verein.routes import verein_bp
 from services.verkehr.routes import verkehr_bp
 

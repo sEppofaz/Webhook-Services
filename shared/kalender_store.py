@@ -194,4 +194,6 @@ def uebertrage_key(source_key: str, target_key: str) -> int:
         )
         conn.execute("UPDATE tg_subscriptions SET verein_key = ? WHERE verein_key = ?",
                      (target_key, source_key))
+        from shared.dokumente_db import key_umziehen   # Dokumente wandern mit (ADR-029)
+        key_umziehen(source_key, target_key, conn)
     return stand["n"]

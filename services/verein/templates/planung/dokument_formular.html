@@ -1,0 +1,111 @@
+{% extends "planung/base.html" %}
+{% set ist_neu = not dok.id %}
+{% block titel %}{{ 'Neues Dokument' if ist_neu else dok.titel }}{% endblock %}
+{% macro top_karte(top) %}
+<fieldset class="card top-karte">
+  <div class="kopf"><b class="top-nr">Tagesordnungspunkt</b>
+    <button type="button" class="btn sek klein top-weg" style="margin-left:auto">Entfernen</button></div>
+  <label>Thema</label><input name="top_titel" maxlength="500" value="{{ top.titel }}" placeholder="z. B. Bericht des Kassiers">
+  <label>Besprochen</label><textarea name="top_text" rows="3" maxlength="20000">{{ top.text }}</textarea>
+  <label>Beschluss <span class="hint">(optional)</span></label><textarea name="top_beschluss" rows="2" maxlength="20000">{{ top.beschluss }}</textarea>
+  <div class="zeile abst">
+    <div><label>Ja</label><input name="top_ja" inputmode="numeric" pattern="[0-9]*" maxlength="5" value="{{ top.ja }}"></div>
+    <div><label>Nein</label><input name="top_nein" inputmode="numeric" pattern="[0-9]*" maxlength="5" value="{{ top.nein }}"></div>
+    <div><label>Enthaltung</label><input name="top_enthaltung" inputmode="numeric" pattern="[0-9]*" maxlength="5" value="{{ top.enthaltung }}"></div>
+  </div>
+</fieldset>
+{% endmacro %}
+{% block inhalt %}
+{% set i = dok.inhalt or {} %}
+<p class="hint" style="margin:4px 0 0"><a href="{{ url_for('planung.dokumente_seite') if ist_neu else url_for('planung.dokument_seite', did=dok.id) }}">‹ {{ 'Dokumente' if ist_neu else 'Zurück ohne Speichern' }}</a></p>
+<h1>{{ ('Neues ' ~ EINZAHL[dok.kategorie]) if ist_neu and dok.kategorie == 'protokoll' else ('Neues Dokument' if ist_neu else 'Bearbeiten') }}</h1>
+{% if fehler %}<div class="warn rot">{{ fehler }}</div>{% endif %}
+
+<form method="post" id="dok-form" action="{{ url_for('planung.dokument_neu') if ist_neu else url_for('planung.dokument_seite', did=dok.id) }}">{{ csrf()|safe }}
+<div class="card">
+  <div class="zeile">
+    <div><label for="f-kat">Kategorie</label>
+      <select id="f-kat" name="kategorie">{% for k, n in KATEGORIEN.items() %}<option value="{{ k }}"{{ ' selected' if k == dok.kategorie }}>{{ n }}</option>{% endfor %}</select></div>
+    <div><label for="f-datum"><span class="nur-prot">Datum der Sitzung</span><span class="ohne-prot">Datum <span class="hint">(optional)</span></span></label>
+      <input id="f-datum" type="date" name="datum" value="{{ dok.datum }}"></div>
+  </div>
+  <label for="f-titel">Titel <span class="hint">(leer = wird aus Sitzung und Datum gebildet)</span></label>
+  <input id="f-titel" name="titel" maxlength="200" value="{{ dok.titel }}">
+</div>
+
+<div class="nur-prot">
+<h2>Sitzung</h2>
+<div class="card">
+  <div class="zeile">
+    <div><label for="f-art">Art</label>
+      <select id="f-art" name="sitzungsart">{% for a in SITZUNGSARTEN %}<option{{ ' selected' if a == i.sitzungsart }}>{{ a }}</option>{% endfor %}</select></div>
+    <div><label for="f-ort">Ort</label><input id="f-ort" name="ort" maxlength="500" value="{{ i.ort }}" placeholder="z. B. Gasthaus Huber"></div>
+  </div>
+  <div class="zeile">
+    <div><label for="f-beginn">Beginn</label><input id="f-beginn" type="time" name="beginn" value="{{ i.beginn }}"></div>
+    <div><label for="f-ende">Ende</label><input id="f-ende" type="time" name="ende" value="{{ i.ende }}"></div>
+  </div>
+  <div class="zeile">
+    <div><label for="f-leitung">Sitzungsleitung</label><input id="f-leitung" name="leitung" maxlength="500" value="{{ i.leitung }}"></div>
+    <div><label for="f-prot">Protokoll</label><input id="f-prot" name="protokoll" maxlength="500" value="{{ i.protokoll }}"></div>
+  </div>
+  <label for="f-anw">Anwesend</label>
+  <textarea id="f-anw" name="anwesende" rows="2" maxlength="500" placeholder="Namen oder Anzahl, z. B. 23 Mitglieder (Liste liegt bei)">{{ i.anwesende }}</textarea>
+  <label for="f-ent">Entschuldigt</label>
+  <textarea id="f-ent" name="entschuldigt" rows="1" maxlength="500">{{ i.entschuldigt }}</textarea>
+</div>
+
+<h2>Tagesordnung</h2>
+<div id="tops">
+{% for top in (i.tops or []) + [{}] %}{{ top_karte(top) }}{% endfor %}
+</div>
+<template id="top-vorlage">{{ top_karte({}) }}</template>
+<button type="button" class="btn sek" id="top-neu" hidden>+ Weiterer Punkt</button>
+</div>
+
+<h2><span class="nur-prot">Sonstiges</span><span class="ohne-prot">Text</span></h2>
+<div class="card">
+  <textarea name="text" rows="8" maxlength="20000" aria-label="Text">{{ i.text }}</textarea>
+</div>
+<div class="aktionen"><button class="btn">Speichern</button></div>
+</form>
+<script>
+(function () {
+  const form = document.getElementById("dok-form"), kat = document.getElementById("f-kat");
+  const liste = document.getElementById("tops"), neu = document.getElementById("top-neu");
+  const art = () => form.classList.toggle("js-prot", kat.value === "protokoll") | form.classList.toggle("js-ohne", kat.value !== "protokoll");
+  kat.addEventListener("change", art);
+  art();
+  const leer = k => [...k.querySelectorAll("input,textarea")].every(f => !f.value.trim());
+  function nummern() {
+    liste.querySelectorAll(".top-nr").forEach((b, n) => { b.textContent = `TOP ${n + 1}`; });
+  }
+  const karten = liste.querySelectorAll(".top-karte");
+  if (karten.length > 1 && leer(karten[karten.length - 1])) karten[karten.length - 1].remove();   // „+“ ersetzt den Leer-Punkt
+  neu.hidden = false;
+  neu.addEventListener("click", () => {
+    liste.append(document.getElementById("top-vorlage").content.cloneNode(true));
+    nummern();
+    liste.lastElementChild.querySelector("input").focus();
+  });
+  liste.addEventListener("click", (e) => {
+    const knopf = e.target.closest(".top-weg");
+    if (!knopf) return;
+    const karte = knopf.closest(".top-karte");
+    if (liste.querySelectorAll(".top-karte").length === 1) karte.querySelectorAll("input,textarea").forEach(f => { f.value = ""; });
+    else karte.remove();
+    nummern();
+  });
+  form.classList.add("js");
+  nummern();
+})();
+</script>
+{% endblock %}
+{% block css %}
+.top-karte{border:0;margin:10px 0}.top-karte .kopf{align-items:center}
+.abst>*{flex:1 1 80px}
+form:not(.js) .top-weg{display:none}
+textarea{resize:vertical}
+form.js-prot .ohne-prot,form.js-ohne .nur-prot{display:none}
+form:not(.js-prot):not(.js-ohne) .ohne-prot{display:none}
+{% endblock %}

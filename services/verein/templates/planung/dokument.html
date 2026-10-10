@@ -1,0 +1,64 @@
+{% extends "planung/base.html" %}
+{% block titel %}{{ dok.titel }}{% endblock %}
+{% block inhalt %}
+<p class="hint" style="margin:4px 0 0"><a href="{{ url_for('planung.dokumente_seite') }}#{{ dok.kategorie }}">‹ Dokumente</a> · {{ KATEGORIEN[dok.kategorie] }}</p>
+<h1>{{ dok.titel }}</h1>
+{% if fehler %}<div class="warn rot">{{ fehler }}</div>{% endif %}
+{% if meldung %}<div class="ok">{{ meldung }}</div>{% endif %}
+
+{% if dok.art == 'datei' %}
+<div class="card">
+  <div class="hint">{{ dok.datum|datum_lang or 'ohne Datum' }} · {{ TYPEN[dok.datei_typ][0] }} · {{ dok.groesse|mb }} · {{ dok.datei_name }}</div>
+  <div class="aktionen">
+    {% if dok.datei_typ in IM_BROWSER %}<a class="btn" href="{{ url_for('planung.dokument_datei', did=dok.id) }}" target="_blank" rel="noopener">Öffnen</a>{% endif %}
+    <a class="btn{{ ' sek' if dok.datei_typ in IM_BROWSER }}" href="{{ url_for('planung.dokument_datei', did=dok.id, laden=1) }}">Herunterladen</a>
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <table class="dok-kopf">{% for k, v in kopf %}<tr><th scope="row">{{ k }}</th><td>{{ v }}</td></tr>{% endfor %}</table>
+  {% for top in dok.inhalt.tops or [] %}
+  <h2 class="top">TOP {{ loop.index }}: {{ top.titel }}</h2>
+  {% if top.text %}<p class="vor">{{ top.text }}</p>{% endif %}
+  {% if top.beschluss %}<p class="vor"><b>Beschluss:</b> {{ top.beschluss }}</p>{% endif %}
+  {% if abstimmung(top) %}<p class="hint">Abstimmung: {{ abstimmung(top) }}</p>{% endif %}
+  {% endfor %}
+  {% if dok.inhalt.text %}{% if dok.kategorie == 'protokoll' %}<h2 class="top">Sonstiges</h2>{% endif %}<p class="vor">{{ dok.inhalt.text }}</p>{% endif %}
+  <div class="aktionen" style="margin-top:14px">
+    {% for fmt, f in DOK_FORMATE.items() %}<a class="btn{{ ' sek' if not loop.first }}" href="{{ url_for('planung.dokument_export', did=dok.id, fmt=fmt) }}">Als {{ f[0] }}</a>{% endfor %}
+  </div>
+</div>
+{% endif %}
+<p class="hint">Angelegt {{ dok.erstellt_am[:10]|datum_lang }}{% if dok.geaendert_am != dok.erstellt_am %} · zuletzt geändert {{ dok.geaendert_am[:10]|datum_lang }}{% endif %}</p>
+
+{% if darf %}
+<div class="aktionen">
+  {% if dok.art == 'formular' %}<a class="btn sek" href="{{ url_for('planung.dokument_seite', did=dok.id, bearbeiten=1) }}">Bearbeiten</a>
+  {% else %}<button type="button" class="btn sek" data-klappe="aendern">Ändern</button>{% endif %}
+  <button type="button" class="btn sek" data-klappe="weg">Löschen</button>
+</div>
+{% if dok.art == 'datei' %}
+<form id="aendern" class="card" method="post" enctype="multipart/form-data" hidden>{{ csrf()|safe }}
+  <div class="zeile">
+    <div><label for="ae-kat">Kategorie</label>
+      <select id="ae-kat" name="kategorie">{% for k, n in KATEGORIEN.items() %}<option value="{{ k }}"{{ ' selected' if k == dok.kategorie }}>{{ n }}</option>{% endfor %}</select></div>
+    <div><label for="ae-datum">Datum</label><input id="ae-datum" type="date" name="datum" value="{{ dok.datum }}"></div>
+  </div>
+  <label for="ae-titel">Titel</label><input id="ae-titel" name="titel" maxlength="200" value="{{ dok.titel }}">
+  <label for="ae-datei">Datei ersetzen <span class="hint">(optional · {{ erlaubt }} · höchstens {{ max_datei // 1048576 }} MB)</span></label>
+  <input id="ae-datei" type="file" name="datei" accept=".pdf,.jpg,.jpeg,.png,.webp,.docx,.xlsx,.odt,.ods,image/*,application/pdf">
+  <div class="aktionen"><button class="btn">Speichern</button></div>
+</form>
+{% endif %}
+<form id="weg" class="card" method="post" action="{{ url_for('planung.dokument_loeschen', did=dok.id) }}" hidden>{{ csrf()|safe }}
+  <p style="margin-top:0">„{{ dok.titel }}“ endgültig löschen? Das lässt sich nicht rückgängig machen.</p>
+  <button class="btn rot">Endgültig löschen</button>
+</form>
+{% endif %}
+{% endblock %}
+{% block css %}
+.dok-kopf th{width:150px;font-size:13px}.dok-kopf td{overflow-wrap:anywhere}
+@media (max-width:480px){.dok-kopf th{width:110px}}
+h2.top{font-size:16px;margin:18px 0 6px}
+p.vor{white-space:pre-wrap;overflow-wrap:anywhere;margin:6px 0}
+{% endblock %}

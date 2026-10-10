@@ -1090,6 +1090,10 @@ def datenschutz():
 <p>Termine, die ein Verein als Entwurf speichert, sind nicht öffentlich. Sie sehen nur der Verein selbst und die Vereine einer Planungsrunde, der er beigetreten ist. In einer Planungsrunde wird ein Verlauf geführt (welcher Verein wann beigetreten ist, Termine geändert, bestätigt oder veröffentlicht hat) – nur mit Vereinsnamen und Terminen, ohne Personendaten. Schließt der Organisator die Runde ab, wird dieser Stand als Ergebnis für die beteiligten Vereine festgehalten.</p>
 </div>
 <div class="card">
+<h2 style="font-size:1rem;margin-top:0">4b. Vereinsdokumente</h2>
+<p>Im Vereinsbereich kann ein Verein Protokolle, seine Satzung und andere Unterlagen ablegen – als hochgeladene Datei oder direkt geschrieben. Diese Dokumente sind nicht öffentlich. Sie sehen nur die angemeldeten Admins und Mitglieder dieses Vereins; anlegen, ändern und löschen können nur die Vereinsadmins. Die Dateien liegen auf dem Server des Vereinskalenders (Hetzner Online GmbH) und in der nächtlichen Sicherung, die zusätzlich verschlüsselt bei Dropbox liegt. Der Betreiber sieht die Inhalte nicht ein. Gelöschte Dokumente sind sofort weg, aus den Sicherungen nach spätestens 30 Tagen; wird das Vereinskonto gelöscht, werden alle Dokumente des Vereins mit gelöscht. Für den Inhalt – auch für Namen von Mitgliedern in Protokollen – ist der Verein verantwortlich.</p>
+</div>
+<div class="card">
 <h2 style="font-size:1rem;margin-top:0">5a. Telegram-Terminerinnerungen (freiwillig)</h2>
 <p>Wer den Telegram-Bot für Terminerinnerungen nutzt, speichert damit freiwillig seine Telegram-Chat-ID sowie die ausgewählten Vereins-Abonnements auf unserem Server. Diese Daten werden ausschließlich zum Versand der gewünschten Erinnerungen verwendet. Abmelden ist jederzeit mit dem Befehl /stop im Bot möglich – dabei werden alle gespeicherten Daten gelöscht. Eine Löschung ist auch per E-Mail möglich.</p>
 </div>
@@ -1120,6 +1124,10 @@ def nutzungsbedingungen():
 <div class="card">
 <h2 style="font-size:1rem;margin-top:0">4. Kündigung</h2>
 <p>Der Betreiber kann Accounts bei Verstoß gegen diese Bedingungen ohne Vorankündigung sperren oder löschen.</p>
+</div>
+<div class="card">
+<h2 style="font-size:1rem;margin-top:0">5. Vereinsdokumente</h2>
+<p>Im Bereich „Dokumente“ legt der Verein eigene Unterlagen ab (z. B. Protokolle, Satzung). Für den Inhalt und für darin enthaltene personenbezogene Daten ist der Verein verantwortlich; der Betreiber speichert sie nur in seinem Auftrag und sieht sie nicht ein. Bitte nur ablegen, was der Verein dafür auch speichern darf. Es gibt kein Recht auf dauerhafte Aufbewahrung – wichtige Unterlagen bitte zusätzlich selbst sichern (Herunterladen).</p>
 </div>
 {_BACK_HISTORY}"""
     return _page("Nutzungsbedingungen", body)

@@ -1265,6 +1265,13 @@ def admin_delete_verein(verein_id: int):
                 "DELETE FROM tg_subscriptions WHERE verein_key = ?", (verein_key,)
             )
         conn.execute("DELETE FROM vereine_accounts WHERE id = ?", (verein_id,))
+    # Dokumente gehören nur dem Verein – mit dem Konto immer weg, auch wenn die Termine bleiben (ADR-029)
+    geloescht_dokumente = 0
+    if verein_key:
+        from shared import dokumente_db, dokumente_store
+        geloescht_dokumente, dateien = dokumente_db.verein_loeschen(verein_key)
+        for name in dateien:
+            dokumente_store.entfernen(name)
     geloescht_termine = 0
     if delete_termine and verein_key:
         try:
@@ -1277,7 +1284,7 @@ def admin_delete_verein(verein_id: int):
             KalenderStore.update(_rm)
         except Exception:
             pass
-    return {"ok": True, "geloescht_termine": geloescht_termine}
+    return {"ok": True, "geloescht_termine": geloescht_termine, "geloescht_dokumente": geloescht_dokumente}
 
 
 

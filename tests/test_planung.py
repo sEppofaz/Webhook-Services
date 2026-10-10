@@ -292,7 +292,7 @@ pruefe("<span>Sommerfest</span>" in s and 'chip kalender">Im Kalender' in s, "Te
 pruefe("<span>Grillfest</span>" not in s and "Grillfest" in s, "Grillfest nur als Konflikt (gleiche Gemeinde)")
 pruefe("Fremdfest" not in s and "Messe" not in s, "andere Gemeinde und Pfarrbrief-Gottesdienst sind kein Konflikt")
 tabs = re.findall(r'class="hdr-pill[^"]*"[^>]*>(?:<svg.*?</svg>)?([^<]+)</', s)
-pruefe(tabs == ["Termine", "Planungsrunden", "Einstellungen", "Abmelden"], f"Tabs, war {tabs}")
+pruefe(tabs == ["Termine", "Planungsrunden", "Dokumente", "Einstellungen", "Abmelden"], f"Tabs, war {tabs}")
 pruefe('hdr-pill-pri" href="/verein/termine" aria-current="page"' in s, "Tab Termine aktiv")
 pruefe('href="/verein/termine/neu' in s and 'href="/verein/upload"' in s and "Hilfe &amp; FAQ" in s,
        "Termine: Neuer Termin, Hochladen, Hilfe aus dem Dashboard")

@@ -51,3 +51,6 @@ flask_secret.key
 freigabe_chat_angekuendigt.txt
 mail_texte.json
 mail_texte.tmp
+
+# Vereinsdokumente (ADR-029) – Laufzeitdaten, nie einchecken
+vereinsdokumente/
