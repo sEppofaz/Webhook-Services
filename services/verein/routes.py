@@ -804,7 +804,11 @@ def mitglieder(user):
                                VALUES (?,?,?,'member',?,?,1,0)""",
                             (email, tmp_hash, user["verein_id"], token, expires),
                         )
-                        send_invite_email(email, token, user["verein_name"])
+                        ich = conn.execute("SELECT vorname, nachname, name FROM vk_users WHERE id=?",
+                                           (user["id"],)).fetchone()
+                        von = " ".join(x for x in ((ich["vorname"] or "").strip(), (ich["nachname"] or "").strip()) if x) \
+                            or (ich["name"] or "").strip()
+                        send_invite_email(email, token, user["verein_name"], von)
                         success = f"Einladung an {html.escape(email)} verschickt."
         elif aktion == "entfernen":
             try:

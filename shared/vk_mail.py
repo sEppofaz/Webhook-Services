@@ -154,6 +154,7 @@ PLATZHALTER = {
     "kalender_link": "Link zum Kalender",
     "kontakt": KONTAKT,
     "neu": "neue Adresse (gekürzt, z. B. ma…@web.de)",
+    "eingeladen_von": "Vor- und Nachname des Admins, der einlädt",
 }
 _LINKS = {"link", "login_link", "profil_link", "upload_link", "kalender_link"}
 
@@ -178,10 +179,14 @@ STANDARD = {
     },
     "invite": {
         "zweck": "Ein Vereinsadmin lädt ein weiteres Mitglied ein",
-        "platzhalter": ["verein", "link"], "knopf_link": "link", "anrede": False,
+        "platzhalter": ["verein", "link", "eingeladen_von"], "knopf_link": "link", "anrede": True,
         "betreff": "Einladung: {verein} – Vereinskalender",
         "ueberschrift": "Einladung zur Mitarbeit",
-        "text": "Du wurdest eingeladen, den Vereinskalender für **{verein}** mitzuverwalten.",
+        "text": ("**{eingeladen_von}** hat dich eingeladen, die Termine von **{verein}** im Vereinskalender "
+                 "mitzuverwalten.\n\n"
+                 "Vereinskalender.online ist eine Plattform, auf der jeder die Termine und Veranstaltungen "
+                 "der Vereine unserer Region schnell und übersichtlich findet. Vereine und Veranstalter "
+                 "pflegen ihre Termine dort selbst."),
         "knopf": "Einladung annehmen",
         "hinweis": "Der Link ist **48 Stunden** gültig.",
     },
@@ -233,7 +238,8 @@ STANDARD = {
 }
 
 # Beispielwerte für Vorschau und Testmail
-BEISPIEL = {"verein": "FF Musterdorf e.V.", "link": f"{BASE_URL}/beispiel-link", "neu": "ma…@web.de"}
+BEISPIEL = {"verein": "FF Musterdorf e.V.", "link": f"{BASE_URL}/beispiel-link", "neu": "ma…@web.de",
+            "eingeladen_von": "Maria Huber"}
 
 
 def _lade_datei() -> dict:
@@ -370,8 +376,12 @@ def send_reset_email(to_email: str, token: str, gruss: str = "") -> bool:
     return _mail("reset", to_email, {"link": f"{BASE_URL}/verein/passwort-reset?token={token}"}, gruss)
 
 
-def send_invite_email(to_email: str, token: str, verein_name: str) -> bool:
-    return _mail("invite", to_email, {"link": f"{BASE_URL}/verein/einladung?token={token}", "verein": verein_name})
+def send_invite_email(to_email: str, token: str, verein_name: str, eingeladen_von: str = "") -> bool:
+    """Eingeladene kennen wir nur per Adresse → Begrüßung „Hallo,". Ohne Namen des Einladenden (alte
+    Konten) steht „Ein Admin von <Verein>" (v1.71)."""
+    von = (eingeladen_von or "").strip() or f"Ein Admin von {verein_name}"
+    return _mail("invite", to_email, {"link": f"{BASE_URL}/verein/einladung?token={token}",
+                                      "verein": verein_name, "eingeladen_von": von}, "Hallo,")
 
 
 def send_welcome_email(to_email: str, verein_name: str, gruss: str = "") -> bool:

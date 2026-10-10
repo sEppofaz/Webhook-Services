@@ -173,6 +173,19 @@ def test_xss():
     finally:
         vk_mail._send = alt
     pruefe(XSS not in gesendet["body"], "Einladungsmail escapt Vereinsnamen")
+    # v1.71: Einlader in der Mail – Name aus vk_users, ohne Namen Ersatztext, alles escapt
+    with vk_db.db_conn() as c:
+        c.execute("UPDATE vk_users SET vorname=?, nachname=? WHERE id=?", ("Maria", XSS, uid))
+    vk_mail._send = lambda to, sub, body: gesendet.update(to=to, sub=sub, body=body) or True
+    try:
+        r = cl.post("/verein/mitglieder", data={"_csrf": tok, "aktion": "einladen", "email": "neu1@x.de"})
+        pruefe(gesendet.get("to") == "neu1@x.de" and "Maria" in gesendet["body"] and XSS not in gesendet["body"],
+               "Einladung nennt den Einladenden (Name escapt)")
+        pruefe("Hallo," in gesendet["body"], "Einladung mit Begrüßung „Hallo,“")
+        vk_mail.send_invite_email("a@b.de", "tok", "FF Ohne", "")
+        pruefe("Ein Admin von FF Ohne" in gesendet["body"], "ohne Namen → „Ein Admin von <Verein>“")
+    finally:
+        vk_mail._send = alt
     gesendet.clear()
     pruefe(vk_mail._send("a@b.de\nBcc: x@y.de", "s", "b") is False, "Mail an Adresse mit Zeilenumbruch verweigert")
     html = (ROOT / "kalender.html").read_text(encoding="utf-8")
