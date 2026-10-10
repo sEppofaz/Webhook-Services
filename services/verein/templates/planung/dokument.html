@@ -2,7 +2,7 @@
 {% block titel %}{{ dok.titel }}{% endblock %}
 {% block inhalt %}
 {% include "planung/_zurueck.html" with context %}
-<p class="etikett">{{ EINZAHL.get(dok.kategorie, 'Dokument') }}</p>
+<p class="etikett">{{ EINZAHL.get(dok.kategorie, 'Dokument') }}{% if dok.sichtbar == 'vorstand' %} · nur Vorstand{% endif %}</p>
 <h1 style="margin-top:2px">{{ dok.titel }}</h1>
 {% if fehler %}<div class="warn rot">{{ fehler }}</div>{% endif %}
 {% if meldung %}<div class="ok">{{ meldung }}</div>{% endif %}
@@ -34,16 +34,21 @@
 
 {% if darf %}
 <div class="aktionen">
-  {% if dok.art == 'formular' %}<a class="btn sek" href="{{ url_for('planung.dokument_seite', did=dok.id, bearbeiten=1) }}">Bearbeiten</a>
+  {% if not frei %}{# Bestand ohne Freischaltung: nur Löschen #}
+  {% elif dok.art == 'formular' %}<a class="btn sek" href="{{ url_for('planung.dokument_seite', did=dok.id, bearbeiten=1) }}">Bearbeiten</a>
   {% else %}<button type="button" class="btn sek" data-klappe="aendern">Ändern</button>{% endif %}
   <button type="button" class="btn sek" data-klappe="weg">Löschen</button>
 </div>
-{% if dok.art == 'datei' %}
+{% if dok.art == 'datei' and frei %}
 <form id="aendern" class="card" method="post" enctype="multipart/form-data" hidden>{{ csrf()|safe }}
   <div class="zeile">
     <div><label for="ae-kat">Kategorie</label>
       <select id="ae-kat" name="kategorie">{% for k, n in KATEGORIEN.items() %}<option value="{{ k }}"{{ ' selected' if k == dok.kategorie }}>{{ n }}</option>{% endfor %}</select></div>
     <div><label for="ae-datum">Datum</label><input id="ae-datum" type="date" name="datum" value="{{ dok.datum }}"></div>
+  </div>
+  <div class="zeile">
+    <div><label for="ae-sicht">Sichtbar für</label>
+      <select id="ae-sicht" name="sichtbar">{% for k, n in SICHTBAR.items() %}<option value="{{ k }}"{{ ' selected' if k == (dok.sichtbar or 'alle') }}>{{ n }}</option>{% endfor %}</select></div>
   </div>
   <label for="ae-titel">Titel</label><input id="ae-titel" name="titel" maxlength="200" value="{{ dok.titel }}">
   <label for="ae-datei">Datei ersetzen <span class="hint">(optional · {{ erlaubt }} · höchstens {{ max_datei // 1048576 }} MB)</span></label>

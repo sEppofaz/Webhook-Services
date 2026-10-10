@@ -1050,7 +1050,7 @@ def admin_users():
         vereine = conn.execute(
             """SELECT v.id, v.verein_key, v.verein_name, v.status,
                       v.rubrik, v.heimatort, v.plz, v.gemeinde, v.landkreis,
-                      v.created_at
+                      v.created_at, v.avv_fassung, v.avv_am
                FROM vereine_accounts v
                ORDER BY v.verein_name""",
         ).fetchall()

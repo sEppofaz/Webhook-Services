@@ -40,6 +40,10 @@
   </div>
   <div id="f-neu-kat" class="neu-feld"><label for="f-neu-kat-in">Name der neuen Kategorie <span class="hint">(nur ausfüllen bei „+ Neue Kategorie …“)</span></label>
     <input id="f-neu-kat-in" name="neu_kategorie" maxlength="40" value="{{ dok.neu_kategorie or '' }}" placeholder="z. B. Festschriften, Verträge"></div>
+  <div class="zeile">
+    <div><label for="f-sicht">Sichtbar für</label>
+      <select id="f-sicht" name="sichtbar">{% for k, n in SICHTBAR.items() %}<option value="{{ k }}"{{ ' selected' if k == (dok.sichtbar or 'alle') }}>{{ n }}</option>{% endfor %}</select></div>
+  </div>
   <label for="f-titel">Titel <span class="hint">(leer = wird aus Sitzung und Datum gebildet)</span></label>
   <input id="f-titel" name="titel" maxlength="200" value="{{ dok.titel }}">
 </div>

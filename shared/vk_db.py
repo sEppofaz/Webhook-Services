@@ -9,7 +9,10 @@ DB_FILE = Path("/opt/rename-webhook/vk_accounts.db")
 SESSION_TIMEOUT_HOURS = 8
 # Fassung von Datenschutzerklärung + Nutzungsbedingungen (v1.79). Bei wesentlicher Textänderung hochzählen –
 # dann bestätigt jedes Konto beim nächsten Aufruf des Vereinsbereichs neu (`/verein/bestaetigen`).
-DS_FASSUNG = "2026-10"
+DS_FASSUNG = "2026-10.2"   # .2 = v1.83: Server-Logs, Anthropic, Telegram, Zugriffsprotokoll, AVV ergänzt
+# Fassung des AV-Vertrags für den Dokumentenbereich (v1.83, ADR-032). Neue Fassung ⇒ Bestand bleibt lesbar,
+# Anlegen/Ändern erst nach erneutem Abschluss durch einen Vereinsadmin.
+AVV_FASSUNG = "2026-10"
 
 
 @contextmanager
@@ -194,6 +197,13 @@ def init_db():
             # Kenntnisnahme Datenschutz/Nutzungsbedingungen je Fassung (v1.79), Verlauf zusätzlich in vk_audit
             "ALTER TABLE vk_users ADD COLUMN ds_fassung TEXT",
             "ALTER TABLE vk_users ADD COLUMN ds_bestaetigt_am DATETIME",
+            # Dokumentenbereich per AV-Vertrag freischalten (v1.83) + einmaliger Hinweis für Admins
+            "ALTER TABLE vereine_accounts ADD COLUMN avv_fassung TEXT",
+            "ALTER TABLE vereine_accounts ADD COLUMN avv_am DATETIME",
+            "ALTER TABLE vereine_accounts ADD COLUMN avv_user INTEGER",
+            "ALTER TABLE vk_users ADD COLUMN hinweis_dokumente INTEGER NOT NULL DEFAULT 0",
+            # Vorstand (v1.83): sieht zusätzlich Dokumente „nur Vorstand“; bewusst keine neue role
+            "ALTER TABLE vk_users ADD COLUMN vorstand INTEGER NOT NULL DEFAULT 0",
         ]:
             try:
                 conn.execute(col_sql)
@@ -205,6 +215,10 @@ def init_db():
         # Dokumente der Vereine (ADR-029, v1.78)
         from shared.dokumente_db import SCHEMA as _DOKUMENTE_SCHEMA
         conn.executescript(_DOKUMENTE_SCHEMA)
+        try:   # Sichtbarkeit je Dokument (v1.83) – Tabelle aus v1.78 hat die Spalte noch nicht
+            conn.execute("ALTER TABLE dokument ADD COLUMN sichtbar TEXT NOT NULL DEFAULT 'alle'")
+        except Exception:
+            pass
 
 
 def create_session(user_id: int) -> str:
@@ -230,8 +244,8 @@ def get_session_user(token: str) -> dict | None:
     with db_conn() as conn:
         row = conn.execute(
             """SELECT u.id, u.email, u.role, u.aktiv,
-                      u.email_verified, u.totp_secret, u.ds_fassung,
-                      v.id as verein_id, v.verein_key, v.verein_name, v.status as verein_status
+                      u.email_verified, u.totp_secret, u.ds_fassung, u.hinweis_dokumente, u.vorstand,
+                      v.id as verein_id, v.verein_key, v.verein_name, v.status as verein_status, v.avv_fassung
                FROM vk_sessions s
                JOIN vk_users u ON u.id = s.user_id
                JOIN vereine_accounts v ON v.id = u.verein_id

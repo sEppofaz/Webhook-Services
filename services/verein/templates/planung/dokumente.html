@@ -6,6 +6,13 @@
 {% if fehler %}<div class="warn rot">{{ fehler }}</div>{% endif %}
 {% if meldung %}<div class="ok">{{ meldung }}</div>{% endif %}
 
+{% if not frei %}
+<div class="card zeile" style="align-items:center">
+  <div style="flex:3 1 260px"><b>Der Dokumentenbereich ist nicht freigeschaltet.</b>
+    <div class="hint">{% if ist_admin %}Vorhandene Dokumente könnt ihr ansehen, herunterladen und löschen. Für Neues schließt ihr einmal den AV-Vertrag ab.{% else %}Vorhandene Dokumente könnt ihr ansehen. Euer Vereinsadmin kann den Bereich freischalten.{% endif %}</div></div>
+  {% if ist_admin %}<div style="flex:0 0 auto"><a class="btn" href="{{ url_for('planung.dokumente_freischalten') }}">Freischalten</a></div>{% endif %}
+</div>
+{% endif %}
 {% if darf %}
 <div class="aktionen">
   <a class="btn" href="{{ url_for('planung.dokument_neu', kat='protokoll') }}">Protokoll schreiben</a>
@@ -25,6 +32,10 @@
   </div>
   <div id="hl-neu-kat" class="neu-feld"><label for="hl-neu-kat-in">Name der neuen Kategorie <span class="hint">(nur ausfüllen bei „+ Neue Kategorie …“)</span></label>
     <input id="hl-neu-kat-in" name="neu_kategorie" maxlength="40" placeholder="z. B. Festschriften, Verträge"></div>
+  <div class="zeile">
+    <div><label for="hl-sicht">Sichtbar für</label>
+      <select id="hl-sicht" name="sichtbar">{% for k, n in SICHTBAR.items() %}<option value="{{ k }}"{{ ' selected' if k == 'alle' }}>{{ n }}</option>{% endfor %}</select></div>
+  </div>
   <label for="hl-titel">Titel <span class="hint">(leer = Dateiname)</span></label>
   <input id="hl-titel" name="titel" maxlength="200" placeholder="z. B. Jahreshauptversammlung 2026">
   <div class="aktionen"><button class="btn">Hochladen</button></div>
@@ -45,7 +56,7 @@
   {% for d in liste %}
   <a class="card dok" href="{{ url_for('planung.dokument_seite', did=d.id) }}">
     <span class="dok-ico" aria-hidden="true">{% if d.art == 'formular' %}<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z"/></svg>{% else %}<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>{% endif %}</span>
-    <span class="dok-text"><b>{{ d.titel }}</b>
+    <span class="dok-text"><b>{{ d.titel }}</b>{% if d.sichtbar == 'vorstand' %}<span class="nur-vorstand"><svg class="schloss" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> nur Vorstand</span>{% endif %}
       <span class="hint">{{ d.datum|datum_lang or 'ohne Datum' }} · {% if d.art == 'formular' %}geschrieben{% if d.inhalt.tops %} · {{ d.inhalt.tops|length }} {{ 'Punkt' if d.inhalt.tops|length == 1 else 'Punkte' }}{% endif %}{% else %}{{ TYPEN[d.datei_typ][0] }} · {{ d.groesse|mb }}{% endif %}</span></span>
     <svg class="dok-pfeil" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
   </a>
@@ -55,7 +66,7 @@
 {% endfor %}
 {% endfor %}
 
-{% if darf %}<p class="hint" style="margin-top:20px"><a href="{{ url_for('planung.dokument_listen') }}">Eigene Kategorien und Sitzungsarten verwalten</a></p>{% endif %}
+{% if ist_admin %}<p class="hint" style="margin-top:20px">{% if darf %}<a href="{{ url_for('planung.dokument_listen') }}">Eigene Kategorien und Sitzungsarten</a> · {% endif %}<a href="{{ url_for('planung.dokumente_verlauf') }}">Zugriffe</a> · <a href="{{ url_for('planung.dokumente_zip') }}">Alle als ZIP herunterladen</a></p>{% endif %}
 <p class="hint" style="margin-top:8px">Belegt: {{ belegt|mb if belegt else '0 MB' }} von {{ max_verein // 1048576 }} MB.
 {% if not darf %}Neue Dokumente legen die Vereinsadmins an.{% endif %}</p>
 <script>
@@ -68,6 +79,7 @@ document.querySelectorAll("select[data-neu]").forEach(sel => {
 </script>
 {% endblock %}
 {% block css %}
+.nur-vorstand{display:inline-flex;align-items:center;gap:3px;margin-left:6px;font-size:12px;font-weight:600;color:var(--text2)}
 .neu-feld[hidden]{display:none}
 .dok{display:flex;align-items:center;gap:12px;color:inherit;text-decoration:none}
 .dok:hover{outline:2px solid var(--accent)}

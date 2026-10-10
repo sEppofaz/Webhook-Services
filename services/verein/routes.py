@@ -18,7 +18,7 @@ from shared.flyer_store import upload_flyer, delete_flyer, pruefe_flyer
 from shared.rubriken import RUBRIKEN
 from shared.csrf import csrf_field, get_csrf_token, validate_csrf
 from shared.vk_db import (
-    DS_FASSUNG, db_conn, delete_user_sessions, get_session_user, log_audit,
+    AVV_FASSUNG, DS_FASSUNG, db_conn, delete_user_sessions, get_session_user, log_audit,
     get_upload_count, increment_upload_quota,
 )
 from services.auth.routes import (
@@ -763,6 +763,20 @@ def mitglieder(user):
                             or (ich["name"] or "").strip()
                         send_invite_email(email, token, user["verein_name"], von)
                         success = f"Einladung an {html.escape(email)} verschickt."
+        elif aktion == "vorstand":
+            # Vorstand markieren/zurücknehmen (v1.83): sieht Dokumente „nur Vorstand“, sonst lesend wie Mitglied
+            try:
+                member_id = int(request.form.get("member_id", 0))
+            except ValueError:
+                member_id = 0
+            wert = 1 if request.form.get("wert") == "1" else 0
+            with db_conn() as conn:
+                n = conn.execute("UPDATE vk_users SET vorstand=? WHERE id=? AND verein_id=? AND role='member'",
+                                 (wert, member_id, user["verein_id"])).rowcount
+            if n:
+                log_audit("vorstand_gesetzt" if wert else "vorstand_entfernt", f"user_{member_id}",
+                          user["verein_key"] or "", user["id"])
+                success = "Als Vorstand markiert." if wert else "Vorstand-Markierung entfernt."
         elif aktion == "entfernen":
             try:
                 member_id = int(request.form.get("member_id", 0))
@@ -783,7 +797,7 @@ def mitglieder(user):
 
     with db_conn() as conn:
         members = conn.execute(
-            "SELECT id, email, role, aktiv, email_verified FROM vk_users WHERE verein_id=? ORDER BY id",
+            "SELECT id, email, role, aktiv, email_verified, vorstand FROM vk_users WHERE verein_id=? ORDER BY id",
             (user["verein_id"],),
         ).fetchall()
 
@@ -792,9 +806,14 @@ def mitglieder(user):
     for m in members:
         status = "aktiv" if m["aktiv"] else "Einladung ausstehend"
         remove_btn = ""
+        rolle = "Vereinsadmin" if m["role"] == "admin" else ("Vorstand" if m["vorstand"] else "Mitglied")
         if m["role"] == "member":
-            remove_btn = f'<form method="post" style="display:inline">{csrf_field(tok)}<input type="hidden" name="aktion" value="entfernen"><input type="hidden" name="member_id" value="{m["id"]}"><button style="background:none;border:none;color:#ff453a;cursor:pointer;font-size:.9rem" type="submit">Entfernen</button></form>'
-        rows += f'<div class="card"><div style="display:flex;justify-content:space-between"><div><div>{html.escape(m["email"])}</div><div style="color:#aeaeb2;font-size:.82rem">{m["role"]} · {status}</div></div><div>{remove_btn}</div></div></div>'
+            vorstand_btn = (f'<form method="post" style="display:inline">{csrf_field(tok)}<input type="hidden" name="aktion" value="vorstand">'
+                            f'<input type="hidden" name="member_id" value="{m["id"]}"><input type="hidden" name="wert" value="{0 if m["vorstand"] else 1}">'
+                            f'<button style="background:none;border:none;color:#a78bfa;cursor:pointer;font-size:.9rem;padding:6px 0" type="submit">'
+                            f'{"Vorstand entfernen" if m["vorstand"] else "Zum Vorstand machen"}</button></form>')
+            remove_btn = vorstand_btn + f'<form method="post" style="display:inline">{csrf_field(tok)}<input type="hidden" name="aktion" value="entfernen"><input type="hidden" name="member_id" value="{m["id"]}"><button style="background:none;border:none;color:#ff453a;cursor:pointer;font-size:.9rem;padding:6px 0" type="submit">Entfernen</button></form>'
+        rows += f'<div class="card"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><div style="min-width:0;overflow-wrap:anywhere"><div>{html.escape(m["email"])}</div><div style="color:#aeaeb2;font-size:.82rem">{rolle} · {status}</div></div><div style="display:flex;gap:14px;align-items:center">{remove_btn}</div></div></div>'
 
     invite_form = ""
     if len(members) < 3:
@@ -1088,12 +1107,24 @@ def datenschutz():
 <p>Die Daten dienen ausschließlich dem Betrieb des Vereinskalenders: Identifizierung des Vereins, Authentifizierung des Accounts und Benachrichtigungen (Bestätigungs-E-Mails).</p>
 </div>
 <div class="card">
+<h2 style="font-size:1rem;margin-top:0">2a. Hosting und Server-Protokolle</h2>
+<p>Der Vereinskalender läuft auf einem Server der Hetzner Online GmbH im Rechenzentrum Helsinki (Finnland, EU). Bei jedem Aufruf speichert der Webserver IP-Adresse, Zeitpunkt, aufgerufene Seite und Browserkennung in einem Protokoll, um Fehler und Angriffe zu erkennen (berechtigtes Interesse, Art. 6 Abs. 1 lit. f DSGVO). Diese Protokolle werden nach 14 Tagen gelöscht.</p>
+</div>
+<div class="card">
 <h2 style="font-size:1rem;margin-top:0">3a. Rechtsgrundlage</h2>
 <p>Konto, Vereinsbereich, Planungsrunden und Vereinsdokumente verarbeiten wir zur Erfüllung des Nutzungsvertrags (Art. 6 Abs. 1 lit. b DSGVO) – ohne diese Daten ist die Nutzung nicht möglich. Die Telegram-Erinnerungen sind freiwillig (Art. 6 Abs. 1 lit. a DSGVO). Jedes Konto bestätigt bei der Registrierung bzw. beim ersten Aufruf des Vereinsbereichs, dass es diese Datenschutzerklärung gelesen hat und die Nutzungsbedingungen akzeptiert; dazu speichern wir Zeitpunkt und Fassung. Ändert sich die Erklärung wesentlich, wird erneut gefragt.</p>
 </div>
 <div class="card">
 <h2 style="font-size:1rem;margin-top:0">4. Speicherdauer</h2>
 <p>Accounts werden auf Anfrage gelöscht. Schreib dazu an <a href="mailto:info@vereinskalender.online">info@vereinskalender.online</a>. Eingetragene Termine werden nach Ende des jeweiligen Kalenderjahres bereinigt.</p>
+</div>
+<div class="card">
+<h2 style="font-size:1rem;margin-top:0">3b. Benachrichtigung des Betreibers</h2>
+<p>Bei einer neuen Registrierung erhält der Betreiber über den Messenger Telegram eine Nachricht mit Vereinsname, Ortschaft, Name, E-Mail-Adresse und Telefonnummer des Ansprechpartners, um die Anmeldung freizugeben. Scheitert eine E-Mail, meldet das System die Zieladresse ebenfalls dort.</p>
+</div>
+<div class="card">
+<h2 style="font-size:1rem;margin-top:0">3c. Termine aus PDF oder Foto übernehmen</h2>
+<p>Lädt ein Verein einen Terminplan als PDF oder Foto hoch, wird die Datei zur Texterkennung an die KI Claude der Anthropic PBC (USA) übermittelt. Anthropic verarbeitet die Datei nur zur Beantwortung und nutzt sie nicht zum Training; die Übermittlung in die USA stützt sich auf die Standardvertragsklauseln der EU-Kommission im Auftragsverarbeitungsvertrag von Anthropic. Bitte keine Dokumente mit Personendaten hochladen, die über die Termine hinausgehen. Vereinsdokumente (4b) werden nie an eine KI übermittelt.</p>
 </div>
 <div class="card">
 <h2 style="font-size:1rem;margin-top:0">5. E-Mail-Dienst</h2>
@@ -1105,7 +1136,7 @@ def datenschutz():
 </div>
 <div class="card">
 <h2 style="font-size:1rem;margin-top:0">4b. Vereinsdokumente</h2>
-<p>Im Vereinsbereich kann ein Verein Protokolle, seine Satzung und andere Unterlagen ablegen – als hochgeladene Datei oder direkt geschrieben. Diese Dokumente sind nicht öffentlich. Sie sehen nur die angemeldeten Admins und Mitglieder dieses Vereins; anlegen, ändern und löschen können nur die Vereinsadmins. Die Dateien liegen auf dem Server des Vereinskalenders (Hetzner Online GmbH) und in der nächtlichen Sicherung, die zusätzlich verschlüsselt bei Dropbox liegt. Der Betreiber sieht die Inhalte nicht ein. Gelöschte Dokumente sind sofort weg, aus den Sicherungen nach spätestens 30 Tagen; wird das Vereinskonto gelöscht, werden alle Dokumente des Vereins mit gelöscht. Für den Inhalt – auch für Namen von Mitgliedern in Protokollen – ist der Verein verantwortlich.</p>
+<p>Im Vereinsbereich kann ein Verein Protokolle, seine Satzung und andere Unterlagen ablegen – als hochgeladene Datei oder direkt geschrieben. Diese Dokumente sind nicht öffentlich. Sie sehen nur die angemeldeten Admins und Mitglieder dieses Vereins (Dokumente „nur Vorstand“ nur Admins und als Vorstand markierte Mitglieder); anlegen, ändern und löschen können nur die Vereinsadmins. Die Dateien liegen auf dem Server des Vereinskalenders (Hetzner Online GmbH) und in der nächtlichen Sicherung, die zusätzlich verschlüsselt bei Dropbox liegt. Der Betreiber sieht die Inhalte nicht ein. Gelöschte Dokumente sind sofort weg, aus den Sicherungen nach spätestens 30 Tagen; wird das Vereinskonto gelöscht, werden alle Dokumente des Vereins mit gelöscht. Für den Inhalt – auch für Namen von Mitgliedern in Protokollen – ist der Verein verantwortlich; der Betreiber verarbeitet diese Daten in seinem Auftrag nach dem <a href="/verein/avv">AV-Vertrag</a>, den ein Vereinsadmin zum Freischalten des Bereichs abschließt (dort auch die Unterauftragnehmer). Wer ein Dokument angelegt, geändert, angesehen, heruntergeladen oder gelöscht hat, wird mit Konto und Zeitpunkt protokolliert und den Vereinsadmins angezeigt; diese Einträge werden nach 12 Monaten gelöscht.</p>
 </div>
 <div class="card">
 <h2 style="font-size:1rem;margin-top:0">5a. Telegram-Terminerinnerungen (freiwillig)</h2>
@@ -1117,6 +1148,28 @@ def datenschutz():
 </div>
 {_BACK_HISTORY}"""
     return _page("Datenschutzerklärung", body)
+
+
+@verein_bp.route("/verein/avv")
+def avv():
+    """AV-Vertrag für den Dokumentenbereich (Art. 28 DSGVO, v1.83, ADR-032). Fassung = AVV_FASSUNG; der Abschluss
+    läuft über `/verein/dokumente/freischalten`. Nur belegte Maßnahmen in Anlage 1 (am Server geprüft 2026-10-10)."""
+    k = lambda t, h: f'<div class="card"><h2 style="font-size:1rem;margin-top:0">{t}</h2>{h}</div>'
+    body = f"""
+<p style="color:#aeaeb2;font-size:.85rem">Fassung {AVV_FASSUNG} · gilt für den Dokumentenbereich im Vereinsbereich</p>
+{k("1. Vertragspartner und Gegenstand", "<p><b>Auftraggeber</b> ist der Verein, dessen Vereinsadmin diesen Vertrag im Vereinsbereich abschließt. <b>Auftragnehmer</b> ist Josef Fischer, Hölskofen 13, 84092 Bayerbach b. Ergoldsbach, info@vereinskalender.online (Betreiber von vereinskalender.online).</p><p>Der Auftragnehmer speichert für den Auftraggeber im Dokumentenbereich Unterlagen des Vereins (z. B. Protokolle, Satzung, sonstige Dokumente) und stellt sie den angemeldeten Konten des Vereins bereit (Ansehen, Herunterladen, Export). Der Vertrag gilt, solange der Dokumentenbereich genutzt wird bzw. das Vereinskonto besteht.</p>")}
+{k("2. Art der Daten und Betroffene", "<p>Inhalte der abgelegten Dokumente, insbesondere Namen von Mitgliedern, Anwesenheiten, Funktionen, Beschlüsse und Abstimmungsergebnisse, sowie die Angaben, welches Konto wann ein Dokument angelegt, geändert, angesehen, heruntergeladen oder gelöscht hat. Betroffen sind Mitglieder, Organe und sonstige im Dokument genannte Personen des Auftraggebers sowie die Nutzer seiner Vereinskonten. Besondere Kategorien von Daten (Art. 9 DSGVO) sollen nicht abgelegt werden.</p>")}
+{k("3. Weisungen", "<p>Der Auftragnehmer verarbeitet die Daten nur nach dokumentierter Weisung des Auftraggebers. Die Weisungen ergeben sich aus diesem Vertrag und aus den Aktionen der Vereinsadmins im Vereinsbereich (Anlegen, Ändern, Löschen, Sichtbarkeit). Weitere Weisungen erteilt der Auftraggeber per E-Mail an info@vereinskalender.online. Hält der Auftragnehmer eine Weisung für rechtswidrig, weist er den Auftraggeber darauf hin.</p>")}
+{k("4. Pflichten des Auftragnehmers", "<ul><li>Er sieht die Inhalte nicht ein, außer der Auftraggeber verlangt es (z. B. zur Fehlersuche) oder es ist gesetzlich vorgeschrieben.</li><li>Personen mit Zugang zum Server sind zur Vertraulichkeit verpflichtet.</li><li>Er trifft die technischen und organisatorischen Maßnahmen nach Anlage 1 (Art. 32 DSGVO) und passt sie dem Stand der Technik an, ohne das Schutzniveau zu senken.</li><li>Er unterstützt den Auftraggeber bei Anfragen Betroffener (Auskunft, Berichtigung, Löschung) und bei seinen Pflichten nach Art. 32–36 DSGVO, soweit ihm das möglich ist.</li><li>Er meldet eine Verletzung des Schutzes der Daten unverzüglich, möglichst innerhalb von 48 Stunden nach Kenntnis, an die hinterlegte E-Mail-Adresse der Vereinsadmins.</li><li>Er stellt die zum Nachweis nötigen Informationen bereit und ermöglicht Überprüfungen nach vorheriger Absprache; in der Regel genügt eine schriftliche Auskunft.</li></ul>")}
+{k("5. Unterauftragnehmer", "<p>Der Auftraggeber stimmt den Unterauftragnehmern in Anlage 2 zu. Über neue oder geänderte Unterauftragnehmer informiert der Auftragnehmer vorab durch eine neue Fassung dieses Vertrags; der Auftraggeber kann widersprechen, indem er den Dokumentenbereich nicht weiter nutzt und seine Dokumente löscht. Unterauftragnehmer werden vertraglich auf dasselbe Schutzniveau verpflichtet.</p>")}
+{k("6. Löschung und Rückgabe", "<p>Der Auftraggeber kann jederzeit alle Dokumente herunterladen und löschen. Gelöschte Dokumente sind sofort entfernt und aus den Sicherungen nach spätestens 30 Tagen. Wird das Vereinskonto gelöscht, werden alle Dokumente mitgelöscht. Eine Pflicht zur Aufbewahrung über das Vertragsende hinaus übernimmt der Auftragnehmer nicht.</p>")}
+{k("7. Haftung, Schluss", "<p>Es gilt Art. 82 DSGVO. Der Dienst ist kostenlos; ein Anspruch auf dauerhafte Aufbewahrung besteht nicht (siehe Nutzungsbedingungen). Abschluss in elektronischer Form (Art. 28 Abs. 9 DSGVO): Der Vereinsadmin bestätigt den Vertrag im Vereinsbereich; Zeitpunkt, Fassung und Konto werden gespeichert. Eine neue Fassung muss erneut bestätigt werden, bevor neue Dokumente angelegt werden können.</p>")}
+{k("Anlage 1 – Technische und organisatorische Maßnahmen", "<ul><li><b>Verschlüsselte Übertragung:</b> nur HTTPS (TLS 1.2/1.3), HSTS.</li><li><b>Zugang:</b> Anmeldung mit E-Mail und Passwort (bcrypt-Hash), Sperre nach 5 Fehlversuchen für 15 Minuten, Sitzungen höchstens 8 Stunden, Cookies <i>Secure</i>/<i>HttpOnly</i>, Schutz gegen gefälschte Formularaufrufe (CSRF).</li><li><b>Trennung:</b> Jede Abfrage ist an den Verein der Sitzung gebunden; Dokumente anderer Vereine sind nicht erreichbar (automatisch getestet).</li><li><b>Rechte:</b> Anlegen, Ändern, Löschen nur durch Vereinsadmins; Mitglieder lesen. Dokumente „nur Vorstand“ sehen nur Vereinsadmins und als Vorstand markierte Mitglieder. Dateien werden nur nach Anmeldung ausgeliefert, ohne öffentlichen Link, nicht im Browser-Cache gespeichert.</li><li><b>Protokollierung:</b> Anlegen, Ändern, Ansehen, Herunterladen, Export und Löschen werden mit Konto und Zeitpunkt protokolliert, Aufbewahrung 12 Monate.</li><li><b>Server:</b> Rechenzentrum der Hetzner Online GmbH in Helsinki (Finnland, EU); Server-Zugang nur per SSH-Schlüssel, Firewall, automatische Sperre bei Angriffsversuchen (fail2ban); wöchentliche Prüfung der Software-Pakete auf bekannte Sicherheitslücken.</li><li><b>Sicherung:</b> nächtliche Sicherung, mit GPG verschlüsselt, 21 Tage auf dem Server und 30 Tage bei Dropbox; Dropbox erhält nur die verschlüsselte Datei.</li><li><b>Prüfung der Uploads:</b> Dateityp wird am Inhalt erkannt, nur PDF, Bilder und Office-Formate, höchstens 20 MB je Datei.</li><li><b>Nicht umgesetzt:</b> Die Festplatte des Servers ist nicht zusätzlich verschlüsselt.</li></ul>")}
+{k("Anlage 2 – Unterauftragnehmer", "<ul><li><b>Hetzner Online GmbH</b>, Industriestr. 25, 91710 Gunzenhausen – Server und Speicherung, Rechenzentrum Helsinki (Finnland, EU).</li><li><b>Dropbox International Unlimited Company</b>, Dublin (Irland) – Ablage der verschlüsselten nächtlichen Sicherung; Dropbox kann die Inhalte nicht lesen.</li><li><b>Sinch Mailjet SAS</b>, Paris (Frankreich) – Versand von E-Mails an die Vereinskonten (enthalten keine Dokumentinhalte).</li><li><b>Sendinblue SAS (Brevo)</b>, Paris (Frankreich) – Ersatz für den E-Mail-Versand, falls Mailjet ausfällt.</li></ul>")}
+<p class="hint">Dies ist ein Mustervertrag für einen kostenlosen Dienst. Er ersetzt keine Rechtsberatung.</p>
+<button class="btn btn-sec" onclick="window.print()" style="margin-top:.5rem">Drucken / als PDF speichern</button>
+{_BACK_HISTORY}"""
+    return _page("AV-Vertrag Dokumentenbereich", body)
 
 
 @verein_bp.route("/verein/nutzungsbedingungen")
@@ -1141,7 +1194,11 @@ def nutzungsbedingungen():
 </div>
 <div class="card">
 <h2 style="font-size:1rem;margin-top:0">5. Vereinsdokumente</h2>
-<p>Im Bereich „Dokumente“ legt der Verein eigene Unterlagen ab (z. B. Protokolle, Satzung). Für den Inhalt und für darin enthaltene personenbezogene Daten ist der Verein verantwortlich; der Betreiber speichert sie nur in seinem Auftrag und sieht sie nicht ein. Bitte nur ablegen, was der Verein dafür auch speichern darf. Es gibt kein Recht auf dauerhafte Aufbewahrung – wichtige Unterlagen bitte zusätzlich selbst sichern (Herunterladen).</p>
+<p>Im Bereich „Dokumente“ legt der Verein eigene Unterlagen ab (z. B. Protokolle, Satzung). Für den Inhalt und für darin enthaltene personenbezogene Daten ist der Verein verantwortlich; der Betreiber speichert sie nur in seinem Auftrag und sieht sie nicht ein. Bitte nur ablegen, was der Verein dafür auch speichern darf. Es gibt kein Recht auf dauerhafte Aufbewahrung – wichtige Unterlagen bitte zusätzlich selbst sichern (Herunterladen). Der Bereich steht zur Verfügung, sobald ein Vereinsadmin den <a href="/verein/avv">AV-Vertrag</a> abgeschlossen hat.</p>
+</div>
+<div class="card">
+<h2 style="font-size:1rem;margin-top:0">6. Entwürfe und Planungsrunden</h2>
+<p>Entwürfe und Planungsrunden sind für Termine gedacht. Bitte dort keine personenbezogenen Daten Dritter eintragen (z. B. Namen von Mitgliedern mit Aufgaben oder Kontaktdaten) – dafür gibt es den Dokumentenbereich.</p>
 </div>
 {_BACK_HISTORY}"""
     return _page("Nutzungsbedingungen", body)

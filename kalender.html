@@ -2854,7 +2854,7 @@ async function loadStats(){
         </div>
       </div>
       ${data.dokumente?`<div style="font-size:12px;color:var(--text3);margin:-4px 0 12px;text-align:center">Vereinsdokumente: ${data.dokumente.anzahl} von ${data.dokumente.vereine} ${data.dokumente.vereine===1?'Verein':'Vereinen'} · ${String(data.dokumente.mb).replace('.',',')}&nbsp;MB</div>`:''}
-      ${data.datenschutz&&data.datenschutz.konten?`<div style="font-size:12px;color:var(--text3);margin:-8px 0 12px;text-align:center">Datenschutz bestätigt: ${data.datenschutz.bestaetigt} von ${data.datenschutz.konten} Konten (Fassung ${escHtml(data.datenschutz.fassung)})</div>`:''}
+      ${data.datenschutz&&data.datenschutz.konten?`<div style="font-size:12px;color:var(--text3);margin:-8px 0 12px;text-align:center">Datenschutz bestätigt: ${data.datenschutz.bestaetigt} von ${data.datenschutz.konten} Konten (Fassung ${escHtml(data.datenschutz.fassung)})${data.datenschutz.avv_vereine!=null?` · Dokumentenbereich: ${data.datenschutz.avv_vereine} ${data.datenschutz.avv_vereine===1?'Verein':'Vereine'}`:''}</div>`:''}
       ${data.tg_ranking&&data.tg_ranking.length?`
       <div style="background:var(--card);border:1.5px solid var(--border2);border-radius:12px;padding:14px;margin-bottom:12px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
@@ -3292,6 +3292,7 @@ function renderAllAccounts(list){
           ${pflegeZeile(v)}
           <div style="font-size:11px;color:var(--text3);margin-top:1px">${escHtml(v.rubrik||"")}${v.heimatort?` · ${escHtml(v.heimatort)}`:""}${v.plz?` · PLZ ${escHtml(v.plz)}`:""}</div>
           ${(v.users||[]).map(u=>userLines(u,v)).join("")}
+          ${v.avv_fassung?`<div style="font-size:11px;color:var(--text3);margin-top:2px">Dokumente freigeschaltet am ${String(v.avv_am||"").slice(0,10).split("-").reverse().join(".")} · AV-Vertrag Fassung ${escHtml(v.avv_fassung)}</div>`:""}
         </div>
         <button class="ver-del-btn" style="border-color:var(--border2);color:var(--text2);flex-shrink:0"
           onclick="openVereinEditModal(${v.id},_vereinMap[${v.id}].verein_name,_vereinMap[${v.id}])">${icon("pen",14)}</button>
@@ -4348,7 +4349,7 @@ function showInfoModal(){
       <div class="help-row" style="padding:8px 0 12px;border-bottom:1.5px solid var(--border);margin-bottom:4px">
         <span class="help-icon">${icon("users",20)}</span>
         <div><strong>Jahresplanung mit anderen Vereinen</strong><span>Im Vereinsbereich Termine erst als Entwurf anlegen &ndash; auch aus dem Vorjahr &uuml;bernommen &ndash; und in einer <b>Planungsrunde</b> mit den Vereinen der Gemeinde abstimmen: Jeder sieht die Entw&uuml;rfe der anderen und wo sich Termine &uuml;berschneiden. Eine Runde startet jeder Verein selbst und l&auml;dt per Link oder Code ein. Ver&ouml;ffentlicht wird erst, wenn ihr es wollt.</span></div>
-        <div><strong>Protokolle und Satzung ablegen</strong><span>Unter &bdquo;Dokumente&ldquo; legt ihr Protokolle, die Satzung und andere Unterlagen ab &ndash; als Datei (PDF, Foto, Word) oder direkt geschrieben, mit Tagesordnungspunkten und Beschl&uuml;ssen, fertig als PDF oder Word. Eigene Kategorien (z.&nbsp;B. Festschriften) und Sitzungsarten legt ihr direkt im Auswahlfeld an, gesucht wird auch im Text. Nur f&uuml;r euren Verein sichtbar, nicht &ouml;ffentlich.</span></div>
+        <div><strong>Protokolle und Satzung ablegen</strong><span>Unter &bdquo;Dokumente&ldquo; legt ihr Protokolle, die Satzung und andere Unterlagen ab &ndash; als Datei (PDF, Foto, Word) oder direkt geschrieben, mit Tagesordnungspunkten und Beschl&uuml;ssen, fertig als PDF oder Word. Eigene Kategorien (z.&nbsp;B. Festschriften) und Sitzungsarten legt ihr direkt im Auswahlfeld an, gesucht wird auch im Text. Nur f&uuml;r euren Verein sichtbar, nicht &ouml;ffentlich. Ein Vereinsadmin schaltet den Bereich einmal frei (AV-Vertrag, kostenlos). Dokumente lassen sich auf &bdquo;nur Vorstand&ldquo; stellen; Admins sehen, wer was ge&ouml;ffnet hat, und k&ouml;nnen alles als ZIP herunterladen.</span></div>
         <div><strong>Datenschutz best&auml;tigen</strong><span>Jedes Konto best&auml;tigt einmal, dass es die Datenschutzerkl&auml;rung gelesen hat und die Nutzungsbedingungen akzeptiert &ndash; bei der Registrierung, beim Annehmen einer Einladung oder beim n&auml;chsten Aufruf des Vereinsbereichs. Erneut gefragt wird nur, wenn sich die Erkl&auml;rung &auml;ndert.</span></div>
       </div>
       <div class="help-row" style="padding:8px 0 12px;border-bottom:1.5px solid var(--border);margin-bottom:4px">
@@ -4427,7 +4428,7 @@ function showInfoModal(){
         <span class="help-icon">${icon("scale",20)}</span>
         <div><strong>Impressum</strong><span>Josef Fischer &middot; H&ouml;lskofen 13 &middot; 84092 Bayerbach b. Ergoldsbach<br><a href="mailto:info@vereinskalender.online" style="color:var(--accent);text-decoration:none">info@vereinskalender.online</a></span></div>
       </div>
-      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.82 &middot; 2026-10-10 &middot; a sEpp-App</p>
+      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.83 &middot; 2026-10-10 &middot; a sEpp-App</p>
       <button onclick="document.getElementById('info-modal').remove()" style="width:100%;margin-top:16px;padding:12px;background:none;border:1.5px solid var(--border2);border-radius:12px;font-size:14px;color:var(--text2);cursor:pointer">Schlie&szlig;en</button>
     </div>`;
   document.body.appendChild(m);

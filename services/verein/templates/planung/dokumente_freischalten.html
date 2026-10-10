@@ -1,0 +1,32 @@
+{% extends "planung/base.html" %}
+{% block titel %}Dokumentenbereich{% endblock %}
+{% block inhalt %}
+<h1>Dokumentenbereich</h1>
+{% if fehler %}<div class="warn rot">{{ fehler }}</div>{% endif %}
+<p>Hier legt euer Verein Protokolle, die Satzung und andere Unterlagen ab – hochgeladen ({{ erlaubt }}) oder direkt geschrieben, mit Tagesordnungspunkten und Beschlüssen, fertig als PDF oder Word. Nur für euren Verein sichtbar, nicht öffentlich.</p>
+{% if frei %}
+<div class="ok">Der Dokumentenbereich ist freigeschaltet.</div>
+<div class="aktionen"><a class="btn" href="{{ url_for('planung.dokumente_seite') }}">Zu den Dokumenten</a></div>
+{% else %}
+<div class="card">
+  <b>Warum ein Vertrag?</b>
+  <p style="margin:6px 0 0">In Protokollen stehen oft Namen von Mitgliedern. Diese Daten gehören eurem Verein – der Vereinskalender speichert sie nur in eurem Auftrag. Dafür verlangt die DSGVO einen Vertrag zur Auftragsverarbeitung (AV-Vertrag, Art. 28). Er regelt, was mit euren Daten geschieht, wie sie geschützt sind und wann sie gelöscht werden. Kosten entstehen keine.</p>
+  <p class="hint" style="margin-bottom:0">Termine und Planungsrunden funktionieren auch ohne – der Vertrag ist nur für die Dokumente nötig.</p>
+</div>
+{% if alt %}<div class="warn">Der AV-Vertrag hat eine neue Fassung. Vorhandene Dokumente bleiben lesbar; für Neues bitte die neue Fassung abschließen.</div>{% endif %}
+{% if ist_admin %}
+<form method="post" class="card">{{ csrf()|safe }}
+  <p style="margin-top:0"><a href="/verein/avv" target="_blank" rel="noopener">AV-Vertrag lesen</a> (Fassung {{ AVV_FASSUNG }}, öffnet sich in einem neuen Tab, lässt sich drucken oder als PDF speichern)</p>
+  <label class="chk-zeile"><input type="checkbox" name="avv" required> Ich schließe den AV-Vertrag im Namen unseres Vereins ab.</label>
+  <div class="aktionen"><button class="btn">Dokumentenbereich freischalten</button></div>
+  <p class="hint" style="margin-bottom:0">Gespeichert werden Datum, Fassung und wer abgeschlossen hat. Ihr könnt das jederzeit unter Einstellungen nachsehen.</p>
+</form>
+{% else %}
+<div class="card hint">Freischalten kann nur ein Vereinsadmin eures Vereins.</div>
+{% endif %}
+{% endif %}
+{% endblock %}
+{% block css %}
+.chk-zeile{display:flex;gap:10px;align-items:flex-start;font-size:15px;color:var(--text);margin:10px 0}
+.chk-zeile input{width:20px;height:20px;flex-shrink:0;margin-top:1px}
+{% endblock %}

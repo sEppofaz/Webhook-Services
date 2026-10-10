@@ -1,0 +1,18 @@
+{% extends "planung/base.html" %}
+{% block titel %}Zugriffe auf Dokumente{% endblock %}
+{% block inhalt %}
+{% set zurueck_ziel = none %}{% include "planung/_zurueck.html" with context %}
+<h1>Zugriffe auf Dokumente</h1>
+<p class="hint">Wer hat wann ein Dokument angelegt, geändert, angesehen, heruntergeladen oder gelöscht. Nur für Vereinsadmins sichtbar; Einträge werden nach {{ tage // 30 }} Monaten gelöscht. Zeiten in UTC.</p>
+{% for e in eintraege %}
+<div class="card verlauf">
+  <div><b>{{ e.wer }}</b> {{ e.was }}{% if e.dok %}: {% if e.did %}<a href="{{ url_for('planung.dokument_seite', did=e.did) }}">{{ e.dok }}</a>{% else %}{{ e.dok }}{% endif %}{% endif %}</div>
+  <div class="hint">{{ e.zeit[:10]|datum_lang }} {{ e.zeit[11:16] }}{% if e.email and e.email != e.wer %} · {{ e.email }}{% endif %}</div>
+</div>
+{% else %}
+<p class="hint">Noch keine Einträge.</p>
+{% endfor %}
+{% endblock %}
+{% block css %}
+.verlauf{padding:10px 14px}.verlauf div{overflow-wrap:anywhere}
+{% endblock %}

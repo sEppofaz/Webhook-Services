@@ -19,6 +19,16 @@
 
 {% if fehler %}<div class="warn rot">{{ fehler }}</div>{% endif %}
 {% if meldung %}<div class="ok">{{ meldung }}</div>{% endif %}
+{% if hinweis_dokumente %}
+<div class="card zeile hinweis-dok" style="align-items:center">
+  <div style="flex:3 1 260px"><b>Neu: Dokumentenbereich</b>
+    <div class="hint">Protokolle, Satzung und andere Unterlagen eures Vereins ablegen – nur für euch sichtbar. Ihr schaltet ihn unter „Dokumente“ frei.</div></div>
+  <div class="zeile" style="flex:0 0 auto;margin:0">
+    <a class="btn sek" href="{{ url_for('planung.dokumente_seite') }}">Ansehen</a>
+    <form method="post" action="{{ url_for('planung.hinweis_dokumente_weg') }}" style="margin:0">{{ csrf()|safe }}<button class="btn sek" aria-label="Hinweis ausblenden">Ausblenden</button></form>
+  </div>
+</div>
+{% endif %}
 {% if upload_ok and upload_ok.isdigit() %}<div class="ok">{{ upload_ok }} Termine aus dem Terminplan übernommen.</div>{% endif %}
 
 {% for r in runden %}

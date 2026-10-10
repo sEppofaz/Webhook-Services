@@ -33,7 +33,7 @@ from shared.geo import _gem_norm
 from shared.kalender_store import KalenderStore
 from shared.kollision import STUFE_TAG, ist_regelgottesdienst, kollisionen
 from shared.termin_felder import BESCHREIBUNG_MAX, datum_ok, zeit_fehler
-from shared.vk_db import db_conn, get_upload_count, log_audit
+from shared.vk_db import AVV_FASSUNG, db_conn, get_upload_count, log_audit
 from shared.wiederholung import MONATE, vorlage
 
 planung_bp = Blueprint("planung", __name__, template_folder="templates")
@@ -224,7 +224,11 @@ def _vorlagen_hilfen():
     return {"csrf": lambda: csrf_field(get_csrf_token()), "FORMATE": FORMATE, "STATUS": P.STATUS,
             "datum_text": datum_text, "zeit_text": zeit_text, "STUFE_TAG": STUFE_TAG,
             "angemeldet": user["verein_key"] if user else None, "angemeldet_name": user["verein_name"] if user else "",
-            "darf": _ist_admin(), "kollision_js": KOLLISION_JS}
+            "darf": _ist_admin(), "kollision_js": KOLLISION_JS,
+            # Dokumentenbereich freigeschaltet (AV-Vertrag in aktueller Fassung, v1.83) + einmaliger Hinweis
+            "avv_frei": bool(user) and user.get("avv_fassung") == AVV_FASSUNG,
+            "hinweis_dokumente": bool(user) and _ist_admin() and user.get("avv_fassung") != AVV_FASSUNG
+                                 and not user.get("hinweis_dokumente")}
 
 
 @planung_bp.before_request

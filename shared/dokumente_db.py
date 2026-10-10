@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS dokument (
     datei_typ    TEXT NOT NULL DEFAULT '',          -- Endung aus der Inhaltsprüfung
     groesse      INTEGER NOT NULL DEFAULT 0,
     inhalt       TEXT NOT NULL DEFAULT '',          -- JSON, nur art=formular
+    sichtbar     TEXT NOT NULL DEFAULT 'alle',      -- alle | vorstand (v1.83)
     erstellt_von INTEGER,
     erstellt_am  TEXT NOT NULL,
     geaendert_von INTEGER,
@@ -47,6 +48,7 @@ CREATE TABLE IF NOT EXISTS dokument_liste (
 CREATE INDEX IF NOT EXISTS ix_dokument_liste ON dokument_liste(verein_key, art);
 """
 LISTEN_ARTEN = ("kategorie", "sitzungsart")
+SICHTBAR = {"alle": "Alle im Verein", "vorstand": "Nur Vorstand und Vereinsadmins"}
 NAME_MAX = 40
 # Gesucht wird nur in diesen Werten des Formularinhalts, nicht in den JSON-Schlüsseln („beschluss“ träfe sonst immer)
 SUCH_FELDER = ("text", "sitzungsart", "ort", "leitung", "protokoll", "anwesende", "entschuldigt")
@@ -75,41 +77,47 @@ def _trifft(d: dict, suche: str) -> bool:
     return any(s in w.casefold() for w in werte if w)
 
 
-def liste(verein_key: str, suche: str = "") -> list[dict]:
-    """Alle Dokumente eines Vereins, neueste zuerst (ohne Datum nach dem Anlegen)."""
+def liste(verein_key: str, suche: str = "", vorstand: bool = True) -> list[dict]:
+    """Alle Dokumente eines Vereins, neueste zuerst (ohne Datum nach dem Anlegen). vorstand=False → ohne
+    Dokumente „nur Vorstand“ (normales Mitglied)."""
     with db_conn() as c:
         rows = [_aus(r) for r in c.execute(
-            "SELECT * FROM dokument WHERE verein_key = ?"
+            "SELECT * FROM dokument WHERE verein_key = ?" + ("" if vorstand else " AND sichtbar = 'alle'") +
             " ORDER BY COALESCE(NULLIF(datum, ''), substr(erstellt_am, 1, 10)) DESC, id DESC", (verein_key,))]
     return [d for d in rows if _trifft(d, suche)] if suche else rows
 
 
-def hole(did: int, verein_key: str) -> dict | None:
+def hole(did: int, verein_key: str, vorstand: bool = True) -> dict | None:
     with db_conn() as c:
-        r = c.execute("SELECT * FROM dokument WHERE id = ? AND verein_key = ?", (did, verein_key)).fetchone()
+        r = c.execute("SELECT * FROM dokument WHERE id = ? AND verein_key = ?" +
+                      ("" if vorstand else " AND sichtbar = 'alle'"), (did, verein_key)).fetchone()
     return _aus(r) if r else None
 
 
 def neu(verein_key: str, user_id: int, kategorie: str, titel: str, datum: str, art: str,
-        inhalt: dict | None = None, datei: dict | None = None) -> int:
+        inhalt: dict | None = None, datei: dict | None = None, sichtbar: str = "alle") -> int:
     """datei = {name, pfad, typ, groesse} bei art=datei."""
     datei = datei or {}
     z = jetzt()
     with db_conn() as c:
         return c.execute(
             "INSERT INTO dokument (verein_key, kategorie, titel, datum, art, datei_name, datei_pfad, datei_typ, groesse,"
-            " inhalt, erstellt_von, erstellt_am, geaendert_von, geaendert_am) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
-            " RETURNING id",
+            " inhalt, erstellt_von, erstellt_am, geaendert_von, geaendert_am, sichtbar)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id",
             (verein_key, kategorie, titel, datum, art, datei.get("name", ""), datei.get("pfad", ""),
              datei.get("typ", ""), datei.get("groesse", 0),
-             json.dumps(inhalt, ensure_ascii=False) if inhalt else "", user_id, z, user_id, z)).fetchone()["id"]
+             json.dumps(inhalt, ensure_ascii=False) if inhalt else "", user_id, z, user_id, z,
+             sichtbar if sichtbar in SICHTBAR else "alle")).fetchone()["id"]
 
 
 def aendern(did: int, verein_key: str, user_id: int, kategorie: str, titel: str, datum: str,
-            inhalt: dict | None = None, datei: dict | None = None) -> bool:
+            inhalt: dict | None = None, datei: dict | None = None, sichtbar: str | None = None) -> bool:
     """Ändert Kopfdaten und (formular) den Inhalt bzw. (datei) ersetzt die Datei, wenn `datei` gesetzt ist."""
     sql = "UPDATE dokument SET kategorie = ?, titel = ?, datum = ?, geaendert_von = ?, geaendert_am = ?"
     args: list = [kategorie, titel, datum, user_id, jetzt()]
+    if sichtbar in SICHTBAR:
+        sql += ", sichtbar = ?"
+        args.append(sichtbar)
     if inhalt is not None:
         sql += ", inhalt = ?"
         args.append(json.dumps(inhalt, ensure_ascii=False))

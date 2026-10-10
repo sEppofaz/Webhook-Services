@@ -84,8 +84,8 @@ app.config["TESTING"] = True
 def konto(name, key, email):
     import bcrypt
     with vk_db.db_conn() as c:
-        vid = c.execute("INSERT INTO vereine_accounts (verein_key, verein_name, status) VALUES (?,?, 'aktiv') RETURNING id",
-                        (key, name)).fetchone()["id"]
+        vid = c.execute("INSERT INTO vereine_accounts (verein_key, verein_name, status, avv_fassung)"
+                        " VALUES (?,?, 'aktiv', ?) RETURNING id", (key, name, vk_db.AVV_FASSUNG)).fetchone()["id"]
         uid = c.execute("INSERT INTO vk_users (email, password_hash, verein_id, role, email_verified, aktiv, ds_fassung) "
                         f"VALUES (?,?,?, 'admin', 1, 1, '{vk_db.DS_FASSUNG}') RETURNING id",
                         (email, bcrypt.hashpw(b"geheim123", bcrypt.gensalt(4)).decode(), vid)).fetchone()["id"]

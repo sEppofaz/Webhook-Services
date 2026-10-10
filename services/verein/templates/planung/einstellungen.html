@@ -20,6 +20,7 @@
 {{ eintrag("Mitglieder", "Weitere Vereinsadmins oder Mitglieder einladen und entfernen.", "/verein/mitglieder") }}
 {{ eintrag("Dokumente: Kategorien und Sitzungsarten", "Eigene Kategorien und Sitzungsarten umbenennen oder löschen.", url_for('planung.dokument_listen')) }}
 {% endif %}
+{{ eintrag("Dokumentenbereich", ("Freigeschaltet – AV-Vertrag abgeschlossen." if avv_frei else "Nicht freigeschaltet – Protokolle und Satzung ablegen nach Abschluss des AV-Vertrags."), url_for('planung.dokumente_freischalten')) }}
 {{ eintrag("Passwort ändern", "Neues Passwort setzen; alle anderen Anmeldungen werden beendet.", "/verein/passwort") }}
 <p class="hint">Angemeldet als {{ email }} · {{ 'Vereinsadmin' if rolle == 'admin' else 'Mitglied' }}</p>
 

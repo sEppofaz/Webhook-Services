@@ -564,7 +564,9 @@ def _datenschutz_statistik() -> dict | None:
             r = c.execute("SELECT COUNT(*) AS n, COALESCE(SUM(u.ds_fassung = ?), 0) AS ok FROM vk_users u"
                           " JOIN vereine_accounts v ON v.id = u.verein_id"
                           " WHERE u.aktiv = 1 AND u.email_verified = 1 AND v.status = 'aktiv'", (DS_FASSUNG,)).fetchone()
-        return {"fassung": DS_FASSUNG, "bestaetigt": r["ok"], "konten": r["n"]}
+        with db_conn() as c:
+            avv = c.execute("SELECT COUNT(*) AS n FROM vereine_accounts WHERE avv_fassung IS NOT NULL").fetchone()["n"]
+        return {"fassung": DS_FASSUNG, "bestaetigt": r["ok"], "konten": r["n"], "avv_vereine": avv}
     except Exception:
         return None
 

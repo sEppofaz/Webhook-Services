@@ -9,7 +9,10 @@ Zwei Wege, ein Dokument anzulegen (einfache Abläufe): **Datei hochladen** (Form
 """
 from __future__ import annotations
 
-from datetime import datetime
+import csv
+import io
+import zipfile
+from datetime import datetime, timedelta
 from urllib.parse import quote
 
 from flask import Response, abort, g, redirect, render_template, request, send_file, url_for
@@ -20,7 +23,7 @@ from shared import dokumente_store as S
 from shared.dokument_export import FORMATE as DOK_FORMATE, abstimmung, datum_lang, exportiere, kopfzeilen
 from shared.export import dateiname
 from shared.termin_felder import datum_ok
-from shared.vk_db import log_audit
+from shared.vk_db import AVV_FASSUNG, db_conn, log_audit
 
 TITEL_MAX = 200
 FELD_MAX = 500           # Ort, Leitung, Anwesende …
@@ -53,7 +56,8 @@ def _zurueck(**kw):
 def _kopf_aus_formular(key: str) -> tuple[dict, str]:
     f = {"kategorie": request.form.get("kategorie", ""), "titel": request.form.get("titel", "").strip(),
          "datum": request.form.get("datum", "").strip(),
-         "neu_kategorie": " ".join(request.form.get("neu_kategorie", "").split())}
+         "neu_kategorie": " ".join(request.form.get("neu_kategorie", "").split()),
+         "sichtbar": request.form.get("sichtbar", "alle") if request.form.get("sichtbar") in D.SICHTBAR else "alle"}
     if f["kategorie"] == NEU:
         if not f["neu_kategorie"]:
             return f, "Bitte einen Namen für die neue Kategorie eingeben."
@@ -147,8 +151,29 @@ def _speichere(datei: dict) -> dict:
     return datei
 
 
+# ── Freischaltung per AV-Vertrag (v1.83, ADR-032) ───────────────────────────
+# Standard-Nutzung (Termine, Planung) braucht keinen AVV. Der Dokumentenbereich ist ein Zusatz: Ein Vereinsadmin
+# schließt den AV-Vertrag ab und schaltet ihn damit frei. Ohne Freischaltung: Bestand lesen/herunterladen/löschen
+# geht, Anlegen und Ändern nicht.
+
+def _frei() -> bool:
+    return g.user.get("avv_fassung") == AVV_FASSUNG
+
+
+def _schreiben() -> None:
+    """Admin UND freigeschaltet – sonst zur Freischalt-Seite (statt 403, damit klar ist, was fehlt)."""
+    _nur_admin()
+    if not _frei():
+        abort(redirect(url_for("planung.dokumente_freischalten")))
+
+
+def _vorstand() -> bool:
+    """Admins zählen immer als Vorstand (v1.83)."""
+    return _ist_admin() or bool(g.user.get("vorstand"))
+
+
 def _dokument(key: str, did: int) -> dict:
-    dok = D.hole(did, key)
+    dok = D.hole(did, key, vorstand=_vorstand())
     if not dok:
         abort(404, "Dieses Dokument gibt es nicht (mehr).")
     return dok
@@ -160,7 +185,7 @@ def _dokument(key: str, did: int) -> dict:
 @verein_login
 def dokumente_seite(key):
     if request.method == "POST":       # Datei hochladen
-        _nur_admin()
+        _schreiben()
         kopf, fehler = _kopf_aus_formular(key)
         datei, fehler2 = (None, "") if fehler else _datei_aus_formular(key)
         fehler = fehler or fehler2 or ("" if datei else "Bitte eine Datei auswählen.")
@@ -168,11 +193,14 @@ def dokumente_seite(key):
             return redirect(url_for("planung.dokumente_seite", fehler=fehler) + "#hochladen")
         datei = _speichere(datei)
         titel = kopf["titel"] or datei["name"].rsplit(".", 1)[0]
-        did = D.neu(key, g.user["id"], _kat_aufloesen(key, kopf), titel, kopf["datum"], "datei", datei=datei)
+        did = D.neu(key, g.user["id"], _kat_aufloesen(key, kopf), titel, kopf["datum"], "datei", datei=datei,
+                    sichtbar=kopf["sichtbar"])
         _audit("dokument_neu", did, key)
         return _zurueck(meldung=f"„{titel}“ ist abgelegt.")
     suche = request.args.get("q", "").strip()[:100]
-    alle = D.liste(key, suche)
+    if not _frei() and not D.liste(key):          # nichts abgelegt und nicht freigeschaltet → erklären
+        return _freischalt_seite()
+    alle = D.liste(key, suche, vorstand=_vorstand())
     gruppen = []
     kats = D.kategorien(key)
     for kat, name in kats.items():
@@ -183,16 +211,17 @@ def dokumente_seite(key):
                         "jahre": list(jahre.items())})
     belegt = D.belegung(key)
     return render_template("planung/dokumente.html", gruppen=gruppen, suche=suche, anzahl=len(alle),
-                           KATEGORIEN=kats, TYPEN=S.TYPEN, erlaubt=S.ERLAUBT_TEXT, NEU=NEU,
+                           KATEGORIEN=kats, TYPEN=S.TYPEN, erlaubt=S.ERLAUBT_TEXT, NEU=NEU, SICHTBAR=D.SICHTBAR,
                            belegt=belegt, max_verein=S.MAX_VEREIN, max_datei=S.MAX_BYTES,
                            voll=belegt >= S.MAX_VEREIN, neu_kat=request.args.get("kat", "protokoll"),
+                           darf=_ist_admin() and _frei(), ist_admin=_ist_admin(), frei=_frei(),
                            fehler=request.args.get("fehler", ""), meldung=request.args.get("meldung", ""))
 
 
 # ── Schreiben ────────────────────────────────────────────────────────────────
 
 def _formular_seite(key: str, dok: dict, fehler: str = ""):
-    return render_template("planung/dokument_formular.html", dok=dok, fehler=fehler, KATEGORIEN=D.kategorien(key),
+    return render_template("planung/dokument_formular.html", dok=dok, fehler=fehler, KATEGORIEN=D.kategorien(key), SICHTBAR=D.SICHTBAR,
                            EINZAHL=D.einzahl(key), SITZUNGSARTEN=D.sitzungsarten(key), TYPEN=S.TYPEN,
                            erlaubt=S.ERLAUBT_TEXT, NEU=NEU, STUNDEN=[f"{h:02d}" for h in range(24)], MINUTEN=MINUTEN)
 
@@ -210,7 +239,7 @@ def _sitzungsart_merken(key: str, inhalt: dict) -> None:
 @planung_bp.route("/verein/dokumente/neu", methods=["GET", "POST"])
 @verein_login
 def dokument_neu(key):
-    _nur_admin()
+    _schreiben()
     if request.method == "GET":
         return _formular_seite(key, _leer(key, request.args.get("kat", "protokoll")))
     kopf, fehler = _kopf_aus_formular(key)
@@ -225,7 +254,7 @@ def dokument_neu(key):
     kat = _kat_aufloesen(key, kopf)
     _sitzungsart_merken(key, inhalt)
     titel = kopf["titel"] or _standardtitel(key, kat, inhalt, kopf["datum"])
-    did = D.neu(key, g.user["id"], kat, titel, kopf["datum"], "formular", inhalt=inhalt)
+    did = D.neu(key, g.user["id"], kat, titel, kopf["datum"], "formular", inhalt=inhalt, sichtbar=kopf["sichtbar"])
     _audit("dokument_neu", did, key)
     return redirect(url_for("planung.dokument_seite", did=did, meldung="Gespeichert."))
 
@@ -243,7 +272,7 @@ def _standardtitel(key: str, kategorie: str, inhalt: dict, datum: str) -> str:
 def dokument_seite(key, did):
     dok = _dokument(key, did)
     if request.method == "POST":
-        _nur_admin()
+        _schreiben()
         kopf, fehler = _kopf_aus_formular(key)
         if dok["art"] == "formular":
             inhalt, fehler2 = _inhalt_aus_formular(kopf["kategorie"])
@@ -255,7 +284,7 @@ def dokument_seite(key, did):
             kat = _kat_aufloesen(key, kopf)
             _sitzungsart_merken(key, inhalt)
             titel = kopf["titel"] or _standardtitel(key, kat, inhalt, kopf["datum"])
-            D.aendern(did, key, g.user["id"], kat, titel, kopf["datum"], inhalt=inhalt)
+            D.aendern(did, key, g.user["id"], kat, titel, kopf["datum"], inhalt=inhalt, sichtbar=kopf["sichtbar"])
         else:
             datei, fehler2 = (None, "") if fehler else _datei_aus_formular(key, ersetzt=dok["groesse"])
             if fehler or fehler2:
@@ -263,17 +292,22 @@ def dokument_seite(key, did):
             if datei:
                 datei = _speichere(datei)
             titel = kopf["titel"] or dok["titel"]
-            D.aendern(did, key, g.user["id"], _kat_aufloesen(key, kopf), titel, kopf["datum"], datei=datei)
+            D.aendern(did, key, g.user["id"], _kat_aufloesen(key, kopf), titel, kopf["datum"], datei=datei,
+                      sichtbar=kopf["sichtbar"])
             if datei:
                 S.entfernen(dok["datei_pfad"])
         _audit("dokument_geaendert", did, key)
         return redirect(url_for("planung.dokument_seite", did=did, meldung="Gespeichert."))
     if dok["art"] == "formular" and request.args.get("bearbeiten") and _ist_admin():
+        _schreiben()
         return _formular_seite(key, dok)
+    if not request.args.get("meldung"):          # nicht direkt nach dem eigenen Speichern zählen
+        _audit("dokument_angesehen", did, key)
     return render_template("planung/dokument.html", dok=dok, KATEGORIEN=D.kategorien(key), EINZAHL=D.einzahl(key), NEU=NEU,
+                           SICHTBAR=D.SICHTBAR,
                            TYPEN=S.TYPEN, IM_BROWSER=S.IM_BROWSER, DOK_FORMATE=DOK_FORMATE, erlaubt=S.ERLAUBT_TEXT,
                            kopf=kopfzeilen(dok, g.user["verein_name"]) if dok["art"] == "formular" else [],
-                           abstimmung=abstimmung, max_datei=S.MAX_BYTES,
+                           abstimmung=abstimmung, max_datei=S.MAX_BYTES, frei=_frei(), ist_admin=_ist_admin(),
                            fehler=request.args.get("fehler", ""), meldung=request.args.get("meldung", ""))
 
 
@@ -301,6 +335,7 @@ def dokument_datei(key, did):
                   download_name=dok["datei_name"], conditional=False, etag=False, max_age=0)
     r.headers["Cache-Control"] = "private, no-store"
     r.headers["X-Content-Type-Options"] = "nosniff"
+    _audit("dokument_heruntergeladen" if herunterladen else "dokument_angesehen", did, key)
     return r
 
 
@@ -316,6 +351,7 @@ def dokument_export(key, did, fmt):
         abort(404, "Dieses Format steht gerade nicht zur Verfügung.")
     name = dateiname(dok["titel"], fmt)
     ersatz = name.encode("ascii", "replace").decode().replace("?", "_")
+    _audit("dokument_heruntergeladen", did, key)
     return Response(inhalt, mimetype=DOK_FORMATE[fmt][1],
                     headers={"Content-Disposition": f"attachment; filename=\"{ersatz}\"; filename*=UTF-8''{quote(name)}",
                              "Cache-Control": "private, no-store"})
@@ -326,7 +362,7 @@ def dokument_export(key, did, fmt):
 @planung_bp.route("/verein/dokumente/listen", methods=["GET", "POST"])
 @verein_login
 def dokument_listen(key):
-    _nur_admin()
+    _schreiben()
     if request.method == "POST":
         try:
             eid = int(request.form.get("id", ""))
@@ -346,3 +382,116 @@ def dokument_listen(key):
     return render_template("planung/dokument_listen.html", kategorien=kats, sitzungsarten=D.eintraege(key, "sitzungsart"),
                            FEST_KAT=list(D.KATEGORIEN.values()), FEST_SITZ=list(D.SITZUNGSARTEN), NAME_MAX=D.NAME_MAX,
                            fehler=request.args.get("fehler", ""), meldung=request.args.get("meldung", ""))
+
+
+# ── Freischalten ─────────────────────────────────────────────────────────────
+
+def _freischalt_seite(fehler: str = ""):
+    return render_template("planung/dokumente_freischalten.html", fehler=fehler, ist_admin=_ist_admin(),
+                           frei=_frei(), alt=bool(g.user.get("avv_fassung")), AVV_FASSUNG=AVV_FASSUNG,
+                           max_verein=S.MAX_VEREIN, erlaubt=S.ERLAUBT_TEXT)
+
+
+@planung_bp.route("/verein/dokumente/freischalten", methods=["GET", "POST"])
+@verein_login
+def dokumente_freischalten(key):
+    if request.method == "GET":
+        return _freischalt_seite()
+    _nur_admin()
+    if not request.form.get("avv"):
+        return _freischalt_seite("Bitte bestätigen, dass ihr den AV-Vertrag abschließt."), 400
+    with db_conn() as c:
+        c.execute("UPDATE vereine_accounts SET avv_fassung = ?, avv_am = CURRENT_TIMESTAMP, avv_user = ? WHERE id = ?",
+                  (AVV_FASSUNG, g.user["id"], g.user["verein_id"]))
+    log_audit("avv_abgeschlossen", AVV_FASSUNG, key, g.user["id"])
+    return _zurueck(meldung="Der Dokumentenbereich ist freigeschaltet.")
+
+
+@planung_bp.route("/verein/hinweis/dokumente", methods=["POST"])
+@verein_login
+def hinweis_dokumente_weg(key):
+    with db_conn() as c:
+        c.execute("UPDATE vk_users SET hinweis_dokumente = 1 WHERE id = ?", (g.user["id"],))
+    return redirect(url_for("planung.termine_seite"))
+
+
+# ── Export aller Dokumente als ZIP (v1.83, Art. 20 DSGVO / Kündigung) ────────
+
+@planung_bp.route("/verein/dokumente/export.zip")
+@verein_login
+def dokumente_zip(key):
+    _nur_admin()
+    kats = D.kategorien(key)
+    buf, namen = io.BytesIO(), set()
+    zeilen = [["Kategorie", "Titel", "Datum", "Art", "Sichtbar", "Datei im Archiv", "Angelegt", "Geändert"]]
+
+    def eindeutig(pfad: str) -> str:
+        basis, _, ext = pfad.rpartition(".")
+        n, kandidat = 2, pfad
+        while kandidat in namen:
+            kandidat, n = f"{basis} ({n}).{ext}", n + 1
+        namen.add(kandidat)
+        return kandidat
+
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for d in D.liste(key):
+            ordner = S.sicherer_name(kats.get(d["kategorie"], "Sonstiges"), "x").rsplit(".", 1)[0]
+            datei = ""
+            if d["art"] == "datei":
+                p = S.pfad(d["datei_pfad"])
+                if p:
+                    datei = eindeutig(f"{ordner}/{d['datei_name']}")
+                    z.write(p, datei)
+            else:
+                try:
+                    datei = eindeutig(f"{ordner}/{dateiname(d['titel'], 'pdf')}")
+                    z.writestr(datei, exportiere("pdf", d, g.user["verein_name"]))
+                except ImportError:                       # ohne fpdf2: Klartext statt PDF
+                    datei = eindeutig(f"{ordner}/{dateiname(d['titel'], 'txt')}")
+                    z.writestr(datei, "\n".join(f"{k}: {v}" for k, v in kopfzeilen(d, g.user["verein_name"])))
+            zeilen.append([kats.get(d["kategorie"], ""), d["titel"], d["datum"], d["art"],
+                           D.SICHTBAR.get(d.get("sichtbar") or "alle", ""), datei,
+                           d["erstellt_am"][:10], d["geaendert_am"][:10]])
+        tab = io.StringIO()
+        csv.writer(tab, delimiter=";").writerows(zeilen)
+        z.writestr("uebersicht.csv", "\ufeff" + tab.getvalue())
+    _audit("dokumente_export", 0, key)
+    name = dateiname(f"Dokumente {g.user['verein_name']} {datetime.now():%Y-%m-%d}", "zip")
+    ersatz = name.encode("ascii", "replace").decode().replace("?", "_")
+    return Response(buf.getvalue(), mimetype="application/zip",
+                    headers={"Content-Disposition": f"attachment; filename=\"{ersatz}\"; filename*=UTF-8''{quote(name)}",
+                             "Cache-Control": "private, no-store"})
+
+
+# ── Zugriffsprotokoll für Vereinsadmins (v1.83) ──────────────────────────────
+
+VERLAUF_AKTIONEN = {"dokument_neu": "angelegt", "dokument_geaendert": "geändert", "dokument_geloescht": "gelöscht",
+                    "dokument_angesehen": "angesehen", "dokument_heruntergeladen": "heruntergeladen",
+                    "dokumente_export": "alle exportiert (ZIP)", "avv_abgeschlossen": "AV-Vertrag abgeschlossen"}
+VERLAUF_TAGE = 365
+
+
+@planung_bp.route("/verein/dokumente/verlauf")
+@verein_login
+def dokumente_verlauf(key):
+    _nur_admin()
+    grenze = (datetime.utcnow() - timedelta(days=VERLAUF_TAGE)).strftime("%Y-%m-%d %H:%M:%S")
+    ph = ",".join("?" * len(VERLAUF_AKTIONEN))
+    with db_conn() as c:
+        c.execute(f"DELETE FROM vk_audit WHERE verein_key = ? AND aktion IN ({ph}) AND aktion != 'avv_abgeschlossen'"
+                  " AND timestamp < ?", (key, *VERLAUF_AKTIONEN, grenze))
+        rows = c.execute(
+            f"SELECT a.aktion, a.termin_id, a.timestamp AS zeitpunkt, u.email, u.vorname, u.nachname, u.name"
+            f" FROM vk_audit a LEFT JOIN vk_users u ON u.id = a.user_id"
+            f" WHERE a.verein_key = ? AND a.aktion IN ({ph}) ORDER BY a.id DESC LIMIT 200",
+            (key, *VERLAUF_AKTIONEN)).fetchall()
+        titel = {f"dok_{r['id']}": r["titel"] for r in c.execute("SELECT id, titel FROM dokument WHERE verein_key = ?", (key,))}
+    eintraege = []
+    for r in rows:
+        wer = " ".join(x for x in ((r["vorname"] or "").strip(), (r["nachname"] or "").strip()) if x) \
+            or (r["name"] or "").strip() or (r["email"] or "entferntes Konto")
+        eintraege.append({"zeit": r["zeitpunkt"], "wer": wer, "email": r["email"] or "",
+                          "was": VERLAUF_AKTIONEN[r["aktion"]],
+                          "dok": titel.get(r["termin_id"], "" if not r["termin_id"].startswith("dok_") else "(gelöscht)"),
+                          "did": int(r["termin_id"][4:]) if r["termin_id"] in titel else None})
+    return render_template("planung/dokumente_verlauf.html", eintraege=eintraege, tage=VERLAUF_TAGE)
