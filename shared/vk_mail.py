@@ -153,12 +153,13 @@ PLATZHALTER = {
     "login_link": "Link zur Anmeldung",
     "profil_link": "Link zum Vereinsprofil",
     "upload_link": "Link zum Terminplan-Upload",
+    "termin_link": "Link zu „Neuer Termin“",
     "kalender_link": "Link zum Kalender",
     "kontakt": KONTAKT,
     "neu": "neue Adresse (gekürzt, z. B. ma…@web.de)",
     "eingeladen_von": "Vor- und Nachname des Admins, der einlädt",
 }
-_LINKS = {"link", "login_link", "profil_link", "upload_link", "kalender_link"}
+_LINKS = {"link", "login_link", "profil_link", "upload_link", "termin_link", "kalender_link"}
 
 STANDARD = {
     # Kein eigener Versand: Kurzvorstellung am Ende JEDER Mail (v1.72), bearbeitbar wie ein Mail-Text.
@@ -201,14 +202,15 @@ STANDARD = {
     },
     "welcome": {
         "zweck": "Nach der Freigabe – Konto ist freigeschaltet",
-        "platzhalter": ["verein", "login_link", "profil_link", "upload_link", "kalender_link", "kontakt"],
+        "platzhalter": ["verein", "login_link", "profil_link", "termin_link", "upload_link", "kalender_link", "kontakt"],
         "knopf_link": "login_link", "anrede": True,
         "betreff": "Konto freigeschaltet – {verein}",
         "ueberschrift": "Willkommen beim Vereinskalender!",
-        "text": ("Das Konto für **{verein}** ist freigeschaltet. In drei Schritten seid ihr dabei:\n\n"
+        "text": ("Das Konto für **{verein}** ist freigeschaltet. In vier Schritten seid ihr dabei:\n\n"
                  "1. **Profil prüfen** – PLZ, Ortschaft, Rubrik und Ansprechpartner kontrollieren: {profil_link}\n"
-                 "2. **Termine hochladen** – Jahresprogramm als PDF, Foto oder Excel: {upload_link}\n"
-                 "3. **Kalender abonnieren** – Auf {kalender_link} den Button „Abonnieren“ antippen – dann habt ihr "
+                 "2. **Termine selbst eintragen und pflegen** – einzelne Termine anlegen, ändern oder löschen: {termin_link}\n"
+                 "3. **Vorhandene Termine hochladen** – Jahresprogramm als PDF, Foto oder Excel: {upload_link}\n"
+                 "4. **Kalender abonnieren** – Auf {kalender_link} den Button „Abonnieren“ antippen – dann habt ihr "
                  "alle Termine automatisch im iPhone-Kalender."),
         "knopf": "Jetzt einloggen",
         "hinweis": "Bei Fragen einfach auf diese E-Mail antworten oder schreiben an {kontakt}.",
@@ -375,7 +377,8 @@ def baue_mail(art: str, werte: dict, gruss: str = "", eigene: dict | None = None
     `pitch` = Entwurf der Kurzvorstellung (Vorschau), sonst die gespeicherte."""
     t = eigene or texte(art)
     werte = {"login_link": f"{BASE_URL}/verein/login", "profil_link": f"{BASE_URL}/verein/profil",
-             "upload_link": f"{BASE_URL}/verein/upload", "kalender_link": BASE_URL, "kontakt": KONTAKT, **werte}
+             "upload_link": f"{BASE_URL}/verein/upload",
+             "termin_link": f"{BASE_URL}/verein/termine/neu", "kalender_link": BASE_URL, "kontakt": KONTAKT, **werte}
     werte = {k: v for k, v in werte.items() if k in STANDARD[art]["platzhalter"]}
     body = f"<h2>{_ersetzen(t['ueberschrift'], werte, True)}</h2>\n{_bloecke(t['text'], werte)}"
     ziel = STANDARD[art]["knopf_link"]

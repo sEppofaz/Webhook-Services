@@ -1164,6 +1164,9 @@ def test_pitch():
     pruefe(h.count(link) == 2 and link + "VEREINSKALENDER.online</a>" in h, "„Vereinskalender.online“ wird Link (jede Schreibweise)")
     h = vk_mail.baue_mail("verify", vk_mail.BEISPIEL, "Hallo,", pitch="Siehe https://vereinskalender.online/x")[1]
     pruefe(link not in h, "geschriebene Adresse bleibt unangetastet")
+    h = vk_mail.baue_mail("welcome", vk_mail.BEISPIEL, "Hallo,")[1]
+    pruefe('href="https://vereinskalender.online/verein/termine/neu"' in h and "In vier Schritten" in h
+           and h.count("<li>") == 4, "Willkommens-Mail: 4 Schritte, Link zu „Neuer Termin“ (v1.75)")
     vk_mail.MAIL_TEXTE_FILE.unlink(missing_ok=True)
 
 
