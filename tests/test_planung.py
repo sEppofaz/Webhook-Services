@@ -34,7 +34,7 @@ os.environ["UPLOAD_TOKEN"] = "admintoken"
 os.environ["TELEGRAM_WEBHOOK_SECRET"] = "tgsecret"
 os.environ["CHAT_ID"] = "4711"
 os.environ["VKO_COOKIE_INSECURE"] = "1"
-for k in ("TOKEN", "BREVO_SMTP_USER", "BREVO_SMTP_KEY", "KALENDER_BOT_TOKEN"):
+for k in ("TOKEN", "BREVO_SMTP_USER", "BREVO_SMTP_KEY", "MAILJET_API_KEY", "MAILJET_SECRET_KEY", "KALENDER_BOT_TOKEN"):
     os.environ.pop(k, None)
 for _pkg in ("yfinance", "anthropic", "pillow_heif"):
     try:

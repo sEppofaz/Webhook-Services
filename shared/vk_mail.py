@@ -13,8 +13,19 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
 
+# Versand über Mailjet (seit v1.81, #443): Brevo schreibt jeden Link auf seine Klickzählung um und lässt sich
+# per SMTP nicht abschalten. Mailjet nur, wenn beide MAILJET_* gesetzt sind – sonst weiter über Brevo.
 SMTP_HOST = "smtp-relay.brevo.com"
 SMTP_PORT = 587
+MAILJET_HOST = "in-v3.mailjet.com"
+
+
+def _zugang() -> tuple[str, str, str, str]:
+    """(Anbieter, Host, Benutzer, Schlüssel) – Mailjet bevorzugt, Brevo als Rückfall."""
+    mj_user, mj_key = os.environ.get("MAILJET_API_KEY", ""), os.environ.get("MAILJET_SECRET_KEY", "")
+    if mj_user and mj_key:
+        return "Mailjet", MAILJET_HOST, mj_user, mj_key
+    return "Brevo", SMTP_HOST, os.environ.get("BREVO_SMTP_USER", ""), os.environ.get("BREVO_SMTP_KEY", "")
 FROM_EMAIL = "noreply@vereinskalender.online"
 FROM_NAME  = "Vereinskalender"
 BASE_URL   = "https://vereinskalender.online"
@@ -72,16 +83,16 @@ def _fehler_melden(to_email: str, subject: str, grund: str) -> None:
 
 
 def _send(to_email: str, subject: str, html_body: str) -> bool:
-    """Schickt die Mail über Brevo. Jeder Fehlschlag (fehlender Zugang, SMTP-Fehler) meldet sich per Telegram."""
+    """Schickt die Mail über Mailjet (sonst Brevo). Jeder Fehlschlag (fehlender Zugang, SMTP-Fehler) meldet sich
+    per Telegram."""
     # Betreff enthält teils den Vereinsnamen (Formulareingabe) – keine Zeilenumbrüche in Header
     subject = " ".join(str(subject).split())
     if any(c in to_email for c in "\r\n"):
         return False
-    smtp_user = os.environ.get("BREVO_SMTP_USER", "")
-    smtp_key  = os.environ.get("BREVO_SMTP_KEY", "")
+    anbieter, host, smtp_user, smtp_key = _zugang()
     if not smtp_user or not smtp_key:
         print(f"MAIL ERROR to {to_email}: SMTP-Zugang fehlt", file=sys.stderr)
-        _fehler_melden(to_email, subject, "SMTP-Zugang fehlt (BREVO_SMTP_USER/BREVO_SMTP_KEY nicht gesetzt)")
+        _fehler_melden(to_email, subject, "SMTP-Zugang fehlt (weder MAILJET_* noch BREVO_SMTP_* gesetzt)")
         return False
     msg = MIMEMultipart("alternative")
     msg["Subject"]      = subject
@@ -92,9 +103,12 @@ def _send(to_email: str, subject: str, html_body: str) -> bool:
     msg["Date"]         = email_utils.formatdate(localtime=False)
     msg["MIME-Version"] = "1.0"
     msg["Precedence"]   = "transactional"
+    if anbieter == "Mailjet":                 # Links und Öffnungen nicht zählen – Knöpfe zeigen direkt auf uns
+        msg["X-Mailjet-TrackClick"] = "0"
+        msg["X-Mailjet-TrackOpen"]  = "0"
     msg.attach(MIMEText(html_body, "html", "utf-8"))
     try:
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as smtp:
+        with smtplib.SMTP(host, SMTP_PORT, timeout=10) as smtp:
             smtp.ehlo()
             smtp.starttls()
             smtp.ehlo()
@@ -103,7 +117,7 @@ def _send(to_email: str, subject: str, html_body: str) -> bool:
         return True
     except Exception as e:
         print(f"MAIL ERROR to {to_email}: {e}", file=sys.stderr)
-        _fehler_melden(to_email, subject, f"{type(e).__name__}: {e}")
+        _fehler_melden(to_email, subject, f"{anbieter}: {type(e).__name__}: {e}")
         return False
 
 

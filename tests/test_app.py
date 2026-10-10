@@ -30,7 +30,7 @@ os.environ["UPLOAD_TOKEN"] = "admintoken"
 os.environ["TELEGRAM_WEBHOOK_SECRET"] = "tgsecret"
 os.environ["CHAT_ID"] = "4711"
 os.environ["VKO_COOKIE_INSECURE"] = "1"   # Testclient spricht http
-for k in ("TOKEN", "BREVO_SMTP_USER", "BREVO_SMTP_KEY", "KALENDER_BOT_TOKEN"):
+for k in ("TOKEN", "BREVO_SMTP_USER", "BREVO_SMTP_KEY", "MAILJET_API_KEY", "MAILJET_SECRET_KEY", "KALENDER_BOT_TOKEN"):
     os.environ.pop(k, None)
 
 # Fremdpakete, die nur Nicht-VKO-Blueprints brauchen, lokal oft fehlen → Attrappe
@@ -924,6 +924,34 @@ def test_mail_rueckmeldung():
                    "SMTP-Fehler (z. B. inaktiver Schlüssel) → Telegram-Meldung", gemeldet)
         finally:
             smtplib.SMTP = alt_smtp
+        # Mailjet bevorzugt (v1.81, #443): eigener Host, Klick-/Öffnungszählung per Header aus
+        os.environ.update(MAILJET_API_KEY="mu", MAILJET_SECRET_KEY="mk")
+        verbunden = []
+        class Fake:
+            def __init__(self, host, port, timeout=None): verbunden.append(host)
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def ehlo(self): pass
+            def starttls(self): pass
+            def login(self, u, k): verbunden.append((u, k))
+            def sendmail(self, von, an, text): verbunden.append(text)
+        smtplib.SMTP = Fake
+        try:
+            ok = vk_mail._send("a@b.de", "Test", '<a href="https://vereinskalender.online/x">Knopf</a>')
+            text = verbunden[-1]
+            pruefe(ok and verbunden[0] == "in-v3.mailjet.com" and verbunden[1] == ("mu", "mk"),
+                   "Mailjet gesetzt → Versand über in-v3.mailjet.com", verbunden[:2])
+            pruefe("X-Mailjet-TrackClick: 0" in text and "X-Mailjet-TrackOpen: 0" in text,
+                   "Mailjet: Klick- und Öffnungszählung aus")
+            pruefe("Reply-To: info@vereinskalender.online" in text, "Antwortadresse info@")
+            os.environ.pop("MAILJET_API_KEY"); os.environ.pop("MAILJET_SECRET_KEY")
+            verbunden.clear()
+            vk_mail._send("a@b.de", "Test", "x")
+            pruefe(verbunden[0] == "smtp-relay.brevo.com" and "X-Mailjet" not in verbunden[-1],
+                   "ohne Mailjet-Zugang → Rückfall Brevo, ohne Mailjet-Header")
+        finally:
+            smtplib.SMTP = alt_smtp
+            os.environ.pop("MAILJET_API_KEY", None); os.environ.pop("MAILJET_SECRET_KEY", None)
             os.environ.pop("BREVO_SMTP_USER"); os.environ.pop("BREVO_SMTP_KEY")
     finally:
         vk_mail._fehler_melden = alt_melden

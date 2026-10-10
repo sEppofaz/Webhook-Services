@@ -1097,7 +1097,7 @@ def datenschutz():
 </div>
 <div class="card">
 <h2 style="font-size:1rem;margin-top:0">5. E-Mail-Dienst</h2>
-<p>E-Mails werden über Brevo (Sendinblue SAS, Frankreich) versendet. Dabei wird die Ziel-E-Mail-Adresse an Brevo übermittelt.</p>
+<p>E-Mails werden über Mailjet (Sinch Mailjet SAS, Frankreich) versendet. Dabei werden die Ziel-E-Mail-Adresse und der Inhalt der Mail an Mailjet übermittelt. Öffnungen und Klicks auf Links werden nicht ausgewertet – die Links zeigen direkt auf vereinskalender.online.</p>
 </div>
 <div class="card">
 <h2 style="font-size:1rem;margin-top:0">4a. Entwürfe und Planungsrunden</h2>
