@@ -158,6 +158,7 @@ PLATZHALTER = {
     "kontakt": KONTAKT,
     "neu": "neue Adresse (gekürzt, z. B. ma…@web.de)",
     "eingeladen_von": "Vor- und Nachname des Admins, der einlädt",
+    "email": "die neue Adresse, voll ausgeschrieben (Mail geht an genau diese Adresse)",
 }
 _LINKS = {"link", "login_link", "profil_link", "upload_link", "termin_link", "kalender_link"}
 
@@ -227,10 +228,10 @@ STANDARD = {
     },
     "email_change_confirm": {
         "zweck": "Verein ändert seine Login-Adresse – Mail an die NEUE Adresse",
-        "platzhalter": ["verein", "link"], "knopf_link": "link", "anrede": True,
+        "platzhalter": ["verein", "email", "link"], "knopf_link": "link", "anrede": True,
         "betreff": "Neue E-Mail-Adresse bestätigen – Vereinskalender",
         "ueberschrift": "Neue E-Mail-Adresse bestätigen",
-        "text": "Für **{verein}** soll diese Adresse künftig zum Einloggen und für Benachrichtigungen dienen.",
+        "text": "Für **{verein}** soll die Adresse **{email}** künftig zum Einloggen und für Benachrichtigungen dienen.",
         "knopf": "Adresse bestätigen",
         "hinweis": ("Der Link ist **24 Stunden** gültig. Bis dahin gilt die bisherige Adresse.\n"
                     "Falls du das nicht veranlasst hast, ignoriere diese E-Mail.\n\nDirektlink: {link}"),
@@ -250,7 +251,7 @@ STANDARD = {
 
 # Beispielwerte für Vorschau und Testmail
 BEISPIEL = {"verein": "FF Musterdorf e.V.", "link": f"{BASE_URL}/beispiel-link", "neu": "ma…@web.de",
-            "eingeladen_von": "Maria Huber"}
+            "eingeladen_von": "Maria Huber", "email": "erika@beispiel.de"}
 
 
 def _lade_datei() -> dict:
@@ -426,9 +427,11 @@ def send_rejected_email(to_email: str, verein_name: str, gruss: str = "") -> boo
 
 
 def send_email_change_confirm(to_email: str, token: str, verein_name: str, gruss: str = "") -> bool:
-    """An die NEUE Adresse: erst der Klick macht sie zur Login-Adresse."""
+    """An die NEUE Adresse: erst der Klick macht sie zur Login-Adresse. `{email}` = genau diese Adresse, daher
+    ungekürzt (v1.76); gekürzt nur im Hinweis an die alte Adresse."""
     return _mail("email_change_confirm", to_email,
-                 {"link": f"{BASE_URL}/verein/email-bestaetigen?token={token}", "verein": verein_name}, gruss)
+                 {"link": f"{BASE_URL}/verein/email-bestaetigen?token={token}", "verein": verein_name,
+                  "email": to_email}, gruss)
 
 
 def send_email_change_notice(to_email: str, neu: str, verein_name: str, gruss: str = "") -> bool:

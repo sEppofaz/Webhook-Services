@@ -1167,6 +1167,15 @@ def test_pitch():
     h = vk_mail.baue_mail("welcome", vk_mail.BEISPIEL, "Hallo,")[1]
     pruefe('href="https://vereinskalender.online/verein/termine/neu"' in h and "In vier Schritten" in h
            and h.count("<li>") == 4, "Willkommens-Mail: 4 Schritte, Link zu „Neuer Termin“ (v1.75)")
+    mails = []
+    vk_mail._send = lambda to, sub, body: mails.append(body) or True
+    try:
+        vk_mail.send_email_change_confirm("neu<x>@web.de", "T", "FF X", "Hallo,")
+        vk_mail.send_email_change_notice("alt@web.de", "neuadresse@web.de", "FF X", "Hallo,")
+    finally:
+        vk_mail._send = alt
+    pruefe("<strong>neu&lt;x&gt;@web.de</strong>" in mails[0], "Bestätigung nennt die neue Adresse voll (escapt, v1.76)")
+    pruefe("neuadresse@web.de" not in mails[1], "Hinweis an die alte Adresse bleibt gekürzt")
     vk_mail.MAIL_TEXTE_FILE.unlink(missing_ok=True)
 
 
