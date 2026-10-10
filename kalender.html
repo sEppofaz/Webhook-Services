@@ -3267,13 +3267,14 @@ function renderAllAccounts(list){
     const mailBtn=u.aktiv&&(!u.email_verified||v.status==="aktiv")
       ? `<button type="button" class="acc-mail-btn" data-uid="${u.id}" style="margin-left:6px;padding:2px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--accent);font-size:11px;cursor:pointer">${u.email_verified?"Willkommens-Mail senden":"Bestätigungslink senden"}</button>`
       : "";
+    const zweiFa=u.totp_aktiv?`<button type="button" class="acc-2fa-btn" data-uid="${u.id}" style="margin-left:6px;padding:2px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--accent);font-size:11px;cursor:pointer">App-Anmeldung zurücksetzen</button>`:"";
     const offen=!u.email_verified?`<div style="font-size:11px;color:#ff9f0a">E-Mail-Adresse noch nicht bestätigt – Anmelden erst danach möglich</div>`:"";
     // Datenschutz-Bestätigung (v1.79): Zeitpunkt + Fassung, Verlauf aller Fassungen in vk_audit
     const dsAm=u.ds_bestaetigt_am?String(u.ds_bestaetigt_am).slice(0,10).split("-").reverse().join("."):"";
     const ds=!u.aktiv?"":u.ds_aktuell
       ?`<div style="font-size:11px;color:var(--text3)">Datenschutz bestätigt am ${dsAm} · Fassung ${escHtml(u.ds_fassung)}</div>`
       :`<div style="font-size:11px;color:#ff9f0a">Datenschutz noch nicht bestätigt${u.ds_fassung?` (nur ältere Fassung ${escHtml(u.ds_fassung)} am ${dsAm})`:""} – wird beim nächsten Aufruf des Vereinsbereichs abgefragt</div>`;
-    return `<div style="font-size:12px;color:var(--text2);padding:2px 0">${badge} ${parts.join(" &middot; ")}${mailBtn}${offen}${ds}</div>`;
+    return `<div style="font-size:12px;color:var(--text2);padding:2px 0">${badge} ${parts.join(" &middot; ")}${mailBtn}${zweiFa}${offen}${ds}</div>`;
   };
   // Pflege-Übersicht (ADR-027): pflegt selbst / nur Crawler, Abruf aus, kommende Termine je Herkunft
   const pflegeBadge=v=>{
@@ -3320,6 +3321,19 @@ document.addEventListener("click",async e=>{
   }catch(err){alert("❌ Keine Verbindung – bitte erneut versuchen");}
   btn.disabled=false;
   btn.textContent=alt;
+});
+
+// Authenticator-App eines Kontos zurücksetzen (v1.84, Handy verloren) – Werte nur über data-uid
+document.addEventListener("click",async e=>{
+  const btn=e.target.closest(".acc-2fa-btn");
+  if(!btn)return;
+  if(!confirm("App-Anmeldung für dieses Konto zurücksetzen? Danach reicht wieder das Passwort."))return;
+  btn.disabled=true;
+  try{
+    const resp=await fetch(`/api/admin/users/${encodeURIComponent(btn.dataset.uid)}/2fa-reset`,{method:"POST",headers:{"X-Upload-Token":localStorage.getItem("ut")||""}});
+    const r=await resp.json().catch(()=>({}));
+    if(resp.ok){btn.remove();}else{alert("❌ "+(r.error||"Fehler – bitte erneut versuchen"));btn.disabled=false;}
+  }catch(err){alert("❌ Keine Verbindung – bitte erneut versuchen");btn.disabled=false;}
 });
 
 function scrollToAccLetter(l){
@@ -4351,6 +4365,7 @@ function showInfoModal(){
         <div><strong>Jahresplanung mit anderen Vereinen</strong><span>Im Vereinsbereich Termine erst als Entwurf anlegen &ndash; auch aus dem Vorjahr &uuml;bernommen &ndash; und in einer <b>Planungsrunde</b> mit den Vereinen der Gemeinde abstimmen: Jeder sieht die Entw&uuml;rfe der anderen und wo sich Termine &uuml;berschneiden. Eine Runde startet jeder Verein selbst und l&auml;dt per Link oder Code ein. Ver&ouml;ffentlicht wird erst, wenn ihr es wollt.</span></div>
         <div><strong>Protokolle und Satzung ablegen</strong><span>Unter &bdquo;Dokumente&ldquo; legt ihr Protokolle, die Satzung und andere Unterlagen ab &ndash; als Datei (PDF, Foto, Word) oder direkt geschrieben, mit Tagesordnungspunkten und Beschl&uuml;ssen, fertig als PDF oder Word. Eigene Kategorien (z.&nbsp;B. Festschriften) und Sitzungsarten legt ihr direkt im Auswahlfeld an, gesucht wird auch im Text. Nur f&uuml;r euren Verein sichtbar, nicht &ouml;ffentlich. Ein Vereinsadmin schaltet den Bereich einmal frei (AV-Vertrag, kostenlos). Dokumente lassen sich auf &bdquo;nur Vorstand&ldquo; stellen; Admins sehen, wer was ge&ouml;ffnet hat, und k&ouml;nnen alles als ZIP herunterladen.</span></div>
         <div><strong>Datenschutz best&auml;tigen</strong><span>Jedes Konto best&auml;tigt einmal, dass es die Datenschutzerkl&auml;rung gelesen hat und die Nutzungsbedingungen akzeptiert &ndash; bei der Registrierung, beim Annehmen einer Einladung oder beim n&auml;chsten Aufruf des Vereinsbereichs. Erneut gefragt wird nur, wenn sich die Erkl&auml;rung &auml;ndert.</span></div>
+        <div><strong>Anmeldung mit Authenticator-App</strong><span>Freiwillig f&uuml;r Vereinsadmins: Unter Einstellungen l&auml;sst sich zus&auml;tzlich zum Passwort ein Code aus einer App einschalten (z.&nbsp;B. Passw&ouml;rter auf dem iPhone). Zehn Ersatzcodes helfen, wenn das Handy fehlt.</span></div>
       </div>
       <div class="help-row" style="padding:8px 0 12px;border-bottom:1.5px solid var(--border);margin-bottom:4px">
         <span class="help-icon">${icon("mail",20)}</span>
@@ -4428,7 +4443,7 @@ function showInfoModal(){
         <span class="help-icon">${icon("scale",20)}</span>
         <div><strong>Impressum</strong><span>Josef Fischer &middot; H&ouml;lskofen 13 &middot; 84092 Bayerbach b. Ergoldsbach<br><a href="mailto:info@vereinskalender.online" style="color:var(--accent);text-decoration:none">info@vereinskalender.online</a></span></div>
       </div>
-      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.83 &middot; 2026-10-10 &middot; a sEpp-App</p>
+      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.84 &middot; 2026-10-10 &middot; a sEpp-App</p>
       <button onclick="document.getElementById('info-modal').remove()" style="width:100%;margin-top:16px;padding:12px;background:none;border:1.5px solid var(--border2);border-radius:12px;font-size:14px;color:var(--text2);cursor:pointer">Schlie&szlig;en</button>
     </div>`;
   document.body.appendChild(m);

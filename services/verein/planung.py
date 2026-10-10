@@ -227,6 +227,7 @@ def _vorlagen_hilfen():
             "darf": _ist_admin(), "kollision_js": KOLLISION_JS,
             # Dokumentenbereich freigeschaltet (AV-Vertrag in aktueller Fassung, v1.83) + einmaliger Hinweis
             "avv_frei": bool(user) and user.get("avv_fassung") == AVV_FASSUNG,
+            "totp_aktiv": bool(user) and bool(user.get("totp_secret")),
             "hinweis_dokumente": bool(user) and _ist_admin() and user.get("avv_fassung") != AVV_FASSUNG
                                  and not user.get("hinweis_dokumente")}
 

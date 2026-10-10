@@ -22,6 +22,7 @@
 {% endif %}
 {{ eintrag("Dokumentenbereich", ("Freigeschaltet – AV-Vertrag abgeschlossen." if avv_frei else "Nicht freigeschaltet – Protokolle und Satzung ablegen nach Abschluss des AV-Vertrags."), url_for('planung.dokumente_freischalten')) }}
 {{ eintrag("Passwort ändern", "Neues Passwort setzen; alle anderen Anmeldungen werden beendet.", "/verein/passwort") }}
+{% if darf %}{{ eintrag("Anmeldung mit Authenticator-App", ("Eingeschaltet – beim Anmelden wird ein Code aus der App abgefragt." if totp_aktiv else "Freiwillig: zusätzlich zum Passwort ein Code aus einer App (z. B. Passwörter auf dem iPhone)."), "/verein/2fa") }}{% endif %}
 <p class="hint">Angemeldet als {{ email }} · {{ 'Vereinsadmin' if rolle == 'admin' else 'Mitglied' }}</p>
 
 <h2 id="quellen">Wer trägt eure Termine ein?</h2>

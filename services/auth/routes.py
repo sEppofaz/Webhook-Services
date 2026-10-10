@@ -10,7 +10,7 @@ from functools import wraps
 from urllib.parse import quote
 
 import bcrypt
-from flask import Blueprint, jsonify, make_response, redirect, request
+from flask import Blueprint, jsonify, make_response, redirect, request, session
 
 from shared.vk_db import (
     DS_FASSUNG, SESSION_TIMEOUT_HOURS, create_session, db_conn, delete_session, delete_user_sessions,
@@ -767,10 +767,7 @@ def login():
                             return resp
 
         if login_user_id is not None:
-            session_token = create_session(login_user_id)
-            resp = make_response(redirect(_weiter_ziel() or "/verein/termine"))
-            resp.set_cookie("vk_session", session_token, httponly=True, secure=_COOKIE_SECURE, samesite="Lax", max_age=SESSION_TIMEOUT_HOURS * 3600)
-            return resp
+            return _anmelden(login_user_id)
 
     tok = get_csrf_token()
     form = f"""
@@ -809,9 +806,7 @@ def login_verein_waehlen():
         valid_ids = [uid for uid, _ in choices]
         if chosen_id not in valid_ids:
             return redirect("/verein/login")
-        session_token = create_session(chosen_id)
-        resp = make_response(redirect(_weiter_ziel() or "/verein/termine"))
-        resp.set_cookie("vk_session", session_token, httponly=True, secure=_COOKIE_SECURE, samesite="Lax", max_age=SESSION_TIMEOUT_HOURS * 3600)
+        resp = _anmelden(chosen_id)
         resp.delete_cookie("vk_preauth")
         return resp
 
@@ -881,6 +876,210 @@ def datenschutz_bestaetigen():
 </form>
 <p class="hint" style="margin-top:1rem">Angemeldet als {html.escape(user["email"])} · {html.escape(user["verein_name"])}</p>"""
     return _page("Datenschutz", body)
+
+
+# ── Anmeldung mit Authenticator-App (2FA, v1.84, freiwillig für Vereinsadmins) ──
+# TOTP (pyotp, RFC 6238) + 10 Ersatzcodes (bcrypt in `totp_recovery_hashes`, je einmal gültig). Nach richtigem
+# Passwort entsteht die Sitzung erst nach dem Code (`/verein/login/2fa`, Pre-Auth-Token im Cookie `vk_2fa`).
+# Fehlversuche zählen in dieselbe Sperre wie beim Passwort. Josef setzt bei Geräteverlust zurück
+# (`POST /api/admin/users/<id>/2fa-reset`).
+
+TOTP_ISSUER = "Vereinskalender"
+ERSATZ_ANZAHL = 10
+
+
+def _sitzung_starten(uid: int):
+    resp = make_response(redirect(_weiter_ziel() or "/verein/termine"))
+    resp.set_cookie("vk_session", create_session(uid), httponly=True, secure=_COOKIE_SECURE, samesite="Lax",
+                    max_age=SESSION_TIMEOUT_HOURS * 3600)
+    return resp
+
+
+def _anmelden(uid: int):
+    """Nach Passwort (und ggf. Vereinswahl): mit 2FA erst zur Code-Abfrage, sonst Sitzung."""
+    with db_conn() as conn:
+        row = conn.execute("SELECT totp_secret FROM vk_users WHERE id = ?", (uid,)).fetchone()
+    if row and row["totp_secret"]:
+        resp = make_response(redirect("/verein/login/2fa"))
+        resp.set_cookie("vk_2fa", _make_preauth([(uid, "")]), httponly=True, secure=_COOKIE_SECURE,
+                        samesite="Lax", max_age=300)
+        return resp
+    return _sitzung_starten(uid)
+
+
+def _ersatzcodes() -> tuple[list[str], str]:
+    """10 Codes wie `k7m2-9xqp` (ohne verwechselbare Zeichen) + JSON der bcrypt-Hashes."""
+    zeichen = "abcdefghjkmnpqrstuvwxyz23456789"
+    codes = ["".join(secrets.choice(zeichen) for _ in range(4)) + "-" + "".join(secrets.choice(zeichen) for _ in range(4))
+             for _ in range(ERSATZ_ANZAHL)]
+    import json as _json
+    return codes, _json.dumps([bcrypt.hashpw(c.encode(), bcrypt.gensalt(10)).decode() for c in codes])
+
+
+def _code_pruefen(conn, uid: int, secret: str, hashes_json: str | None, code: str) -> bool:
+    """TOTP (±30 s) oder ein Ersatzcode – der wird dabei verbraucht."""
+    import json as _json
+    import pyotp
+    code = "".join(code.split()).lower()
+    if code.isdigit() and len(code) == 6:
+        return bool(secret) and pyotp.TOTP(secret).verify(code, valid_window=1)
+    if len(code) == 8 and "-" not in code:
+        code = code[:4] + "-" + code[4:]
+    hashes = _json.loads(hashes_json or "[]")
+    for h in hashes:
+        if bcrypt.checkpw(code.encode(), h.encode()):
+            hashes.remove(h)
+            conn.execute("UPDATE vk_users SET totp_recovery_hashes = ? WHERE id = ?", (_json.dumps(hashes), uid))
+            return True
+    return False
+
+
+@auth_bp.route("/verein/login/2fa", methods=["GET", "POST"])
+def login_2fa():
+    token = request.cookies.get("vk_2fa", "")
+    choices = _peek_preauth(token)
+    if not choices:
+        return redirect("/verein/login")
+    uid = choices[0][0]
+    error = ""
+    if request.method == "POST":
+        if not validate_csrf():
+            return redirect("/verein/login")
+        now = datetime.utcnow()
+        with db_conn() as conn:
+            row = conn.execute("SELECT totp_secret, totp_recovery_hashes, login_attempts, locked_until FROM vk_users"
+                               " WHERE id = ? AND aktiv = 1", (uid,)).fetchone()
+            if not row:
+                return redirect("/verein/login")
+            if row["locked_until"] and datetime.fromisoformat(row["locked_until"]) > now:
+                error = f"Zu viele Fehlversuche. Bitte {LOCKOUT_MINUTES} Minuten warten."
+            elif _code_pruefen(conn, uid, row["totp_secret"], row["totp_recovery_hashes"], request.form.get("code", "")):
+                conn.execute("UPDATE vk_users SET login_attempts = 0, locked_until = NULL WHERE id = ?", (uid,))
+            else:
+                versuche = (row["login_attempts"] or 0) + 1
+                gesperrt = (now + timedelta(minutes=LOCKOUT_MINUTES)).isoformat() if versuche >= MAX_LOGIN_ATTEMPTS else None
+                conn.execute("UPDATE vk_users SET login_attempts = ?, locked_until = ? WHERE id = ?", (versuche, gesperrt, uid))
+                error = "Der Code stimmt nicht. Bitte den aktuellen Code aus der App eingeben."
+        if not error:
+            _pop_preauth(token)
+            resp = _sitzung_starten(uid)
+            resp.delete_cookie("vk_2fa")
+            return resp
+    tok = get_csrf_token()
+    body = f"""
+<p style="color:#aeaeb2;font-size:.9rem">Bitte den 6-stelligen Code aus deiner Authenticator-App eingeben.</p>
+{'<p class="err">' + error + '</p>' if error else ''}
+<form method="post" autocomplete="off">
+  {csrf_field(tok)}
+  <label>Code</label>
+  <input name="code" inputmode="numeric" autocomplete="one-time-code" required autofocus maxlength="12" placeholder="123456">
+  <button class="btn" type="submit">Anmelden</button>
+</form>
+<p class="hint">Handy nicht zur Hand? Einen deiner Ersatzcodes eingeben (z.&nbsp;B. k7m2-9xqp). Alles verloren? Schreib an <a href="mailto:{vk_mail.KONTAKT}">{vk_mail.KONTAKT}</a>.</p>
+<a class="btn btn-sec" href="/verein/login" style="margin-top:.5rem">← Zurück zum Login</a>"""
+    return _page("Bestätigungscode", body)
+
+
+@auth_bp.route("/verein/2fa", methods=["GET", "POST"])
+@require_verein_login
+def zwei_faktor(user):
+    """Einrichten, Ersatzcodes neu erzeugen, Abschalten – nur Vereinsadmins (Mitglieder schreiben nichts)."""
+    import pyotp
+    import segno
+    if user["role"] != "admin":
+        return redirect("/verein/einstellungen")
+    zurueck = '<a class="btn btn-sec" href="/verein/einstellungen" style="margin-top:.75rem">← Zurück zu den Einstellungen</a>'
+    tok = get_csrf_token()
+    fehler = ""
+    with db_conn() as conn:
+        row = conn.execute("SELECT totp_secret, totp_recovery_hashes FROM vk_users WHERE id = ?", (user["id"],)).fetchone()
+    aktiv = bool(row["totp_secret"])
+
+    def codes_seite(codes, titel):
+        liste = "".join(f'<li><code style="white-space:nowrap">{c}</code></li>' for c in codes)
+        return _page(titel, f"""
+<p class="ok">Ab jetzt fragt die Anmeldung nach dem Code aus der App.</p>
+<div class="card"><b>Deine Ersatzcodes</b>
+<p class="hint">Jeder Code gilt einmal – falls das Handy fehlt. Jetzt ausdrucken oder sicher notieren; sie werden nur dieses eine Mal angezeigt.</p>
+<ol style="columns:2 9rem;font-size:1rem;line-height:1.8;padding-left:1.6rem">{liste}</ol>
+<button class="btn btn-sec" onclick="window.print()">Drucken</button></div>
+{zurueck}""")
+
+    if request.method == "POST":
+        if not validate_csrf():
+            return _page("Fehler", '<p class="err">Ungültige Anfrage. Bitte Seite neu laden.</p>'), 403
+        aktion, code = request.form.get("aktion", ""), request.form.get("code", "")
+        if aktion == "einrichten" and not aktiv:
+            secret = session.get("totp_neu", "")
+            if secret and pyotp.TOTP(secret).verify("".join(code.split()), valid_window=1):
+                codes, hashes = _ersatzcodes()
+                with db_conn() as conn:
+                    conn.execute("UPDATE vk_users SET totp_secret = ?, totp_recovery_hashes = ? WHERE id = ?",
+                                 (secret, hashes, user["id"]))
+                session.pop("totp_neu", None)
+                log_audit("2fa_eingerichtet", f"user_{user['id']}", user["verein_key"] or "", user["id"])
+                return codes_seite(codes, "Authenticator-App eingerichtet")
+            fehler = "Der Code stimmt nicht. Bitte den aktuellen Code aus der App eingeben."
+        elif aktion in ("ersatz", "aus") and aktiv:
+            with db_conn() as conn:
+                ok = _code_pruefen(conn, user["id"], row["totp_secret"], row["totp_recovery_hashes"], code)
+                if ok and aktion == "aus":
+                    conn.execute("UPDATE vk_users SET totp_secret = NULL, totp_recovery_hashes = NULL WHERE id = ?",
+                                 (user["id"],))
+            if ok and aktion == "aus":
+                log_audit("2fa_abgeschaltet", f"user_{user['id']}", user["verein_key"] or "", user["id"])
+                return _page("Authenticator-App abgeschaltet", '<p class="ok">Die Anmeldung fragt nicht mehr nach einem Code.</p>' + zurueck)
+            if ok:
+                codes, hashes = _ersatzcodes()
+                with db_conn() as conn:
+                    conn.execute("UPDATE vk_users SET totp_recovery_hashes = ? WHERE id = ?", (hashes, user["id"]))
+                return codes_seite(codes, "Neue Ersatzcodes")
+            fehler = "Der Code stimmt nicht."
+
+    if aktiv:
+        import json as _json
+        rest = len(_json.loads(row["totp_recovery_hashes"] or "[]"))
+        body = f"""
+<p class="ok">Die Anmeldung mit Authenticator-App ist eingeschaltet. Noch {rest} von {ERSATZ_ANZAHL} Ersatzcodes übrig.</p>
+{'<p class="err">' + fehler + '</p>' if fehler else ''}
+<form method="post" class="card">{csrf_field(tok)}
+  <label>Code aus der App oder ein Ersatzcode</label>
+  <input name="code" inputmode="numeric" autocomplete="one-time-code" required maxlength="12">
+  <button class="btn" name="aktion" value="ersatz" type="submit">Neue Ersatzcodes erzeugen</button>
+  <button class="btn btn-sec" name="aktion" value="aus" type="submit" style="margin-top:.5rem">Abschalten</button>
+</form>{zurueck}"""
+        return _page("Anmeldung mit Authenticator-App", body)
+
+    secret = session.get("totp_neu") or pyotp.random_base32()
+    session["totp_neu"] = secret
+    uri = pyotp.TOTP(secret).provisioning_uri(name=user["email"], issuer_name=f"{TOTP_ISSUER} {user['verein_name']}"[:60])
+    qr = segno.make(uri, error="m").svg_inline(scale=5, border=2, dark="#1c1c1e", light="#ffffff")
+    gruppiert = " ".join(secret[i:i + 4] for i in range(0, len(secret), 4))
+    body = f"""
+<p style="color:#aeaeb2;font-size:.9rem">Zusätzlich zum Passwort fragt die Anmeldung dann nach einem 6-stelligen Code aus einer App (z.&nbsp;B. Passwörter auf dem iPhone, Google Authenticator, Microsoft Authenticator). Freiwillig – schützt den Vereinsbereich, falls jemand euer Passwort kennt.</p>
+{'<p class="err">' + fehler + '</p>' if fehler else ''}
+<div class="card"><b>1. In der App hinzufügen</b>
+  <div style="background:#fff;border-radius:10px;padding:8px;width:max-content;max-width:100%;margin:.75rem 0">{qr}</div>
+  <p class="hint">Am Handy direkt: <a href="{html.escape(uri)}">In Authenticator-App öffnen</a> · oder Schlüssel abtippen: <code style="user-select:all">{gruppiert}</code></p>
+</div>
+<form method="post" class="card">{csrf_field(tok)}
+  <b>2. Code aus der App eingeben</b>
+  <input name="code" inputmode="numeric" autocomplete="one-time-code" required maxlength="8" placeholder="123456" style="margin-top:.5rem">
+  <button class="btn" name="aktion" value="einrichten" type="submit">Einschalten</button>
+</form>{zurueck}"""
+    return _page("Anmeldung mit Authenticator-App", body)
+
+
+@auth_bp.route("/api/admin/users/<int:user_id>/2fa-reset", methods=["POST"])
+def admin_2fa_reset(user_id: int):
+    """Josef: Authenticator-App eines Kontos zurücksetzen (Handy verloren)."""
+    token = request.headers.get("X-Upload-Token", "")
+    if not UPLOAD_TOKEN or not hmac.compare_digest(token, UPLOAD_TOKEN):
+        return {"error": "Unauthorized"}, 401
+    with db_conn() as conn:
+        n = conn.execute("UPDATE vk_users SET totp_secret = NULL, totp_recovery_hashes = NULL, login_attempts = 0,"
+                         " locked_until = NULL WHERE id = ? AND totp_secret IS NOT NULL", (user_id,)).rowcount
+    return ({"ok": True}, 200) if n else ({"error": "Für dieses Konto ist keine Authenticator-App eingerichtet."}, 404)
 
 
 # ── Logout ───────────────────────────────────────────────────────────────────
@@ -1057,7 +1256,7 @@ def admin_users():
         users = conn.execute(
             """SELECT u.id, u.email, u.name, u.telefon, u.aktiv,
                       u.email_verified, u.created_at, u.role, u.verein_id,
-                      u.ds_fassung, u.ds_bestaetigt_am
+                      u.ds_fassung, u.ds_bestaetigt_am, (u.totp_secret IS NOT NULL) AS totp_aktiv
                FROM vk_users u""",
         ).fetchall()
     users_by_verein: dict = {}
