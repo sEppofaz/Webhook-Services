@@ -362,6 +362,13 @@ def _bloecke(text: str, werte: dict) -> str:
     return "\n".join(teile)
 
 
+def _pitch_links(text: str) -> str:
+    """„Vereinskalender.online" in der Kurzvorstellung wird zum Link (v1.73, jede Schreibweise). Ziel fest im Code;
+    nicht in einer schon geschriebenen Adresse (https://…, …@…)."""
+    return re.sub(r"(?<![/\w.@-])(vereinskalender\.online)(?![\w-])",
+                  lambda m: f'<a href="{BASE_URL}" style="color:#6D28D9">{m.group(1)}</a>', text, flags=re.I)
+
+
 def baue_mail(art: str, werte: dict, gruss: str = "", eigene: dict | None = None,
               pitch: str | None = None) -> tuple[str, str]:
     """(Betreff, HTML) einer Mail. `eigene` = Texte aus dem Formular (Vorschau vor dem Speichern),
@@ -381,7 +388,7 @@ def baue_mail(art: str, werte: dict, gruss: str = "", eigene: dict | None = None
         body = _mit_gruss(body, gruss)
     pitch = texte("pitch")["text"] if pitch is None else pitch
     if pitch.strip():                                     # leer = Kurzvorstellung abgeschaltet
-        body += f'\n<div class="pitch">{_bloecke(pitch, {})}</div>'
+        body += f'\n<div class="pitch">{_pitch_links(_bloecke(pitch, {}))}</div>'
     titel = html.escape(_ersetzen(t["ueberschrift"], werte, False))
     return _ersetzen(t["betreff"], werte, False), _html_wrap(titel, body)
 
