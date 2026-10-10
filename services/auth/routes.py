@@ -79,6 +79,8 @@ _CSS = """
 body{background:#1c1c1e;color:#f2f2f7;font-family:-apple-system,sans-serif;
      max-width:480px;margin:0 auto;padding:1.5rem 1rem}
 h1{font-size:1.4rem;margin:0 0 1.5rem}
+[hidden]{display:none!important}
+.zurueck-oben{display:inline-flex;align-items:center;min-height:44px;padding:0 14px;margin:-.75rem 0 1rem;border-radius:10px;background:#2c2c2e;color:#0a84ff;font-weight:600;text-decoration:none;font-size:.95rem}
 label{display:block;font-size:.85rem;color:#aeaeb2;margin:.75rem 0 .25rem}
 input,select,textarea{width:100%;padding:.75rem;border-radius:.625rem;
   border:1px solid #3a3a3c;background:#2c2c2e;color:#f2f2f7;font-size:1rem}
@@ -138,13 +140,25 @@ _PW_TOGGLE_JS = """<script>
 })();
 </script>"""
 
+# Zurück-Knopf zusätzlich oben (v1.85, Josef): nur wenn der untere „← Zurück …“ beim Öffnen nicht im Bild ist
+_ZURUECK_OBEN_JS = """<script>
+(function(){
+  var alle=[].slice.call(document.querySelectorAll('a.btn.btn-sec')).filter(function(a){return /^\\s*←/.test(a.textContent);});
+  var unten=alle[alle.length-1],h1=document.querySelector('h1');
+  if(!unten||!h1||unten.getBoundingClientRect().top<window.innerHeight)return;
+  var oben=unten.cloneNode(true);oben.className='zurueck-oben';oben.removeAttribute('style');
+  h1.insertAdjacentElement('afterend',oben);
+})();
+</script>"""
+
+
 def _page(title: str, body: str) -> str:
     """Titel wird hier escapt (enthält teils den frei wählbaren Vereinsnamen), `body` ist fertiges HTML."""
     title = html.escape(title)
     return f"""<!doctype html><html lang="de"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{title} – Vereinskalender</title>{_CSS}</head>
-<body><h1>{title}</h1>{body}{_PW_TOGGLE_JS}</body></html>"""
+<body><h1>{title}</h1>{body}{_PW_TOGGLE_JS}{_ZURUECK_OBEN_JS}</body></html>"""
 
 
 _WEITER_RE = re.compile(r"^/verein/r/[A-Za-z0-9_-]{8,64}$")
@@ -318,17 +332,34 @@ _ORTSCHAFT_JS = """<script>
   var plz=document.querySelector('input[name=plz]'),ort=document.querySelector('input[name=heimatort]');
   var liste=document.getElementById('ort-liste'),info=document.getElementById('plz-info');
   if(!plz||!ort||!liste||!info)return;
-  var zuletzt='',ctl=null;
+  var zuletzt='',ctl=null,ANDERE='__andere';
   function zeige(t,warn){info.textContent=t;info.style.color=warn?'#ff9f0a':'#8e8e93';}
+  // v1.85: Ortschaften als echtes Auswahlfeld – iOS zeigt <datalist> bei leerem Feld nicht an.
+  // Das Textfeld bleibt das gesendete Feld (name=heimatort); „Andere Ortschaft …“ blendet es zum Tippen ein.
+  var sel=document.createElement('select');sel.id='ort-wahl';sel.setAttribute('aria-label','Ortschaft');sel.hidden=true;
+  ort.parentNode.insertBefore(sel,ort);
+  function auswahl(orte){
+    if(!orte.length){sel.hidden=true;ort.hidden=false;pflicht();return;}
+    var akt=ort.value.trim(),drin=orte.indexOf(akt)>=0;
+    sel.innerHTML='<option value="">Bitte wählen …</option>'+orte.map(function(o){return '<option>'+o.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</option>';}).join('')+'<option value="'+ANDERE+'">Andere Ortschaft eintippen …</option>';
+    sel.value=drin?akt:(akt?ANDERE:'');sel.hidden=false;ort.hidden=!(akt&&!drin);pflicht();
+  }
+  function pflicht(){ort.required=!ort.hidden;sel.required=!sel.hidden&&ort.hidden;}
+  sel.addEventListener('change',function(){
+    if(sel.value===ANDERE){ort.hidden=false;ort.value='';ort.focus();}
+    else{ort.hidden=true;ort.value=sel.value;}
+    pflicht();
+  });
   function laden(){
     var v=plz.value.trim();
-    if(!/^\\d{5}$/.test(v)){if(v!==zuletzt){liste.innerHTML='';zeige('',false);}zuletzt=v;return;}
+    if(!/^\\d{5}$/.test(v)){if(v!==zuletzt){liste.innerHTML='';zeige('',false);auswahl([]);}zuletzt=v;return;}
     if(v===zuletzt)return;zuletzt=v;
     if(ctl)ctl.abort();ctl=('AbortController' in window)?new AbortController():null;
     fetch('/api/orte?plz='+v,ctl?{signal:ctl.signal}:{}).then(function(r){return r.json();}).then(function(d){
       if(d.plz!==plz.value.trim())return;
       liste.innerHTML='';
       (d.orte||[]).forEach(function(o){var op=document.createElement('option');op.value=o;liste.appendChild(op);});
+      auswahl(d.orte||[]);
       if(d.gemeinden&&d.gemeinden.length){
         zeige(d.gemeinden.map(function(g){return g.name+' · '+g.landkreis;}).join(' / '),false);
       }else{zeige('Diese PLZ kennen wir nicht. Bitte prüfen – speichern geht trotzdem.',true);}
@@ -383,7 +414,7 @@ def _ortschaft_felder(plz: str, heimatort: str) -> str:
   <label>Ortschaft <span class="hint">(Heimatort des Vereins)</span></label>
   <input name="heimatort" type="text" required list="ort-liste" autocomplete="off" placeholder="erst PLZ eingeben, dann auswählen" value="{html.escape(heimatort)}">
   <datalist id="ort-liste"></datalist>
-  <p class="hint" style="margin:.35rem 0 0">Deine Ortschaft steht nicht in der Liste? Einfach eintippen.</p>"""
+  <p class="hint" style="margin:.35rem 0 0">Deine Ortschaft ist nicht dabei? „Andere Ortschaft eintippen …“ wählen.</p>"""
 
 
 _PLZ_QUELLE = ('<p class="hint">PLZ-Verzeichnis: <a href="https://www.openplzapi.org/">OpenPLZ API</a>, '
