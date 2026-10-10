@@ -18,10 +18,11 @@ from shared.flyer_store import upload_flyer, delete_flyer, pruefe_flyer
 from shared.rubriken import RUBRIKEN
 from shared.csrf import csrf_field, get_csrf_token, validate_csrf
 from shared.vk_db import (
-    db_conn, delete_user_sessions, get_session_user, log_audit,
+    DS_FASSUNG, db_conn, delete_user_sessions, get_session_user, log_audit,
     get_upload_count, increment_upload_quota,
 )
 from services.auth.routes import (
+    DS_FEHLER, DS_FELD, DS_KAESTCHEN,
     _CSS, _ORTSCHAFT_JS, _PLZ_QUELLE, _ortschaft_felder, _page, _session_token,
     _telegram_ortschaft_hinweis, ortschaft_geo, require_verein_login,
 )
@@ -850,11 +851,14 @@ def einladung():
                 error = "Passwort muss mindestens 8 Zeichen haben."
             elif pw != pw2:
                 error = "Passwörter stimmen nicht überein."
+            elif not request.form.get(DS_FELD):
+                error = DS_FEHLER
             else:
                 conn.execute(
                     """UPDATE vk_users SET password_hash=?, aktiv=1,
-                       einladungs_token=NULL, einladungs_expires=NULL WHERE id=?""",
-                    (_hash_pw(pw), row["id"]),
+                       einladungs_token=NULL, einladungs_expires=NULL,
+                       ds_fassung=?, ds_bestaetigt_am=CURRENT_TIMESTAMP WHERE id=?""",
+                    (_hash_pw(pw), DS_FASSUNG, row["id"]),
                 )
                 return redirect("/verein/login")
 
@@ -869,6 +873,7 @@ def einladung():
   <input name="password" type="password" required autocomplete="new-password">
   <label>Passwort wiederholen</label>
   <input name="password2" type="password" required autocomplete="new-password">
+  {DS_KAESTCHEN}
   <button class="btn" type="submit">Einladung annehmen</button>
 </form>"""
     return _page("Einladung annehmen", form)
@@ -1061,10 +1066,15 @@ def upload_process(user):
 
 # ── Datenschutz / Nutzungsbedingungen ────────────────────────────────────────
 
+# „Stand“ aus der Fassung, die jedes Konto bestätigt (`DS_FASSUNG`, `/verein/bestaetigen`)
+_MONATE = ("Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober",
+           "November", "Dezember")
+_STAND = f"{_MONATE[int(DS_FASSUNG[5:7]) - 1]} {DS_FASSUNG[:4]}"
+
 @verein_bp.route("/verein/datenschutz")
 def datenschutz():
     body = f"""
-<p style="color:#aeaeb2;font-size:.85rem">Stand: Oktober 2026</p>
+<p style="color:#aeaeb2;font-size:.85rem">Stand: {_STAND}</p>
 <div class="card">
 <h2 style="font-size:1rem;margin-top:0">1. Verantwortlicher</h2>
 <p>Josef Fischer, Hölskofen 13, 84092 Bayerbach b. Ergoldsbach · <a href="mailto:Vereinskalender@icloud.com">Vereinskalender@icloud.com</a></p>
@@ -1076,6 +1086,10 @@ def datenschutz():
 <div class="card">
 <h2 style="font-size:1rem;margin-top:0">3. Zweck der Verarbeitung</h2>
 <p>Die Daten dienen ausschließlich dem Betrieb des Vereinskalenders: Identifizierung des Vereins, Authentifizierung des Accounts und Benachrichtigungen (Bestätigungs-E-Mails).</p>
+</div>
+<div class="card">
+<h2 style="font-size:1rem;margin-top:0">3a. Rechtsgrundlage</h2>
+<p>Konto, Vereinsbereich, Planungsrunden und Vereinsdokumente verarbeiten wir zur Erfüllung des Nutzungsvertrags (Art. 6 Abs. 1 lit. b DSGVO) – ohne diese Daten ist die Nutzung nicht möglich. Die Telegram-Erinnerungen sind freiwillig (Art. 6 Abs. 1 lit. a DSGVO). Jedes Konto bestätigt bei der Registrierung bzw. beim ersten Aufruf des Vereinsbereichs, dass es diese Datenschutzerklärung gelesen hat und die Nutzungsbedingungen akzeptiert; dazu speichern wir Zeitpunkt und Fassung. Ändert sich die Erklärung wesentlich, wird erneut gefragt.</p>
 </div>
 <div class="card">
 <h2 style="font-size:1rem;margin-top:0">4. Speicherdauer</h2>
@@ -1108,7 +1122,7 @@ def datenschutz():
 @verein_bp.route("/verein/nutzungsbedingungen")
 def nutzungsbedingungen():
     body = f"""
-<p style="color:#aeaeb2;font-size:.85rem">Stand: Oktober 2026</p>
+<p style="color:#aeaeb2;font-size:.85rem">Stand: {_STAND}</p>
 <div class="card">
 <h2 style="font-size:1rem;margin-top:0">1. Nutzung</h2>
 <p>Der Vereinskalender vereinskalender.online dient der Veröffentlichung von Vereinsterminen und öffentlichen Veranstaltungen. Die Nutzung ist kostenlos.</p>

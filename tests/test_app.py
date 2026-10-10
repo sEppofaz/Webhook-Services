@@ -114,8 +114,8 @@ def verein_anlegen(name: str, key: str, email: str, role: str = "admin", **verei
             (key, name, "aktiv", verein.get("rubrik", "Verein"), verein.get("heimatort"), verein.get("plz"),
              verein.get("gemeinde"), verein.get("landkreis"))).fetchone()["id"]
         uid = c.execute(
-            "INSERT INTO vk_users (email, password_hash, verein_id, role, email_verified, aktiv)"
-            " VALUES (?,?,?,?,1,1) RETURNING id",
+            "INSERT INTO vk_users (email, password_hash, verein_id, role, email_verified, aktiv, ds_fassung)"
+            f" VALUES (?,?,?,?,1,1, '{vk_db.DS_FASSUNG}') RETURNING id",
             (email, bcrypt.hashpw(b"geheim123", bcrypt.gensalt(4)).decode(), vid, role)).fetchone()["id"]
     return vid, uid
 
@@ -124,8 +124,8 @@ def user_anlegen(verein_id: int, email: str, role: str = "member") -> int:
     import bcrypt
     with vk_db.db_conn() as c:
         return c.execute(
-            "INSERT INTO vk_users (email, password_hash, verein_id, role, email_verified, aktiv)"
-            " VALUES (?,?,?,?,1,1) RETURNING id",
+            "INSERT INTO vk_users (email, password_hash, verein_id, role, email_verified, aktiv, ds_fassung)"
+            f" VALUES (?,?,?,?,1,1, '{vk_db.DS_FASSUNG}') RETURNING id",
             (email, bcrypt.hashpw(b"geheim123", bcrypt.gensalt(4)).decode(), verein_id, role)).fetchone()["id"]
 
 
@@ -940,8 +940,8 @@ def test_mail_rueckmeldung():
             with vk_db.db_conn() as c:
                 vid = c.execute("INSERT INTO vereine_accounts (verein_key, verein_name, status) VALUES (?,?,'pending') RETURNING id",
                                 (name.lower().replace(" ", "_"), name)).fetchone()["id"]
-                uid = c.execute("INSERT INTO vk_users (email, password_hash, verein_id, role, email_verified, aktiv)"
-                                " VALUES (?,?,?, 'admin', ?, 1) RETURNING id", (mail, "x", vid, bestaetigt)).fetchone()["id"]
+                uid = c.execute("INSERT INTO vk_users (email, password_hash, verein_id, role, email_verified, aktiv, ds_fassung)"
+                                f" VALUES (?,?,?, 'admin', ?, 1, '{vk_db.DS_FASSUNG}') RETURNING id", (mail, "x", vid, bestaetigt)).fetchone()["id"]
             return vid, uid
 
         def freigeben_tg(vid, name):

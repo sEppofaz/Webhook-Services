@@ -556,6 +556,19 @@ def _dokumente_statistik() -> dict | None:
         return None
 
 
+def _datenschutz_statistik() -> dict | None:
+    """Wie viele nutzbare Konten (aktiv, E-Mail bestätigt, Verein freigegeben) die aktuelle Fassung bestätigt haben."""
+    try:
+        from shared.vk_db import DS_FASSUNG, db_conn
+        with db_conn() as c:
+            r = c.execute("SELECT COUNT(*) AS n, COALESCE(SUM(u.ds_fassung = ?), 0) AS ok FROM vk_users u"
+                          " JOIN vereine_accounts v ON v.id = u.verein_id"
+                          " WHERE u.aktiv = 1 AND u.email_verified = 1 AND v.status = 'aktiv'", (DS_FASSUNG,)).fetchone()
+        return {"fassung": DS_FASSUNG, "bestaetigt": r["ok"], "konten": r["n"]}
+    except Exception:
+        return None
+
+
 @kalender_bp.route("/api/admin/stats", methods=["GET"])
 def api_admin_stats():
     token = request.headers.get("X-Upload-Token", "")
@@ -680,6 +693,7 @@ def api_admin_stats():
         "ical_vereine_count": ical_vereine_count,
         "ical_ranking":       ical_ranking,
         "dokumente":          _dokumente_statistik(),
+        "datenschutz":        _datenschutz_statistik(),
     }, ensure_ascii=False), 200, {"Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store"}
 
 

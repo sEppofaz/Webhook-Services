@@ -7,6 +7,9 @@ from pathlib import Path
 
 DB_FILE = Path("/opt/rename-webhook/vk_accounts.db")
 SESSION_TIMEOUT_HOURS = 8
+# Fassung von Datenschutzerklärung + Nutzungsbedingungen (v1.79). Bei wesentlicher Textänderung hochzählen –
+# dann bestätigt jedes Konto beim nächsten Aufruf des Vereinsbereichs neu (`/verein/bestaetigen`).
+DS_FASSUNG = "2026-10"
 
 
 @contextmanager
@@ -188,6 +191,9 @@ def init_db():
             "ALTER TABLE vk_users ADD COLUMN email_neu TEXT",
             "ALTER TABLE vk_users ADD COLUMN email_neu_token TEXT",
             "ALTER TABLE vk_users ADD COLUMN email_neu_expires DATETIME",
+            # Kenntnisnahme Datenschutz/Nutzungsbedingungen je Fassung (v1.79), Verlauf zusätzlich in vk_audit
+            "ALTER TABLE vk_users ADD COLUMN ds_fassung TEXT",
+            "ALTER TABLE vk_users ADD COLUMN ds_bestaetigt_am DATETIME",
         ]:
             try:
                 conn.execute(col_sql)
@@ -224,7 +230,7 @@ def get_session_user(token: str) -> dict | None:
     with db_conn() as conn:
         row = conn.execute(
             """SELECT u.id, u.email, u.role, u.aktiv,
-                      u.email_verified, u.totp_secret,
+                      u.email_verified, u.totp_secret, u.ds_fassung,
                       v.id as verein_id, v.verein_key, v.verein_name, v.status as verein_status
                FROM vk_sessions s
                JOIN vk_users u ON u.id = s.user_id

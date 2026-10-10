@@ -7,13 +7,14 @@ import threading
 from datetime import datetime, timedelta
 from difflib import SequenceMatcher
 from functools import wraps
+from urllib.parse import quote
 
 import bcrypt
 from flask import Blueprint, jsonify, make_response, redirect, request
 
 from shared.vk_db import (
-    SESSION_TIMEOUT_HOURS, create_session, db_conn, delete_session, delete_user_sessions,
-    get_session_user, init_db,
+    DS_FASSUNG, SESSION_TIMEOUT_HOURS, create_session, db_conn, delete_session, delete_user_sessions,
+    get_session_user, init_db, log_audit,
 )
 from shared.kalender_core import lookup_plz, _make_verein_key
 from shared.rubriken import RUBRIKEN
@@ -160,6 +161,22 @@ def _session_token() -> str:
     return request.cookies.get("vk_session", "")
 
 
+# Kenntnisnahme Datenschutz/Nutzungsbedingungen (v1.79) – dasselbe Kästchen bei Registrierung, Einladung und
+# `/verein/bestaetigen`. Bewusst keine Einwilligung (Art. 6 Abs. 1 a), Grundlage ist der Nutzungsvertrag.
+DS_FELD = "datenschutz_gelesen"
+DS_KAESTCHEN = f"""<div class="chk">
+    <input type="checkbox" name="{DS_FELD}" id="dsg" required>
+    <label for="dsg">Ich habe die <a href="/verein/datenschutz" target="_blank" rel="noopener">Datenschutzerklärung</a> gelesen und akzeptiere die <a href="/verein/nutzungsbedingungen" target="_blank" rel="noopener">Nutzungsbedingungen</a>.</label>
+  </div>"""
+DS_FEHLER = "Bitte bestätigen, dass du die Datenschutzerklärung gelesen hast und die Nutzungsbedingungen akzeptierst."
+_ZIEL_RE = re.compile(r"^/verein/[A-Za-z0-9/_.\-]*(\?[A-Za-z0-9=&_.%+\-]*)?$")
+
+
+def _ziel_ok(ziel: str) -> str:
+    """Rücksprung nach der Bestätigung – nur Pfade im Vereinsbereich, kein offener Redirect."""
+    return ziel if ziel and "//" not in ziel and _ZIEL_RE.match(ziel) and not ziel.startswith("/verein/bestaetigen") else ""
+
+
 def require_verein_login(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -170,6 +187,10 @@ def require_verein_login(f):
             return redirect("/verein/login?hint=verify")
         if user["verein_status"] not in ("aktiv",):
             return redirect("/verein/login?hint=pending")
+        if user.get("ds_fassung") != DS_FASSUNG:
+            ziel = request.path + ("?" + request.query_string.decode("latin-1") if request.query_string else "")
+            ziel = _ziel_ok(ziel) if request.method == "GET" else ""
+            return redirect("/verein/bestaetigen" + (f"?ziel={quote(ziel, safe='/')}" if ziel else ""))
         return f(*args, user=user, **kwargs)
     return decorated
 
@@ -436,6 +457,8 @@ def register():
             error = "Bitte die Selbstverpflichtungserklärung bestätigen."
         elif not zn:
             error = "Bitte bestätigen, dass die Zugangsdaten notiert wurden."
+        elif not request.form.get(DS_FELD):
+            error = DS_FEHLER
         else:
             # Duplikat-Check: ähnlicher Vereinsname schon vorhanden?
             with db_conn() as conn:
@@ -470,10 +493,10 @@ def register():
                 conn.execute(
                     """INSERT INTO vk_users
                        (email, password_hash, verein_id, role, telefon, verify_token, verify_token_expires,
-                        anrede, vorname, nachname, name)
-                       VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                        anrede, vorname, nachname, name, ds_fassung, ds_bestaetigt_am)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)""",
                     (email, _hash_pw(pw), verein_id, "admin", telefon or None, token, expires,
-                     anrede, vorname, nachname, f"{vorname} {nachname}"),
+                     anrede, vorname, nachname, f"{vorname} {nachname}", DS_FASSUNG),
                 )
             send_verify_email(email, token, gruss=gruss_aus(form_data))
             _telegram_approve_msg(verein_id, verein_name, email,
@@ -557,6 +580,7 @@ def register():
     <input type="checkbox" name="zugangsdaten_notiert" id="zn" required>
     <label for="zn">Ich habe die Zugangsdaten (E-Mail-Adresse + Passwort) notiert.</label>
   </div>
+  {DS_KAESTCHEN}
   <button class="btn" type="submit" id="reg-btn">Registrieren</button>
 </form>
 <a class="btn btn-sec" href="/verein/login" style="margin-top:.5rem">← Abbrechen</a>
@@ -581,6 +605,8 @@ document.querySelector('form').addEventListener('submit',function(e){{
   if(sv&&!sv.checked){{sv.closest('.chk').classList.add('field-err');if(!first)first=sv;}}
   const zn=this.querySelector('[name=zugangsdaten_notiert]');
   if(zn&&!zn.checked){{zn.closest('.chk').classList.add('field-err');if(!first)first=zn;}}
+  const ds=this.querySelector('[name={DS_FELD}]');
+  if(ds&&!ds.checked){{ds.closest('.chk').classList.add('field-err');if(!first)first=ds;}}
   if(first){{e.preventDefault();first.scrollIntoView({{behavior:'smooth',block:'center'}});first.focus();}}
   else if(btn){{btn.disabled=true;btn.textContent='Wird registriert…';}}
 }});
@@ -810,6 +836,53 @@ def login_verein_waehlen():
     return _page("Verein wählen", body)
 
 
+# ── Datenschutz bestätigen (v1.79) ───────────────────────────────────────────
+
+@auth_bp.route("/verein/bestaetigen", methods=["GET", "POST"])
+def datenschutz_bestaetigen():
+    """Kenntnisnahme je Fassung (`DS_FASSUNG`). Bewusst ohne `require_verein_login` – der leitet hierher um."""
+    user = get_session_user(_session_token())
+    if not user:
+        return redirect("/verein/login")
+    if not user["email_verified"]:
+        return redirect("/verein/login?hint=verify")
+    if user["verein_status"] != "aktiv":
+        return redirect("/verein/login?hint=pending")
+    ziel = _ziel_ok(request.values.get("ziel", ""))
+    weiter = ziel or _weiter_ziel() or "/verein/termine"
+    if user.get("ds_fassung") == DS_FASSUNG:
+        return redirect(weiter)
+    fehler = ""
+    if request.method == "POST":
+        if not validate_csrf():
+            return _page("Fehler", '<p class="err">Ungültige Anfrage. Bitte Seite neu laden.</p>'), 403
+        if request.form.get(DS_FELD):
+            with db_conn() as conn:
+                conn.execute("UPDATE vk_users SET ds_fassung = ?, ds_bestaetigt_am = CURRENT_TIMESTAMP WHERE id = ?",
+                             (DS_FASSUNG, user["id"]))
+            log_audit("datenschutz_bestaetigt", DS_FASSUNG, user["verein_key"] or "", user["id"])
+            return redirect(weiter)
+        fehler = DS_FEHLER
+    tok = get_csrf_token()
+    neu = "Die Datenschutzerklärung und die Nutzungsbedingungen haben sich geändert." if user.get("ds_fassung") \
+        else "Bevor es weitergeht, bitte einmal bestätigen."
+    body = f"""
+<p style="color:#aeaeb2;font-size:.9rem">{neu} Wir speichern nur, wann du welche Fassung bestätigt hast.</p>
+{'<p class="err">' + fehler + '</p>' if fehler else ''}
+<form method="post">
+  {csrf_field(tok)}
+  <input type="hidden" name="ziel" value="{html.escape(ziel)}">
+  {DS_KAESTCHEN}
+  <button class="btn" type="submit">Weiter</button>
+</form>
+<form method="post" action="/verein/logout">
+  {csrf_field(tok)}
+  <button class="btn btn-sec" type="submit" style="margin-top:.5rem">Abmelden</button>
+</form>
+<p class="hint" style="margin-top:1rem">Angemeldet als {html.escape(user["email"])} · {html.escape(user["verein_name"])}</p>"""
+    return _page("Datenschutz", body)
+
+
 # ── Logout ───────────────────────────────────────────────────────────────────
 
 @auth_bp.route("/verein/logout", methods=["POST"])
@@ -983,12 +1056,15 @@ def admin_users():
         ).fetchall()
         users = conn.execute(
             """SELECT u.id, u.email, u.name, u.telefon, u.aktiv,
-                      u.email_verified, u.created_at, u.role, u.verein_id
+                      u.email_verified, u.created_at, u.role, u.verein_id,
+                      u.ds_fassung, u.ds_bestaetigt_am
                FROM vk_users u""",
         ).fetchall()
     users_by_verein: dict = {}
     for u in users:
-        users_by_verein.setdefault(u["verein_id"], []).append(dict(u))
+        ud = dict(u)
+        ud["ds_aktuell"] = u["ds_fassung"] == DS_FASSUNG   # Datenschutz-Bestätigung der geltenden Fassung (v1.79)
+        users_by_verein.setdefault(u["verein_id"], []).append(ud)
     pflege = _pflege_je_verein()
     result = []
     for v in vereine:

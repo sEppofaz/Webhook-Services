@@ -86,8 +86,8 @@ def konto(name, key, email):
     with vk_db.db_conn() as c:
         vid = c.execute("INSERT INTO vereine_accounts (verein_key, verein_name, status) VALUES (?,?, 'aktiv') RETURNING id",
                         (key, name)).fetchone()["id"]
-        uid = c.execute("INSERT INTO vk_users (email, password_hash, verein_id, role, email_verified, aktiv) "
-                        "VALUES (?,?,?, 'admin', 1, 1) RETURNING id",
+        uid = c.execute("INSERT INTO vk_users (email, password_hash, verein_id, role, email_verified, aktiv, ds_fassung) "
+                        f"VALUES (?,?,?, 'admin', 1, 1, '{vk_db.DS_FASSUNG}') RETURNING id",
                         (email, bcrypt.hashpw(b"geheim123", bcrypt.gensalt(4)).decode(), vid)).fetchone()["id"]
     return vid, uid
 
@@ -95,8 +95,8 @@ def konto(name, key, email):
 def mitglied(vid, email):
     import bcrypt
     with vk_db.db_conn() as c:
-        return c.execute("INSERT INTO vk_users (email, password_hash, verein_id, role, email_verified, aktiv) "
-                         "VALUES (?,?,?, 'member', 1, 1) RETURNING id",
+        return c.execute("INSERT INTO vk_users (email, password_hash, verein_id, role, email_verified, aktiv, ds_fassung) "
+                         f"VALUES (?,?,?, 'member', 1, 1, '{vk_db.DS_FASSUNG}') RETURNING id",
                          (email, bcrypt.hashpw(b"geheim123", bcrypt.gensalt(4)).decode(), vid)).fetchone()["id"]
 
 
