@@ -312,6 +312,38 @@ def import_pdf_bytes(file_bytes: bytes, suffix: str) -> dict:
     return {"alle": parsed.get("termine", []), "auto_plz": parsed.get("plz", "")}
 
 
+# Felder, die ein Import (KI-Antwort, Excel) setzen darf – mit Höchstlänge. Alles andere (flyer_url, veranstalter,
+# quelle_url, id, erstellt_von …) kommt nie aus einer Datei: Eine präparierte PDF könnte sonst über die KI-Antwort
+# z. B. einen javascript:-Flyer oder einen fremden Veranstalter einschleusen (Review 2026-10-10).
+_IMPORT_FELDER = {"datum": 10, "uhrzeit": 5, "uhrzeit_bis": 5, "bezeichnung": 200, "ort": 200, "ortschaft": 100,
+                  "beschreibung": 1000, "quelle": 200}
+
+
+def import_felder(t) -> dict | None:
+    """Ein importierter Termin, nur mit erlaubten Feldern und gültigem Datum/Uhrzeit – sonst None (verworfen)."""
+    from shared.termin_felder import UHRZEIT_RE, datum_ok
+    if not isinstance(t, dict):
+        return None
+    out = {}
+    for k, laenge in _IMPORT_FELDER.items():
+        v = t.get(k)
+        if isinstance(v, (str, int, float)) and not isinstance(v, bool):
+            v = str(v).strip()[:laenge]
+            if v:
+                out[k] = v
+    if not datum_ok(out.get("datum", "")) or not out.get("bezeichnung"):
+        return None
+    if not UHRZEIT_RE.match(out.get("uhrzeit", "")):
+        out.pop("uhrzeit", None)
+        out.pop("uhrzeit_bis", None)
+    if out.get("uhrzeit_bis") and (not UHRZEIT_RE.match(out["uhrzeit_bis"]) or out["uhrzeit_bis"] == out.get("uhrzeit")):
+        out.pop("uhrzeit_bis")
+    out.setdefault("uhrzeit", "")
+    out.setdefault("ort", "")
+    out["id"] = str(uuid.uuid4())[:8]
+    return out
+
+
 def _do_save_import(alle: list, auto_plz: str, form_plz: str,
                     verein_ortschaften: dict | None = None,
                     key_remappings: dict | None = None,
@@ -342,9 +374,10 @@ def _do_save_import(alle: list, auto_plz: str, form_plz: str,
 
     by_verein: dict = {}
     for t in alle:
-        t_copy = {k: v for k, v in t.items() if k != "verein"}
-        t_copy.setdefault("id", str(uuid.uuid4())[:8])
-        name = (t.get("verein") or "Unbekannt").strip() or "Unbekannt"
+        t_copy = import_felder(t)
+        if t_copy is None:
+            continue
+        name = (str(t.get("verein") or "").strip() or "Unbekannt")[:200]
         by_verein.setdefault(name, []).append(t_copy)
 
     result_vereine: list = []

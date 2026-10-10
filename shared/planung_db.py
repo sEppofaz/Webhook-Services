@@ -445,3 +445,31 @@ def pruefkreis_setzen(verein_key: str, dazu: set, ohne: set) -> None:
         c.execute("DELETE FROM pruefkreis WHERE verein_key = ?", (verein_key,))
         c.executemany("INSERT INTO pruefkreis (verein_key, ziel_key, art) VALUES (?,?,?)",
                       [(verein_key, k, "dazu") for k in sorted(dazu)] + [(verein_key, k, "ohne") for k in sorted(ohne)])
+
+
+# ── Vereinskonto gelöscht (Review 2026-10-10) ────────────────────────────────
+
+def verein_loeschen(verein_key: str) -> dict:
+    """Planungsdaten eines gelöschten Vereins entfernen: Entwürfe und Prüfkreis weg (auch als Ziel anderer Vereine).
+    In Runden bleibt die Teilnahme als „verlassen“ stehen – so bleiben Verlauf und Ergebnisse der anderen Vereine
+    vollständig, und der Key wird nicht an einen neuen Verein vergeben (`_unique_verein_key`). Organisiert der Verein
+    eine Runde, übernimmt der am längsten beteiligte andere Verein; ohne andere Teilnehmer und ohne Ergebnis fällt
+    die Runde weg."""
+    n = {"entwuerfe": 0, "runden_uebergeben": 0, "runden_geloescht": 0}
+    with db_conn() as c:
+        n["entwuerfe"] = c.execute("DELETE FROM entwurf WHERE verein_key = ?", (verein_key,)).rowcount
+        c.execute("DELETE FROM pruefkreis WHERE verein_key = ? OR ziel_key = ?", (verein_key, verein_key))
+        for r in c.execute("SELECT id FROM runde WHERE organisator = ?", (verein_key,)).fetchall():
+            nf = c.execute("SELECT verein_key FROM runde_teilnehmer WHERE runde_id = ? AND verein_key != ? AND aktiv = 1"
+                           " ORDER BY beigetreten_am LIMIT 1", (r["id"], verein_key)).fetchone()
+            if nf:
+                c.execute("UPDATE runde SET organisator = ? WHERE id = ?", (nf["verein_key"], r["id"]))
+                _protokoll(c, r["id"], nf["verein_key"], "übernimmt die Organisation", "Konto des Organisators gelöscht")
+                n["runden_uebergeben"] += 1
+            elif not c.execute("SELECT 1 FROM runde_ergebnis WHERE runde_id = ?", (r["id"],)).fetchone():
+                c.execute("DELETE FROM runde WHERE id = ?", (r["id"],))
+                n["runden_geloescht"] += 1
+        for r in c.execute("SELECT runde_id FROM runde_teilnehmer WHERE verein_key = ? AND aktiv = 1", (verein_key,)).fetchall():
+            _protokoll(c, r["runde_id"], verein_key, "ausgetreten", "Vereinskonto gelöscht")
+        c.execute("UPDATE runde_teilnehmer SET aktiv = 2 WHERE verein_key = ?", (verein_key,))
+    return n

@@ -12,7 +12,7 @@ from flask import Blueprint, make_response, redirect, request
 from shared.kalender_store import KalenderStore
 from shared.kalender_core import (
     VEREINSTERMINE_FILE, _HEIC_SUPPORTED, _do_save_import,
-    import_pdf_bytes, parse_excel_bytes,
+    import_pdf_bytes, log, parse_excel_bytes,
 )
 from shared.flyer_store import upload_flyer, delete_flyer, pruefe_flyer
 from shared.rubriken import RUBRIKEN
@@ -23,9 +23,11 @@ from shared.vk_db import (
 )
 from services.auth.routes import (
     DS_FEHLER, DS_FELD, DS_KAESTCHEN,
-    _CSS, _ORTSCHAFT_JS, _PLZ_QUELLE, _ortschaft_felder, _page, _session_token,
-    _telegram_ortschaft_hinweis, ortschaft_geo, require_verein_login,
+    VEREIN_NAME_MAX, _CSS, _ORTSCHAFT_JS, _PLZ_QUELLE, _ortschaft_felder, _page, _session_token,
+    _telegram_ortschaft_hinweis, aehnlicher_verein, ortschaft_geo, require_verein_login,
 )
+from shared.flask_notify import send_telegram
+from shared.telegram import freigabe_chat_id
 from shared.geo import plz_gueltig
 from shared.termin_felder import BESCHREIBUNG_MAX as _BESCHREIBUNG_MAX, datum_ok, zeit_fehler as _zeit_fehler
 from services.verein.planung import KOLLISION_JS
@@ -1059,7 +1061,10 @@ def upload_process(user):
             alle     = result["alle"]
             auto_plz = result.get("auto_plz", "")
         except Exception as ex:
-            body = f'<p class="err">Fehler bei der KI-Analyse: {html.escape(str(ex))}</p>' + _BACK_DASH
+            # Kein roher Fehlertext an den Verein (kann interne API-Meldungen enthalten, Review 2026-10-10)
+            log(f"❌  Vereins-Upload KI-Analyse ({verein_key}): {ex}")
+            body = ('<p class="err">Die Datei konnte gerade nicht ausgewertet werden. Bitte später noch einmal versuchen '
+                    'oder die Termine über die Excel-Vorlage eintragen.</p>' + _BACK_DASH)
             return _page("Fehler", body), 500
 
     if not alle:
@@ -1116,7 +1121,7 @@ def datenschutz():
 </div>
 <div class="card">
 <h2 style="font-size:1rem;margin-top:0">4. Speicherdauer</h2>
-<p>Accounts werden auf Anfrage gelöscht. Schreib dazu an <a href="mailto:info@vereinskalender.online">info@vereinskalender.online</a>. Eingetragene Termine werden nach Ende des jeweiligen Kalenderjahres bereinigt.</p>
+<p>Accounts werden auf Anfrage gelöscht. Schreib dazu an <a href="mailto:info@vereinskalender.online">info@vereinskalender.online</a>. Eingetragene Termine bleiben auch nach dem Termin gespeichert – der Verein sieht sie in seinem Bereich und kann sie als Vorlage für das nächste Jahr nutzen. Ein Verein kann seine Termine jederzeit löschen; sie werden dann nicht mehr angezeigt, intern bleibt ein Vermerk, damit derselbe Termin beim nächsten Abruf von Gemeinde-Webseiten nicht wieder auftaucht. Wird das Vereinskonto gelöscht, werden auf Wunsch auch alle Termine des Vereins gelöscht.</p>
 </div>
 <div class="card">
 <h2 style="font-size:1rem;margin-top:0">3b. Benachrichtigung des Betreibers</h2>
@@ -1265,8 +1270,16 @@ def verein_profil(user):
         email_wechsel = f["email"] != email.lower()
         eingabe_email = f["email"]
 
+        name_neu = f["verein_name"] != verein_name
+        aehnlich = aehnlicher_verein(f["verein_name"], ausser_id=user["verein_id"]) if name_neu else ""
         if not f["verein_name"] or len(f["verein_name"]) < 3:
             error = "Vereinsname muss mindestens 3 Zeichen haben."
+        elif len(f["verein_name"]) > VEREIN_NAME_MAX:
+            error = f"Der Vereinsname darf höchstens {VEREIN_NAME_MAX} Zeichen haben."
+        elif aehnlich:
+            error = (f"Ein Verein mit ähnlichem Namen ist bereits registriert: „{html.escape(aehnlich)}“. "
+                     "Falls der Name trotzdem stimmt, schreib an "
+                     '<a href="mailto:info@vereinskalender.online">info@vereinskalender.online</a>.')
         elif f["rubrik"] not in RUBRIKEN:
             error = "Bitte eine gültige Rubrik wählen."
         elif not plz_gueltig(f["plz"]):
@@ -1313,6 +1326,12 @@ def verein_profil(user):
 
             log_audit("email_wechsel_angefordert" if email_wechsel else "profil_geaendert",
                       "", user.get("verein_key") or "", user["id"])
+            if name_neu:   # Josef gibt jeden Verein persönlich frei – Umbenennen nach der Freigabe immer melden
+                try:
+                    send_telegram(freigabe_chat_id(), f"✏️ Verein umbenannt: {verein_name} → {f['verein_name']}\n"
+                                                      f"Konto: {user['email']}")
+                except Exception:
+                    pass
             _profil_in_kalender(user.get("verein_key"), f["verein_name"], verein_name, {
                 "rubrik": f["rubrik"], "heimatort": f["heimatort"], "plz": f["plz"],
                 "gemeinde": new_gemeinde, "landkreis": new_landkreis,

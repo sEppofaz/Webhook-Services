@@ -1,3 +1,4 @@
+import hmac
 import json
 import os
 import subprocess
@@ -284,7 +285,7 @@ def _collect_alle_termine_30() -> str:
 @telegram_bp.route("/webhook/todo", methods=["POST", "GET"])
 def webhook_todo():
     token = request.headers.get("X-Token", "") or request.args.get("token", "") or (request.get_json(force=True, silent=True) or {}).get("token", "")
-    if not _TODO_WEBHOOK_SECRET or token != _TODO_WEBHOOK_SECRET:
+    if not _TODO_WEBHOOK_SECRET or not hmac.compare_digest(str(token).encode(), _TODO_WEBHOOK_SECRET.encode()):
         return {"error": "Unauthorized"}, 401
     data = request.get_json(force=True, silent=True) or {}
     _text_val = next((v for k, v in data.items() if k.lower() == "text"), None)

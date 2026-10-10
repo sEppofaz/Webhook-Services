@@ -224,11 +224,30 @@ def _unique_verein_key(conn, verein_name: str) -> str:
     for i in range(1, 20):
         exists = key in belegt or conn.execute(
             "SELECT 1 FROM vereine_accounts WHERE verein_key = ?", (key,)
+        ).fetchone() or conn.execute(   # gelöschter Verein mit Runden-Verlauf: Key nicht neu vergeben
+            "SELECT 1 FROM runde_teilnehmer WHERE verein_key = ?", (key,)
         ).fetchone()
         if not exists:
             return key
         key = f"{base}_{i}"
     return f"{base}_{secrets.token_hex(3)}"
+
+
+VEREIN_NAME_MAX = 100
+
+
+def aehnlicher_verein(verein_name: str, ausser_id: int | None = None) -> str:
+    """Name eines bestehenden (nicht abgelehnten) Vereins, der dem neuen Namen zu ähnlich ist – sonst "".
+    Registrierung und Umbenennen im Vereinsprofil (Review 2026-10-10: Umbenennen lief an der Freigabe vorbei)."""
+    with db_conn() as conn:
+        existing = conn.execute(
+            "SELECT id, verein_name FROM vereine_accounts WHERE status != 'abgelehnt'"
+        ).fetchall()
+    for ex in existing:
+        if ex["id"] != ausser_id and \
+                SequenceMatcher(None, verein_name.lower(), ex["verein_name"].lower()).ratio() >= 0.85:
+            return ex["verein_name"]
+    return ""
 
 
 def _hash_pw(pw: str) -> str:
@@ -468,6 +487,8 @@ def register():
 
         if not verein_name or len(verein_name) < 3:
             error = "Bitte einen Vereinsnamen mit mindestens 3 Zeichen eingeben."
+        elif len(verein_name) > VEREIN_NAME_MAX:
+            error = f"Der Vereinsname darf höchstens {VEREIN_NAME_MAX} Zeichen haben."
         elif rubrik not in RUBRIKEN:
             error = "Bitte eine gültige Rubrik auswählen."
         elif not plz_gueltig(plz):
@@ -492,17 +513,12 @@ def register():
             error = DS_FEHLER
         else:
             # Duplikat-Check: ähnlicher Vereinsname schon vorhanden?
-            with db_conn() as conn:
-                existing = conn.execute(
-                    "SELECT verein_name FROM vereine_accounts WHERE status != 'abgelehnt'"
-                ).fetchall()
-            for ex in existing:
-                if SequenceMatcher(None, verein_name.lower(), ex["verein_name"].lower()).ratio() >= 0.85:
-                    error = (f'Ein Verein mit ähnlichem Namen ist bereits registriert: '
-                             f'„{html.escape(ex["verein_name"])}". '
-                             f'Falls du bereits einen Account hast, bitte einloggen. '
-                             f'Bei Problemen: <a href="mailto:info@vereinskalender.online">info@vereinskalender.online</a>')
-                    break
+            aehnlich = aehnlicher_verein(verein_name)
+            if aehnlich:
+                error = (f'Ein Verein mit ähnlichem Namen ist bereits registriert: '
+                         f'„{html.escape(aehnlich)}". '
+                         f'Falls du bereits einen Account hast, bitte einloggen. '
+                         f'Bei Problemen: <a href="mailto:info@vereinskalender.online">info@vereinskalender.online</a>')
 
         if not error:
             gemeinde, landkreis, hinweise = ortschaft_geo(heimatort, plz)
@@ -970,11 +986,11 @@ def _code_pruefen(conn, uid: int, secret: str, hashes_json: str | None, code: st
     code = "".join(code.split()).lower()
     if code.isdigit() and len(code) == 6:
         schritt = _totp_schritt(secret, code)
-        letzt = conn.execute("SELECT totp_letzt FROM vk_users WHERE id = ?", (uid,)).fetchone()[0]
-        if schritt is None or (letzt is not None and schritt <= letzt):
+        if schritt is None:
             return False
-        conn.execute("UPDATE vk_users SET totp_letzt = ? WHERE id = ?", (schritt, uid))
-        return True
+        # Lesen + Setzen in einer Anweisung: zwei gleichzeitige Anmeldungen können denselben Code nicht beide nutzen
+        return conn.execute("UPDATE vk_users SET totp_letzt = ? WHERE id = ? AND (totp_letzt IS NULL OR totp_letzt < ?)",
+                            (schritt, uid, schritt)).rowcount == 1
     if len(code) == 8 and "-" not in code:
         code = code[:4] + "-" + code[4:]
     hashes = _json.loads(hashes_json or "[]")
@@ -1602,6 +1618,9 @@ def admin_delete_verein(verein_id: int):
         geloescht_dokumente, dateien = dokumente_db.verein_loeschen(verein_key)
         for name in dateien:
             dokumente_store.entfernen(name)
+        # Entwürfe, Prüfkreis, Runden (Review 2026-10-10: blieben vorher liegen, Entwürfe sahen andere Runden weiter)
+        from shared import planung_db
+        planung_db.verein_loeschen(verein_key)
     geloescht_termine = 0
     if delete_termine and verein_key:
         try:

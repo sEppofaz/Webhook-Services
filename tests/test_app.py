@@ -1212,12 +1212,87 @@ def test_pitch():
     vk_mail.MAIL_TEXTE_FILE.unlink(missing_ok=True)
 
 
+# ── Review 2026-10-10 ───────────────────────────────────────────────────────
+def test_review_1010():
+    print("\nR10 · Review 2026-10-10: Import-Felder, Umbenennen, Konto löschen, Texte")
+    from shared.kalender_core import _do_save_import, import_felder
+    import services.verein.routes as vr
+    from shared import planung_db as P
+
+    # 1. Import übernimmt nur erlaubte Felder, prüft Datum/Uhrzeit
+    d = daten(); d["_labels"]["kiv"] = "KI-Verein"; d["kiv"] = []; schreibe(d)
+    _do_save_import([{"verein": "KI-Verein", "datum": "2099-03-01", "bezeichnung": "Fest", "uhrzeit": "19:00",
+                      "flyer_url": "javascript:alert(1)", "veranstalter": "FF Fremd", "quelle_url": "javascript:x",
+                      "id": "a1", "erstellt_von": "x@y.de", "_geo": {"orte": ["X"]}},
+                     {"verein": "KI-Verein", "datum": "2099-13-01", "bezeichnung": "Monat 13"},
+                     {"verein": "KI-Verein", "datum": "2099-03-02", "bezeichnung": "Zeit kaputt", "uhrzeit": "25:99",
+                      "uhrzeit_bis": "23:00"},
+                     {"verein": "KI-Verein", "datum": 20990303, "bezeichnung": "Zahl als Datum"},
+                     "kein dict"], "", "", verein_key="kiv")
+    t = daten()["kiv"]
+    pruefe([x["bezeichnung"] for x in t] == ["Fest", "Zeit kaputt"], "nur gültige Termine übernommen", t)
+    f = t[0]
+    pruefe(not {"flyer_url", "veranstalter", "quelle_url", "erstellt_von", "_geo"} & set(f) and f["id"] != "a1",
+           "fremde Felder (flyer_url, veranstalter …) und fremde id verworfen", f)
+    pruefe(t[1]["uhrzeit"] == "" and "uhrzeit_bis" not in t[1], "ungültige Uhrzeit → ganztägig, ohne bis-Uhrzeit")
+    pruefe(import_felder({"datum": "2099-01-01", "bezeichnung": "x" * 500})["bezeichnung"] == "x" * 200, "Länge begrenzt")
+
+    # 1b. Frontend öffnet nur https-Flyer
+    html_src = (ROOT / "kalender.html").read_text()
+    pruefe("/^https:\\/\\//i.test(flyerBtn.dataset.flyerUrl" in html_src, "Flyer-Klick prüft https")
+
+    # 2. Umbenennen im Profil: Ähnlichkeit, Länge, Meldung an Josef
+    verein_anlegen("Schützenverein Bachhausen", "sv_bach", "sv@bach.de")
+    vid, uid = verein_anlegen("Musikkapelle Ort", "mk_ort", "mk@ort.de", plz="84092", heimatort="Hölskofen")
+    cl, _ = client_fuer(uid); tok = csrf(cl)
+    gesendet = []
+    alt = vr.send_telegram
+    vr.send_telegram = lambda chat, text: gesendet.append(text)
+    try:
+        form = {"_csrf": tok, "rubrik": "Verein", "plz": "84092", "heimatort": "Hölskofen", "vorname": "Max",
+                "nachname": "Muster", "email": "mk@ort.de", "telefon": "0171"}
+        r = cl.post("/verein/profil", data={**form, "verein_name": "Schützenverein Bachhausen e.V."})
+        pruefe("ähnlichem Namen" in r.get_data(as_text=True) and not gesendet, "Umbenennen in fremden Namen abgelehnt")
+        r = cl.post("/verein/profil", data={**form, "verein_name": "M" * 101})
+        pruefe("höchstens 100" in r.get_data(as_text=True), "Vereinsname höchstens 100 Zeichen")
+        r = cl.post("/verein/profil", data={**form, "verein_name": "Blaskapelle Hölskofen"})
+        pruefe("Profil gespeichert" in r.get_data(as_text=True) and gesendet
+               and "Musikkapelle Ort → Blaskapelle Hölskofen" in gesendet[0], "Umbenennen gemeldet", gesendet)
+        gesendet.clear()
+        cl.post("/verein/profil", data={**form, "verein_name": "Blaskapelle Hölskofen"})
+        pruefe(not gesendet, "ohne Namensänderung keine Meldung")
+    finally:
+        vr.send_telegram = alt
+
+    # 3. Konto löschen räumt Planungsdaten auf
+    va, ua = verein_anlegen("Löschverein", "loesch_v", "l@v.de")
+    vb, ub = verein_anlegen("Bleibeverein", "bleibe_v", "b@v.de")
+    P.entwurf_neu("loesch_v", {"datum": "2099-04-01", "bezeichnung": "Entwurf weg"})
+    P.pruefkreis_setzen("bleibe_v", {"loesch_v"}, set())
+    r1 = P.runde_starten("Runde mit B", 2099, "loesch_v"); P.beitreten(r1, "bleibe_v")
+    r2 = P.runde_starten("Runde allein", 2099, "loesch_v")
+    rb = P.runde_starten("Runde von B", 2099, "bleibe_v"); P.beitreten(rb, "loesch_v")
+    app.test_client().delete(f"/api/admin/verein/{va}", headers=ADMIN, json={})
+    pruefe(not P.entwuerfe("loesch_v"), "Entwürfe gelöscht")
+    pruefe(P.pruefkreis("bleibe_v") == (set(), set()), "Prüfkreis anderer Vereine bereinigt")
+    pruefe(P.runde(r1)["organisator"] == "bleibe_v", "Runde an anderen Teilnehmer übergeben")
+    pruefe(P.runde(r2) is None, "Runde ohne andere Teilnehmer gelöscht")
+    pruefe("loesch_v" not in P.aktive_teilnehmer(rb), "nicht mehr aktiver Teilnehmer")
+    from services.auth.routes import _unique_verein_key
+    with vk_db.db_conn() as c:
+        pruefe(_unique_verein_key(c, "Löschverein") != "loesch_v", "Key wird nicht neu vergeben")
+
+    # 4. Datenschutz-Text ohne Jahresbereinigung
+    s = app.test_client().get("/verein/datenschutz").get_data(as_text=True)
+    pruefe("Kalenderjahres bereinigt" not in s and "bleiben auch nach dem Termin gespeichert" in s, "Speicherdauer korrekt")
+
+
 TESTS = [test_xss, test_telegram_secret, test_vereine_api_lock, test_erinnerung, test_sessions,
          test_admin_loeschen, test_admin_verein_meta, test_verknuepfen,
          test_ical_uids, test_registrierung_key, test_fremde_endpunkte,
          test_pending_atomar, test_import_vergangenheit, test_stats_zeit, test_cookies,
          test_freigabe_nachricht, test_store_mehrprozess, test_bot_tastatur, test_abo_mischregel, test_chips_ohne_onclick, test_rename_relevanz, test_import_ortschaft, test_register_pruefen, test_plz_check, test_quelle_pfarrbrief,
-         test_verdacht_und_schalter, test_mail_rueckmeldung, test_mail_lebenszeichen, test_freigabe_gruppe, test_mailtexte, test_pitch]
+         test_verdacht_und_schalter, test_mail_rueckmeldung, test_mail_lebenszeichen, test_freigabe_gruppe, test_mailtexte, test_pitch, test_review_1010]
 
 if __name__ == "__main__":
     for t in TESTS:
