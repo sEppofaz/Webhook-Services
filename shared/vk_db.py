@@ -9,10 +9,11 @@ DB_FILE = Path("/opt/rename-webhook/vk_accounts.db")
 SESSION_TIMEOUT_HOURS = 8
 # Fassung von Datenschutzerklärung + Nutzungsbedingungen (v1.79). Bei wesentlicher Textänderung hochzählen –
 # dann bestätigt jedes Konto beim nächsten Aufruf des Vereinsbereichs neu (`/verein/bestaetigen`).
-DS_FASSUNG = "2026-10.2"   # .2 = v1.83: Server-Logs, Anthropic, Telegram, Zugriffsprotokoll, AVV ergänzt
+DS_FASSUNG = "2026-10.3"   # .2 = v1.83: Server-Logs, Anthropic, Telegram, Zugriffsprotokoll, AVV ergänzt
+                           # .3 = v1.88: Nutzungsbedingungen 7 „Aufgaben des Vereinsadmins“, Datenschutz 4 Speicherdauer
 # Fassung des AV-Vertrags für den Dokumentenbereich (v1.83, ADR-032). Neue Fassung ⇒ Bestand bleibt lesbar,
 # Anlegen/Ändern erst nach erneutem Abschluss durch einen Vereinsadmin.
-AVV_FASSUNG = "2026-10"
+AVV_FASSUNG = "2026-10.2"   # .2 = v1.88: Pflichten des Auftraggebers (Zugänge, Vorstand, Betroffenenrechte)
 
 
 @contextmanager

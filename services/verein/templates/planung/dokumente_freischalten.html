@@ -17,6 +17,7 @@
 {% if ist_admin %}
 <form method="post" class="card">{{ csrf()|safe }}
   <p style="margin-top:0"><a href="/verein/avv" target="_blank" rel="noopener">AV-Vertrag lesen</a> (Fassung {{ AVV_FASSUNG }}, öffnet sich in einem neuen Tab, lässt sich drucken oder als PDF speichern)</p>
+  <p class="hint">Mit dem Vertrag übernimmt euer Verein die Verantwortung für die abgelegten Inhalte und dafür, wer Zugang hat: nur Vereinsangehörige einladen, Ausgeschiedene entfernen, „Vorstand“ nur für gewählte Vorstandsmitglieder (Ziffer 5 des Vertrags).</p>
   <label class="chk-zeile"><input type="checkbox" name="avv" required> Ich schließe den AV-Vertrag im Namen unseres Vereins ab.</label>
   <div class="aktionen"><button class="btn">Dokumentenbereich freischalten</button></div>
   <p class="hint" style="margin-bottom:0">Gespeichert werden Datum, Fassung und wer abgeschlossen hat. Ihr könnt das jederzeit unter Einstellungen nachsehen.</p>

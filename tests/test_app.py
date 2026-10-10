@@ -1287,12 +1287,25 @@ def test_review_1010():
     pruefe("Kalenderjahres bereinigt" not in s and "bleiben auch nach dem Termin gespeichert" in s, "Speicherdauer korrekt")
 
 
+def test_admin_aufgaben():
+    print("\nR11 · Aufgaben des Vereinsadmins (v1.88)")
+    s = app.test_client().get("/verein/nutzungsbedingungen").get_data(as_text=True)
+    pruefe('id="aufgaben"' in s and all(x in s for x in ("Zugänge:", "Vorstand:", "Zugangsdaten:", "Wechsel des Vereinsadmins")),
+           "Nutzungsbedingungen 7 mit allen Punkten")
+    s = app.test_client().get("/verein/avv").get_data(as_text=True)
+    pruefe("5. Pflichten des Auftraggebers" in s and "8. Haftung, Schluss" in s and vk_db.AVV_FASSUNG in s, "AVV Ziffer 5, neu nummeriert")
+    vid, uid = verein_anlegen("Aufgaben-Verein", "aufg_v", "a@aufg.de")
+    cl, _ = client_fuer(uid)
+    s = cl.get("/verein/mitglieder").get_data(as_text=True)
+    pruefe("Nur Personen einladen" in s and "nur für gewählte Vorstandsmitglieder" in s, "Hinweise auf der Mitglieder-Seite")
+
+
 TESTS = [test_xss, test_telegram_secret, test_vereine_api_lock, test_erinnerung, test_sessions,
          test_admin_loeschen, test_admin_verein_meta, test_verknuepfen,
          test_ical_uids, test_registrierung_key, test_fremde_endpunkte,
          test_pending_atomar, test_import_vergangenheit, test_stats_zeit, test_cookies,
          test_freigabe_nachricht, test_store_mehrprozess, test_bot_tastatur, test_abo_mischregel, test_chips_ohne_onclick, test_rename_relevanz, test_import_ortschaft, test_register_pruefen, test_plz_check, test_quelle_pfarrbrief,
-         test_verdacht_und_schalter, test_mail_rueckmeldung, test_mail_lebenszeichen, test_freigabe_gruppe, test_mailtexte, test_pitch, test_review_1010]
+         test_verdacht_und_schalter, test_mail_rueckmeldung, test_mail_lebenszeichen, test_freigabe_gruppe, test_mailtexte, test_pitch, test_review_1010, test_admin_aufgaben]
 
 if __name__ == "__main__":
     for t in TESTS:
