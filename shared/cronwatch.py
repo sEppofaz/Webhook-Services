@@ -317,16 +317,21 @@ def lebenszeichen(bewertungen: dict, jetzt: datetime) -> str:
     ok = [n for n in beob if jobs[n]["status"] == OK]
     schlecht = [n for n in beob if jobs[n]["status"] != OK]
     offen = len(jobs) - len(beob)
-    zeile = "🫀 Cron-Wächter %s: %d/%d Jobs ok" % (jetzt.astimezone(TZ).strftime("%d.%m. %H:%M"), len(ok), len(beob))
+    # Eine Zeile pro Bereich (2026-10-10, Josef): Zahlen und „ok" stehen untereinander, Problem in der Zeile seines Bereichs
+    def bereich(ok_n, gesamt, name, probleme):
+        if not probleme:
+            return "%d/%d %s ok" % (ok_n, gesamt, name)
+        return "⚠️ %d/%d %s ok – Problem: %s" % (ok_n, gesamt, name, ", ".join(sorted(probleme)))
+    zeilen = ["🫀 Cron-Wächter %s" % jetzt.astimezone(TZ).strftime("%d.%m. %H:%M"),
+              bereich(len(ok), len(beob), "Jobs", schlecht)]
     for k, (_, mehrzahl) in KATEGORIEN.items():
         if k == NEU_PREFIX:
             continue
         teil = {n: b for n, b in bewertungen.items() if n.startswith(k)}
         if teil:
-            zeile += ", %d/%d %s ok" % (sum(b["status"] == OK for b in teil.values()), len(teil), mehrzahl)
-            schlecht += [n[len(k):] for n, b in teil.items() if b["status"] != OK]
-    if schlecht:
-        zeile += " – Problem: %s" % ", ".join(sorted(schlecht))
+            zeilen.append(bereich(sum(b["status"] == OK for b in teil.values()), len(teil), mehrzahl,
+                                  [n[len(k):] for n, b in teil.items() if b["status"] != OK]))
+    zeile = "\n".join(zeilen)
     if offen:
         zeile += "\n%d weitere noch nicht unter Aufsicht" % offen
     neu = sorted(n[len(NEU_PREFIX):] for n in bewertungen if n.startswith(NEU_PREFIX))

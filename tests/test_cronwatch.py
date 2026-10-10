@@ -333,6 +333,10 @@ def test_timer_urls_system():
                            "timer:nf": {"status": cw.OK, "grund": ""}}, jetzt)
     pruefe("1/1 Jobs ok" in lz and "1/1 Timer ok" in lz and "1/2 Seiten ok" in lz and "Problem: kargl" in lz,
            "Lebenszeichen zählt Timer und Seiten", lz)
+    zeilen = lz.split("\n")
+    pruefe(zeilen[1] == "1/1 Jobs ok" and "1/1 Timer ok" in zeilen and
+           any(z.startswith("⚠️ 1/2 Seiten ok – Problem: ") and "kargl" in z for z in zeilen),
+           "Lebenszeichen: eine Zeile pro Bereich, Problem in seiner Zeile (2026-10-10)", zeilen)
     reg = ROOT / "cron_registry.json"
     timer, urls, grenz = cw.lade_dienste(reg, "timer"), cw.lade_dienste(reg, "urls"), cw.lade_grenzwerte(reg)
     pruefe({"newsletter-fetch", "orgkompass-erinnerungen", "certbot"} <= set(timer), "Registry: Timer eingetragen", sorted(timer))
