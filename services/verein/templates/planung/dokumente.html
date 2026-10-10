@@ -20,9 +20,11 @@
   <input id="hl-datei" type="file" name="datei" required accept=".pdf,.jpg,.jpeg,.png,.webp,.docx,.xlsx,.odt,.ods,image/*,application/pdf">
   <div class="zeile">
     <div><label for="hl-kat">Kategorie</label>
-      <select id="hl-kat" name="kategorie">{% for k, n in KATEGORIEN.items() %}<option value="{{ k }}"{{ ' selected' if k == neu_kat }}>{{ n }}</option>{% endfor %}</select></div>
+      <select id="hl-kat" name="kategorie" data-neu="hl-neu-kat">{% for k, n in KATEGORIEN.items() %}<option value="{{ k }}"{{ ' selected' if k == neu_kat }}>{{ n }}</option>{% endfor %}<option value="{{ NEU }}">+ Neue Kategorie …</option></select></div>
     <div><label for="hl-datum">Datum (Sitzung bzw. Stand)</label><input id="hl-datum" type="date" name="datum"></div>
   </div>
+  <div id="hl-neu-kat" class="neu-feld"><label for="hl-neu-kat-in">Name der neuen Kategorie <span class="hint">(nur ausfüllen bei „+ Neue Kategorie …“)</span></label>
+    <input id="hl-neu-kat-in" name="neu_kategorie" maxlength="40" placeholder="z. B. Festschriften, Verträge"></div>
   <label for="hl-titel">Titel <span class="hint">(leer = Dateiname)</span></label>
   <input id="hl-titel" name="titel" maxlength="200" placeholder="z. B. Jahreshauptversammlung 2026">
   <div class="aktionen"><button class="btn">Hochladen</button></div>
@@ -30,10 +32,11 @@
 {% endif %}
 
 <form method="get" class="zeile kompakt" style="margin-top:14px;align-items:center" role="search">
-  <input name="q" value="{{ suche }}" placeholder="Im Titel suchen" aria-label="Im Titel suchen" style="flex:3 1 220px">
+  <input name="q" value="{{ suche }}" placeholder="Dokumente durchsuchen" aria-label="Dokumente durchsuchen" style="flex:3 1 220px">
   <button class="btn sek" style="flex:0 0 auto">Suchen</button>
   {% if suche %}<a class="hint" style="flex:0 0 auto" href="{{ url_for('planung.dokumente_seite') }}">Suche löschen</a>{% endif %}
 </form>
+<p class="hint" style="margin:4px 0 0">Sucht in Titel, Dateiname und im Text geschriebener Dokumente – nicht im Inhalt hochgeladener Dateien.</p>
 
 {% for gr in gruppen %}
 <h2 id="{{ gr.kat }}">{{ gr.name }}{% if gr.anzahl %} <span class="hint">({{ gr.anzahl }})</span>{% endif %}</h2>
@@ -52,10 +55,20 @@
 {% endfor %}
 {% endfor %}
 
-<p class="hint" style="margin-top:20px">Belegt: {{ belegt|mb if belegt else '0 MB' }} von {{ max_verein // 1048576 }} MB.
+{% if darf %}<p class="hint" style="margin-top:20px"><a href="{{ url_for('planung.dokument_listen') }}">Eigene Kategorien und Sitzungsarten verwalten</a></p>{% endif %}
+<p class="hint" style="margin-top:8px">Belegt: {{ belegt|mb if belegt else '0 MB' }} von {{ max_verein // 1048576 }} MB.
 {% if not darf %}Neue Dokumente legen die Vereinsadmins an.{% endif %}</p>
+<script>
+document.querySelectorAll("select[data-neu]").forEach(sel => {
+  const feld = document.getElementById(sel.dataset.neu);
+  const zeigen = () => { feld.hidden = sel.value !== "{{ NEU }}"; };
+  sel.addEventListener("change", () => { zeigen(); if (!feld.hidden) feld.querySelector("input").focus(); });
+  zeigen();
+});
+</script>
 {% endblock %}
 {% block css %}
+.neu-feld[hidden]{display:none}
 .dok{display:flex;align-items:center;gap:12px;color:inherit;text-decoration:none}
 .dok:hover{outline:2px solid var(--accent)}
 .dok-ico{color:var(--accent);flex-shrink:0;display:flex}

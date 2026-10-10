@@ -36,7 +36,21 @@ CREATE TABLE IF NOT EXISTS dokument (
     geaendert_am TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_dokument_verein ON dokument(verein_key, kategorie, datum);
+-- Eigene Kategorien und Sitzungsarten je Verein (v1.82). Eigene Kategorie in dokument.kategorie als 'k<id>'.
+CREATE TABLE IF NOT EXISTS dokument_liste (
+    id           INTEGER PRIMARY KEY,
+    verein_key   TEXT NOT NULL,
+    art          TEXT NOT NULL,                     -- kategorie | sitzungsart
+    name         TEXT NOT NULL,
+    sort         INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS ix_dokument_liste ON dokument_liste(verein_key, art);
 """
+LISTEN_ARTEN = ("kategorie", "sitzungsart")
+NAME_MAX = 40
+# Gesucht wird nur in diesen Werten des Formularinhalts, nicht in den JSON-Schlüsseln („beschluss“ träfe sonst immer)
+SUCH_FELDER = ("text", "sitzungsart", "ort", "leitung", "protokoll", "anwesende", "entschuldigt")
+SUCH_TOP = ("titel", "text", "beschluss")
 
 
 def jetzt() -> str:
@@ -52,15 +66,22 @@ def _aus(r) -> dict:
     return d
 
 
+def _trifft(d: dict, suche: str) -> bool:
+    """Suche in Titel, Dateiname und den Werten des geschriebenen Inhalts (v1.82), ohne Groß-/Kleinschreibung."""
+    s = suche.casefold()
+    i = d["inhalt"] or {}
+    werte = [d["titel"], d["datei_name"]] + [str(i.get(k, "")) for k in SUCH_FELDER]
+    werte += [str(t.get(k, "")) for t in i.get("tops") or [] for k in SUCH_TOP]
+    return any(s in w.casefold() for w in werte if w)
+
+
 def liste(verein_key: str, suche: str = "") -> list[dict]:
     """Alle Dokumente eines Vereins, neueste zuerst (ohne Datum nach dem Anlegen)."""
-    sql, args = "SELECT * FROM dokument WHERE verein_key = ?", [verein_key]
-    if suche:
-        sql += " AND (titel LIKE ? ESCAPE '\\' OR datei_name LIKE ? ESCAPE '\\')"
-        muster = "%" + suche.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
-        args += [muster, muster]
     with db_conn() as c:
-        return [_aus(r) for r in c.execute(sql + " ORDER BY COALESCE(NULLIF(datum, ''), substr(erstellt_am, 1, 10)) DESC, id DESC", args)]
+        rows = [_aus(r) for r in c.execute(
+            "SELECT * FROM dokument WHERE verein_key = ?"
+            " ORDER BY COALESCE(NULLIF(datum, ''), substr(erstellt_am, 1, 10)) DESC, id DESC", (verein_key,))]
+    return [d for d in rows if _trifft(d, suche)] if suche else rows
 
 
 def hole(did: int, verein_key: str) -> dict | None:
@@ -116,15 +137,19 @@ def verein_loeschen(verein_key: str) -> tuple[int, list[str]]:
     """Alle Dokumente eines Vereins löschen (Konto gelöscht). Gibt (Anzahl, Dateinamen zum Entfernen) zurück."""
     with db_conn() as c:
         rows = c.execute("DELETE FROM dokument WHERE verein_key = ? RETURNING datei_pfad", (verein_key,)).fetchall()
+        c.execute("DELETE FROM dokument_liste WHERE verein_key = ?", (verein_key,))
     return len(rows), [r["datei_pfad"] for r in rows if r["datei_pfad"]]
 
 
 def key_umziehen(quelle: str, ziel: str, c=None) -> int:
     """Key-Übertragung (`uebertrage_key`): Dokumente wandern mit. Dateien liegen flach, nur die Zeile ändert sich."""
+    def _umzug(conn) -> int:
+        conn.execute("UPDATE dokument_liste SET verein_key = ? WHERE verein_key = ?", (ziel, quelle))
+        return conn.execute("UPDATE dokument SET verein_key = ? WHERE verein_key = ?", (ziel, quelle)).rowcount
     if c is not None:
-        return c.execute("UPDATE dokument SET verein_key = ? WHERE verein_key = ?", (ziel, quelle)).rowcount
+        return _umzug(c)
     with db_conn() as c2:
-        return c2.execute("UPDATE dokument SET verein_key = ? WHERE verein_key = ?", (ziel, quelle)).rowcount
+        return _umzug(c2)
 
 
 def statistik() -> dict:
@@ -133,3 +158,67 @@ def statistik() -> dict:
         r = c.execute("SELECT COUNT(*) AS n, COUNT(DISTINCT verein_key) AS v, COALESCE(SUM(groesse), 0) AS b"
                       " FROM dokument").fetchone()
     return {"anzahl": r["n"], "vereine": r["v"], "mb": round(r["b"] / 1024 / 1024, 1)}
+
+
+# ── Eigene Kategorien und Sitzungsarten (v1.82) ──────────────────────────────
+
+def eintraege(verein_key: str, art: str) -> list[dict]:
+    with db_conn() as c:
+        return [dict(r) for r in c.execute(
+            "SELECT id, name FROM dokument_liste WHERE verein_key = ? AND art = ? ORDER BY sort, name COLLATE NOCASE",
+            (verein_key, art))]
+
+
+def kategorien(verein_key: str) -> dict[str, str]:
+    """Feste Kategorien + eigene (Schlüssel `k<id>`), in dieser Reihenfolge."""
+    return {**KATEGORIEN, **{f"k{e['id']}": e["name"] for e in eintraege(verein_key, "kategorie")}}
+
+
+def einzahl(verein_key: str) -> dict[str, str]:
+    return {**KATEGORIE_EINZAHL, **{f"k{e['id']}": e["name"] for e in eintraege(verein_key, "kategorie")}}
+
+
+def sitzungsarten(verein_key: str) -> list[str]:
+    eigene = [e["name"] for e in eintraege(verein_key, "sitzungsart")]
+    return list(SITZUNGSARTEN) + [n for n in eigene if n not in SITZUNGSARTEN]
+
+
+def eintrag_neu(verein_key: str, art: str, name: str) -> int | None:
+    """Legt einen Eintrag an (gleicher Name ohne Groß-/Kleinschreibung → vorhandener). None = fester Name."""
+    name = " ".join(name.split())[:NAME_MAX]
+    fest = KATEGORIEN.values() if art == "kategorie" else SITZUNGSARTEN
+    if not name or name.casefold() in (f.casefold() for f in fest):
+        return None
+    for e in eintraege(verein_key, art):
+        if e["name"].casefold() == name.casefold():
+            return e["id"]
+    with db_conn() as c:
+        return c.execute("INSERT INTO dokument_liste (verein_key, art, name) VALUES (?,?,?) RETURNING id",
+                         (verein_key, art, name)).fetchone()["id"]
+
+
+def eintrag_umbenennen(verein_key: str, eid: int, name: str) -> bool:
+    name = " ".join(name.split())[:NAME_MAX]
+    if not name:
+        return False
+    with db_conn() as c:
+        return c.execute("UPDATE dokument_liste SET name = ? WHERE id = ? AND verein_key = ?",
+                         (name, eid, verein_key)).rowcount == 1
+
+
+def eintrag_belegt(verein_key: str, eid: int) -> int:
+    with db_conn() as c:
+        return c.execute("SELECT COUNT(*) AS n FROM dokument WHERE verein_key = ? AND kategorie = ?",
+                         (verein_key, f"k{eid}")).fetchone()["n"]
+
+
+def eintrag_loeschen(verein_key: str, eid: int) -> bool:
+    """Kategorien nur, wenn leer; Sitzungsarten immer (Protokolle behalten ihren Text)."""
+    with db_conn() as c:
+        r = c.execute("SELECT art FROM dokument_liste WHERE id = ? AND verein_key = ?", (eid, verein_key)).fetchone()
+        if not r:
+            return False
+        if r["art"] == "kategorie" and c.execute(
+                "SELECT 1 FROM dokument WHERE verein_key = ? AND kategorie = ?", (verein_key, f"k{eid}")).fetchone():
+            return False
+        return c.execute("DELETE FROM dokument_liste WHERE id = ? AND verein_key = ?", (eid, verein_key)).rowcount == 1

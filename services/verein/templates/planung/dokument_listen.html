@@ -1,0 +1,39 @@
+{% extends "planung/base.html" %}
+{% block titel %}Kategorien und Sitzungsarten{% endblock %}
+{% macro liste(eintraege, fest, art_text, mit_belegt) %}
+<div class="card">
+  <p class="hint" style="margin-top:0">Fest: {{ fest|join(' · ') }}</p>
+  {% for e in eintraege %}
+  <div class="zeile kompakt eintrag">
+    <form method="post" class="zeile kompakt" style="flex:3 1 240px;margin:0">{{ csrf()|safe }}
+      <input type="hidden" name="id" value="{{ e.id }}">
+      <input name="name" value="{{ e.name }}" maxlength="{{ NAME_MAX }}" aria-label="Name" style="flex:1 1 160px" required>
+      <button class="btn sek" name="aktion" value="umbenennen" style="flex:0 0 auto">Umbenennen</button>
+    </form>
+    <form method="post" style="flex:0 0 auto;margin:0">{{ csrf()|safe }}
+      <input type="hidden" name="id" value="{{ e.id }}">
+      <button class="btn sek" name="aktion" value="loeschen"{% if mit_belegt and e.belegt %} disabled title="Enthält noch {{ e.belegt }} Dokument(e)"{% endif %}>Löschen</button>
+    </form>
+    {% if mit_belegt %}<span class="hint" style="flex:1 0 100%">{{ e.belegt }} {{ 'Dokument' if e.belegt == 1 else 'Dokumente' }}</span>{% endif %}
+  </div>
+  {% else %}
+  <p class="hint">Noch keine eigenen {{ art_text }}. Neue legt ihr direkt im Auswahlfeld an („+ Neue …“).</p>
+  {% endfor %}
+</div>
+{% endmacro %}
+{% block inhalt %}
+{% set zurueck_ziel = none %}{% include "planung/_zurueck.html" with context %}
+<h1>Kategorien und Sitzungsarten</h1>
+{% if fehler %}<div class="warn rot">{{ fehler }}</div>{% endif %}
+{% if meldung %}<div class="ok">{{ meldung }}</div>{% endif %}
+<p class="hint">Eigene Einträge ergänzen die festen. Neue legt ihr beim Hochladen oder Schreiben im Auswahlfeld an. Eine Kategorie lässt sich nur löschen, wenn sie leer ist; gelöschte Sitzungsarten bleiben in bestehenden Protokollen stehen.</p>
+<h2>Kategorien</h2>
+{{ liste(kategorien, FEST_KAT, "Kategorien", true) }}
+<h2>Sitzungsarten</h2>
+{{ liste(sitzungsarten, FEST_SITZ, "Sitzungsarten", false) }}
+{% endblock %}
+{% block css %}
+.eintrag{align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.eintrag:first-of-type{border-top:0}
+.btn[disabled]{opacity:.45;pointer-events:none}
+{% endblock %}

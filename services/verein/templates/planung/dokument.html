@@ -1,8 +1,9 @@
 {% extends "planung/base.html" %}
 {% block titel %}{{ dok.titel }}{% endblock %}
 {% block inhalt %}
-<p class="hint" style="margin:4px 0 0"><a href="{{ url_for('planung.dokumente_seite') }}#{{ dok.kategorie }}">‹ Dokumente</a> · {{ KATEGORIEN[dok.kategorie] }}</p>
-<h1>{{ dok.titel }}</h1>
+{% include "planung/_zurueck.html" with context %}
+<p class="etikett">{{ EINZAHL.get(dok.kategorie, 'Dokument') }}</p>
+<h1 style="margin-top:2px">{{ dok.titel }}</h1>
 {% if fehler %}<div class="warn rot">{{ fehler }}</div>{% endif %}
 {% if meldung %}<div class="ok">{{ meldung }}</div>{% endif %}
 

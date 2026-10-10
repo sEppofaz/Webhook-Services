@@ -18,6 +18,7 @@
 {% if darf %}
 {{ eintrag("Vereinsprofil", "Name, Rubrik, Ortschaft und PLZ, Ansprechpartner, Telefon, E-Mail-Adresse.", "/verein/profil") }}
 {{ eintrag("Mitglieder", "Weitere Vereinsadmins oder Mitglieder einladen und entfernen.", "/verein/mitglieder") }}
+{{ eintrag("Dokumente: Kategorien und Sitzungsarten", "Eigene Kategorien und Sitzungsarten umbenennen oder löschen.", url_for('planung.dokument_listen')) }}
 {% endif %}
 {{ eintrag("Passwort ändern", "Neues Passwort setzen; alle anderen Anmeldungen werden beendet.", "/verein/passwort") }}
 <p class="hint">Angemeldet als {{ email }} · {{ 'Vereinsadmin' if rolle == 'admin' else 'Mitglied' }}</p>

@@ -15,9 +15,18 @@
   </div>
 </fieldset>
 {% endmacro %}
+{% macro uhrzeit(feld, label, wert) %}{% set h, m = (wert or ':').split(':')[0], (wert or ':').split(':')[1] %}
+<div><span class="lbl" id="l-{{ feld }}">{{ label }}</span>
+  <div class="uhr" role="group" aria-labelledby="l-{{ feld }}">
+    <select name="{{ feld }}_h" aria-label="{{ label }} Stunde"><option value="">–</option>{% for x in STUNDEN %}<option{{ ' selected' if x == h }}>{{ x }}</option>{% endfor %}</select>
+    <span aria-hidden="true">:</span>
+    <select name="{{ feld }}_m" aria-label="{{ label }} Minute"><option value="">–</option>{% for x in MINUTEN %}<option{{ ' selected' if x == m }}>{{ x }}</option>{% endfor %}{% if m and m not in MINUTEN %}<option selected>{{ m }}</option>{% endif %}</select>
+  </div></div>
+{% endmacro %}
 {% block inhalt %}
 {% set i = dok.inhalt or {} %}
-<p class="hint" style="margin:4px 0 0"><a href="{{ url_for('planung.dokumente_seite') if ist_neu else url_for('planung.dokument_seite', did=dok.id) }}">‹ {{ 'Dokumente' if ist_neu else 'Zurück ohne Speichern' }}</a></p>
+{% set zurueck_ziel = none if ist_neu else url_for('planung.dokument_seite', did=dok.id) %}{% set zurueck_text = none if ist_neu else 'Zurück ohne Speichern' %}
+{% include "planung/_zurueck.html" with context %}
 <h1>{{ ('Neues ' ~ EINZAHL[dok.kategorie]) if ist_neu and dok.kategorie == 'protokoll' else ('Neues Dokument' if ist_neu else 'Bearbeiten') }}</h1>
 {% if fehler %}<div class="warn rot">{{ fehler }}</div>{% endif %}
 
@@ -25,10 +34,12 @@
 <div class="card">
   <div class="zeile">
     <div><label for="f-kat">Kategorie</label>
-      <select id="f-kat" name="kategorie">{% for k, n in KATEGORIEN.items() %}<option value="{{ k }}"{{ ' selected' if k == dok.kategorie }}>{{ n }}</option>{% endfor %}</select></div>
+      <select id="f-kat" name="kategorie" data-neu="f-neu-kat">{% for k, n in KATEGORIEN.items() %}<option value="{{ k }}"{{ ' selected' if k == dok.kategorie }}>{{ n }}</option>{% endfor %}<option value="{{ NEU }}"{{ ' selected' if dok.kategorie == NEU }}>+ Neue Kategorie …</option></select></div>
     <div><label for="f-datum"><span class="nur-prot">Datum der Sitzung</span><span class="ohne-prot">Datum <span class="hint">(optional)</span></span></label>
       <input id="f-datum" type="date" name="datum" value="{{ dok.datum }}"></div>
   </div>
+  <div id="f-neu-kat" class="neu-feld"><label for="f-neu-kat-in">Name der neuen Kategorie <span class="hint">(nur ausfüllen bei „+ Neue Kategorie …“)</span></label>
+    <input id="f-neu-kat-in" name="neu_kategorie" maxlength="40" value="{{ dok.neu_kategorie or '' }}" placeholder="z. B. Festschriften, Verträge"></div>
   <label for="f-titel">Titel <span class="hint">(leer = wird aus Sitzung und Datum gebildet)</span></label>
   <input id="f-titel" name="titel" maxlength="200" value="{{ dok.titel }}">
 </div>
@@ -38,12 +49,14 @@
 <div class="card">
   <div class="zeile">
     <div><label for="f-art">Art</label>
-      <select id="f-art" name="sitzungsart">{% for a in SITZUNGSARTEN %}<option{{ ' selected' if a == i.sitzungsart }}>{{ a }}</option>{% endfor %}</select></div>
+      <select id="f-art" name="sitzungsart" data-neu="f-neu-art">{% for a in SITZUNGSARTEN %}<option{{ ' selected' if a == i.sitzungsart }}>{{ a }}</option>{% endfor %}{% if i.sitzungsart and i.sitzungsart not in SITZUNGSARTEN %}<option selected>{{ i.sitzungsart }}</option>{% endif %}<option value="{{ NEU }}">+ Neue Sitzungsart …</option></select></div>
     <div><label for="f-ort">Ort</label><input id="f-ort" name="ort" maxlength="500" value="{{ i.ort }}" placeholder="z. B. Gasthaus Huber"></div>
   </div>
+  <div id="f-neu-art" class="neu-feld"><label for="f-neu-art-in">Name der neuen Sitzungsart <span class="hint">(nur ausfüllen bei „+ Neue Sitzungsart …“)</span></label>
+    <input id="f-neu-art-in" name="neu_sitzungsart" maxlength="40" placeholder="z. B. Festausschuss"></div>
   <div class="zeile">
-    <div><label for="f-beginn">Beginn</label><input id="f-beginn" type="time" name="beginn" value="{{ i.beginn }}"></div>
-    <div><label for="f-ende">Ende</label><input id="f-ende" type="time" name="ende" value="{{ i.ende }}"></div>
+    {{ uhrzeit("beginn", "Beginn", i.beginn) }}
+    {{ uhrzeit("ende", "Ende", i.ende) }}
   </div>
   <div class="zeile">
     <div><label for="f-leitung">Sitzungsleitung</label><input id="f-leitung" name="leitung" maxlength="500" value="{{ i.leitung }}"></div>
@@ -76,6 +89,13 @@
   const art = () => form.classList.toggle("js-prot", kat.value === "protokoll") | form.classList.toggle("js-ohne", kat.value !== "protokoll");
   kat.addEventListener("change", art);
   art();
+  // „+ Neue …“: Namensfeld nur zeigen, wenn gewählt (ohne JS immer sichtbar)
+  form.querySelectorAll("select[data-neu]").forEach(sel => {
+    const feld = document.getElementById(sel.dataset.neu);
+    const zeigen = () => { feld.hidden = sel.value !== "{{ NEU }}"; if (!feld.hidden) feld.querySelector("input").focus(); };
+    sel.addEventListener("change", zeigen);
+    feld.hidden = sel.value !== "{{ NEU }}";
+  });
   const leer = k => [...k.querySelectorAll("input,textarea")].every(f => !f.value.trim());
   function nummern() {
     liste.querySelectorAll(".top-nr").forEach((b, n) => { b.textContent = `TOP ${n + 1}`; });
@@ -106,6 +126,9 @@
 .abst>*{flex:1 1 80px}
 form:not(.js) .top-weg{display:none}
 textarea{resize:vertical}
+.neu-feld[hidden]{display:none}
+.lbl{display:block;font-size:13px;color:var(--text2);margin:10px 0 4px}
+.uhr{display:flex;align-items:center;gap:6px}.uhr select{flex:1 1 0;min-width:0}
 form.js-prot .ohne-prot,form.js-ohne .nur-prot{display:none}
 form:not(.js-prot):not(.js-ohne) .ohne-prot{display:none}
 {% endblock %}

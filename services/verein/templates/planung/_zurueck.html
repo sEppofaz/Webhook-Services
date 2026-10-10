@@ -1,0 +1,3 @@
+{# Zurück-Knopf auf Unterseiten der Dokumente (v1.82, statt „‹ Dokumente · Satzung“ – Josef: nicht für jeden klar).
+   Optional vorher setzen: zurueck_ziel, zurueck_text #}
+<p class="zurueck"><a class="btn sek" href="{{ zurueck_ziel or url_for('planung.dokumente_seite') }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>{{ zurueck_text or 'Zurück zu den Dokumenten' }}</a></p>

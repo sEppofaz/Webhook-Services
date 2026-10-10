@@ -165,7 +165,7 @@ pruefe(all(anon.get(u).status_code == 302 for u in ("/verein/dokumente", "/verei
                                                     "/verein/dokumente/1.pdf")), "alles nur angemeldet")
 s = A.get("/verein/dokumente").get_data(as_text=True)
 tabs = re.findall(r'class="hdr-pill[^"]*"[^>]*>(?:<svg.*?</svg>)?([^<]+)</', s)
-pruefe(tabs == ["Termine", "Planungsrunden", "Dokumente", "Einstellungen", "Abmelden"], f"Tabs, war {tabs}")
+pruefe(tabs == ["Termine", "Dokumente", "Planungsrunden", "Einstellungen", "Abmelden"], f"Tabs, war {tabs}")
 pruefe('href="/verein/dokumente" aria-current="page"' in s, "Tab Dokumente aktiv")
 pruefe("Nur für euren Verein sichtbar" in s and "Noch keine." in s, "Hinweis + leere Liste")
 pruefe("Protokoll schreiben" in s and 'data-klappe="hochladen"' in s, "Admin: Schreiben + Hochladen")
@@ -339,10 +339,91 @@ pruefe(st and st["dokumente"]["anzahl"] == len(D.liste("va")) and st["dokumente"
        f"Admin-Statistik: nur Zahlen, war {st and st.get('dokumente')}")
 pruefe("JHV" not in json.dumps(st), "Admin-Statistik ohne Titel")
 
+# ── v1.82: Suche im Inhalt, eigene Kategorien/Sitzungsarten, Uhrzeit, Zurück-Knopf ──
+print("v1.82 Wünsche aus den Screenshots")
+F2 = {**FORM, "kategorie": "__neu", "neu_kategorie": "Festschriften", "titel": "Festschrift 125 Jahre",
+      "sitzungsart": "__neu", "neu_sitzungsart": "Festausschuss"}
+F2.pop("beginn"); F2.pop("ende")
+r = A.post("/verein/dokumente/neu", data={**F2, "kategorie": "__neu", "neu_kategorie": ""})
+pruefe(r.status_code == 400 and "Namen für die neue Kategorie" in r.get_data(as_text=True)
+       and not D.eintraege("va", "kategorie"), "neue Kategorie ohne Namen → Fehler, nichts angelegt")
+r = A.post("/verein/dokumente/neu", data={**F2, "kategorie": "protokoll", "beginn_h": "19", "beginn_m": "15",
+                                          "ende_h": "21", "ende_m": "00"})
+did_f = int(re.search(r"/verein/dokumente/(\d+)", r.headers["Location"]).group(1))
+p2 = D.hole(did_f, "va")
+pruefe(p2["inhalt"]["beginn"] == "19:15" and p2["inhalt"]["ende"] == "21:00", "Uhrzeit aus Stunde + Minute")
+pruefe(p2["inhalt"]["sitzungsart"] == "Festausschuss" and "Festausschuss" in D.sitzungsarten("va"),
+       "neue Sitzungsart angelegt und gespeichert")
+pruefe("Festausschuss" not in D.sitzungsarten("vb"), "Sitzungsart nur für den eigenen Verein")
+s = A.get("/verein/dokumente?q=ENTLASTUNG").get_data(as_text=True)
+pruefe(p2["titel"] in s, "Suche trifft Beschluss-Text im Inhalt (ohne Groß-/Kleinschreibung)")
+s = A.get("/verein/dokumente?q=beschluss").get_data(as_text=True)
+pruefe(p2["titel"] not in s, "Suche trifft nicht das Strukturwort „beschluss“")
+pruefe('placeholder="Dokumente durchsuchen"' in s, "neuer Platzhalter")
+r = A.post("/verein/dokumente/neu", data={"_csrf": T, "kategorie": "__neu", "neu_kategorie": "Festschriften",
+                                          "titel": "Festschrift 125 Jahre", "datum": "", "text": "Chronik"})
+kats = D.kategorien("va")
+kid = next(k for k, n in kats.items() if n == "Festschriften")
+d_fs = [d for d in D.liste("va") if d["titel"] == "Festschrift 125 Jahre"][0]
+pruefe(kid.startswith("k") and d_fs["kategorie"] == kid, "eigene Kategorie angelegt, Dokument darin")
+A.post("/verein/dokumente/neu", data={"_csrf": T, "kategorie": "__neu", "neu_kategorie": "festschriften",
+                                      "titel": "Zweite", "datum": "", "text": "x"})
+pruefe(len(D.eintraege("va", "kategorie")) == 1, "gleicher Name (andere Schreibweise) → keine zweite Kategorie")
+A.post("/verein/dokumente/neu", data={"_csrf": T, "kategorie": "__neu", "neu_kategorie": "Satzung",
+                                      "titel": "Satzung neu", "datum": "", "text": "x"})
+pruefe(len(D.eintraege("va", "kategorie")) == 1
+       and [d for d in D.liste("va") if d["titel"] == "Satzung neu"][0]["kategorie"] == "satzung",
+       "Name einer festen Kategorie → feste Kategorie")
+s = A.get("/verein/dokumente").get_data(as_text=True)
+pruefe("Festschriften" in s and "+ Neue Kategorie" in s, "Liste zeigt eigene Kategorie, Auswahl „+ Neue …“")
+pruefe("Festschriften" not in D.kategorien("vb").values()
+       and f'value="{kid}"' not in client(uid_b).get("/verein/dokumente").get_data(as_text=True),
+       "anderer Verein sieht die Kategorie nicht")
+s = A.get(f"/verein/dokumente/{did_f}?bearbeiten=1").get_data(as_text=True)
+pruefe('name="beginn_h"' in s and '<option selected>19</option>' in s and '<option selected>15</option>' in s
+       and 'type="time"' not in s, "Bearbeiten: Uhrzeit als Stunde/Minute vorbelegt, kein Uhrzeit-Rad")
+pruefe("Zurück ohne Speichern" in s, "Bearbeiten: Zurück-Knopf ohne Speichern")
+D.aendern(did_f, "va", uid_a, "protokoll", p2["titel"], p2["datum"], inhalt={**p2["inhalt"], "beginn": "15:58"})
+s = A.get(f"/verein/dokumente/{did_f}?bearbeiten=1").get_data(as_text=True)
+pruefe("<option selected>58</option>" in s, "krumme Bestandszeit bleibt als Option erhalten")
+s = A.get(f"/verein/dokumente/{did_f}").get_data(as_text=True)
+pruefe("Zurück zu den Dokumenten" in s and "‹ Dokumente" not in s, "Ansicht: Zurück-Knopf statt Brotkrumen")
+r = A.post("/verein/dokumente/neu", data={**F2, "kategorie": "protokoll", "beginn_h": "25", "beginn_m": "00"})
+pruefe(r.status_code == 400 and "Stunde und Minute" in r.get_data(as_text=True), "ungültige Stunde abgelehnt")
+# Verwalten
+pruefe(AM.get("/verein/dokumente/listen").status_code == 403, "Mitglied: keine Verwaltung")
+eid = int(kid[1:])
+r = A.post("/verein/dokumente/listen", data={"_csrf": T, "id": eid, "aktion": "loeschen"})
+pruefe("noch 2 Dokumente" in unquote(r.headers["Location"]) and D.kategorien("va").get(kid), "belegte Kategorie bleibt")
+A.post("/verein/dokumente/listen", data={"_csrf": T, "id": eid, "aktion": "umbenennen", "name": "Chroniken"})
+pruefe(D.kategorien("va")[kid] == "Chroniken", "Kategorie umbenannt")
+pruefe(client(uid_b).post("/verein/dokumente/listen", data={"_csrf": T, "id": eid, "aktion": "umbenennen",
+                                                            "name": "X"}).status_code == 302
+       and D.kategorien("va")[kid] == "Chroniken", "fremder Verein kann nicht umbenennen")
+sid = D.eintraege("va", "sitzungsart")[0]["id"]
+A.post("/verein/dokumente/listen", data={"_csrf": T, "id": sid, "aktion": "loeschen"})
+pruefe("Festausschuss" not in D.sitzungsarten("va") and D.hole(did_f, "va")["inhalt"]["sitzungsart"] == "Festausschuss",
+       "Sitzungsart gelöscht, Protokoll behält den Text")
+s = A.get(f"/verein/dokumente/{did_f}?bearbeiten=1").get_data(as_text=True)
+pruefe("<option selected>Festausschuss</option>" in s, "gelöschte Sitzungsart bleibt im Formular wählbar")
+for d in [d for d in D.liste("va") if d["kategorie"] == kid]:
+    A.post(f"/verein/dokumente/{d['id']}/loeschen", data={"_csrf": T})
+A.post("/verein/dokumente/listen", data={"_csrf": T, "id": eid, "aktion": "loeschen"})
+pruefe(kid not in D.kategorien("va"), "leere Kategorie gelöscht")
+for d in [d for d in D.liste("va") if d["id"] == did_f or d["titel"] == "Satzung neu"]:
+    A.post(f"/verein/dokumente/{d['id']}/loeschen", data={"_csrf": T})
+D.eintrag_neu("alt", "kategorie", "Umzug-Kat")
+s = A.get("/verein/einstellungen").get_data(as_text=True)
+pruefe("Kategorien und Sitzungsarten" in s, "Einstellungen verlinken die Verwaltung")
+html_k = (ROOT / "kalender.html").read_text()
+pruefe('id="verein-admin-btn"' not in html_k and "login-haken" in html_k and 'lb.href="/verein/termine"' in html_k,
+       "Startseite: Stift weg, Login mit Haken führt in den Vereinsbereich")
+
 # Key-Übertragung: Dokumente wandern mit
 D.neu("alt", uid_a, "sonstiges", "Altlast", "", "formular", inhalt={"text": "x"})
 kstore.uebertrage_key("alt", "vb")
 pruefe([d["titel"] for d in D.liste("vb")] == ["Altlast"] and not D.liste("alt"), "Key-Übertragung nimmt Dokumente mit")
+pruefe("Umzug-Kat" in D.kategorien("vb").values(), "Key-Übertragung nimmt eigene Kategorien mit")
 
 # Konto löschen: Dokumente und Dateien weg, auch wenn die Termine bleiben
 hochladen(A, PDF, "noch.pdf")
@@ -351,6 +432,9 @@ r = anon.delete(f"/api/admin/verein/{vid_a}", json={"delete_termine": False}, he
 pruefe(r.status_code == 200 and r.get_json()["geloescht_dokumente"] == 4 and not D.liste("va"),
        f"Konto gelöscht → Dokumente weg, war {r.get_json()}")
 pruefe(dateien and not any((S.ORDNER / n).exists() for n in dateien), "… und ihre Dateien")
+D.eintrag_neu("zz", "sitzungsart", "Weg damit")
+D.verein_loeschen("zz")
+pruefe(not D.eintraege("zz", "sitzungsart"), "Konto löschen nimmt eigene Listen mit")
 pruefe([d["titel"] for d in D.liste("vb")] == ["Altlast"], "anderer Verein unberührt")
 
 # Rechtstexte

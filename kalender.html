@@ -70,6 +70,7 @@ html,body{height:100%;background:var(--bg2);color:var(--text);font-family:-apple
 .hdr-pill:active{opacity:.75}
 .hdr-pill-pri{background:var(--pill-pri-bg);color:var(--pill-pri-fg);border:1.5px solid var(--pill-pri-bg)}
 .hdr-pill-sec{background:transparent;color:var(--text);border:1.5px solid var(--border2)}
+.hdr-pill .login-haken,.hdr-right .hdr-pill .login-haken{display:inline-block;color:#34c759;margin-left:-2px}
 .refresh-btn.spin{animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
@@ -500,7 +501,6 @@ input.mt-feld{height:40px}textarea.mt-feld{resize:vertical;line-height:1.45}
     <a class="hdr-pill hdr-pill-sec" id="verein-login-btn" href="/verein/login" title="Vereins-Login oder Registrierung"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Login</a>
     <button class="hdr-pill hdr-pill-sec" onclick="showInfoModal()" title="Info"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>Info</button>
     <button class="refresh-btn" id="admin-import-btn" onclick="toggleImport()" title="Import" style="display:none"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
-    <a class="refresh-btn" id="verein-admin-btn" href="/verein/termine" title="Mein Verein" style="display:none;text-decoration:none"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></a>
   </div>
 </header>
 
@@ -2258,15 +2258,16 @@ if(ADMIN){
   document.title="VKO Admin";
 }
 
-/* ── Vereinsadmin-Stift-Icon ── */
+/* ── Login-Knopf: eingeloggt „Login" mit grünem Haken → direkt in den Vereinsbereich (v1.82, statt Stift) ── */
 (async()=>{
   try{
     const me=await(await fetch("/api/auth/me")).json();
-    if(me.loggedin){
-      const btn=document.getElementById("verein-admin-btn");
-      if(btn)btn.style.display="";
-      const lb=document.getElementById("verein-login-btn");
-      if(lb)lb.style.display="none";  // eingeloggt: Stift „Mein Verein" statt Login
+    const lb=document.getElementById("verein-login-btn");
+    if(me.loggedin&&lb){
+      lb.href="/verein/termine";
+      lb.title="Angemeldet"+(me.verein_name?" als "+me.verein_name:"")+" – zum Vereinsbereich";
+      lb.classList.add("login-ok");
+      lb.insertAdjacentHTML("beforeend",'<svg class="login-haken" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>');
     }
   }catch(e){}
 })();
@@ -4347,7 +4348,7 @@ function showInfoModal(){
       <div class="help-row" style="padding:8px 0 12px;border-bottom:1.5px solid var(--border);margin-bottom:4px">
         <span class="help-icon">${icon("users",20)}</span>
         <div><strong>Jahresplanung mit anderen Vereinen</strong><span>Im Vereinsbereich Termine erst als Entwurf anlegen &ndash; auch aus dem Vorjahr &uuml;bernommen &ndash; und in einer <b>Planungsrunde</b> mit den Vereinen der Gemeinde abstimmen: Jeder sieht die Entw&uuml;rfe der anderen und wo sich Termine &uuml;berschneiden. Eine Runde startet jeder Verein selbst und l&auml;dt per Link oder Code ein. Ver&ouml;ffentlicht wird erst, wenn ihr es wollt.</span></div>
-        <div><strong>Protokolle und Satzung ablegen</strong><span>Unter &bdquo;Dokumente&ldquo; legt ihr Protokolle, die Satzung und andere Unterlagen ab &ndash; als Datei (PDF, Foto, Word) oder direkt geschrieben, mit Tagesordnungspunkten und Beschl&uuml;ssen, fertig als PDF oder Word. Nur f&uuml;r euren Verein sichtbar, nicht &ouml;ffentlich.</span></div>
+        <div><strong>Protokolle und Satzung ablegen</strong><span>Unter &bdquo;Dokumente&ldquo; legt ihr Protokolle, die Satzung und andere Unterlagen ab &ndash; als Datei (PDF, Foto, Word) oder direkt geschrieben, mit Tagesordnungspunkten und Beschl&uuml;ssen, fertig als PDF oder Word. Eigene Kategorien (z.&nbsp;B. Festschriften) und Sitzungsarten legt ihr direkt im Auswahlfeld an, gesucht wird auch im Text. Nur f&uuml;r euren Verein sichtbar, nicht &ouml;ffentlich.</span></div>
         <div><strong>Datenschutz best&auml;tigen</strong><span>Jedes Konto best&auml;tigt einmal, dass es die Datenschutzerkl&auml;rung gelesen hat und die Nutzungsbedingungen akzeptiert &ndash; bei der Registrierung, beim Annehmen einer Einladung oder beim n&auml;chsten Aufruf des Vereinsbereichs. Erneut gefragt wird nur, wenn sich die Erkl&auml;rung &auml;ndert.</span></div>
       </div>
       <div class="help-row" style="padding:8px 0 12px;border-bottom:1.5px solid var(--border);margin-bottom:4px">
@@ -4426,7 +4427,7 @@ function showInfoModal(){
         <span class="help-icon">${icon("scale",20)}</span>
         <div><strong>Impressum</strong><span>Josef Fischer &middot; H&ouml;lskofen 13 &middot; 84092 Bayerbach b. Ergoldsbach<br><a href="mailto:info@vereinskalender.online" style="color:var(--accent);text-decoration:none">info@vereinskalender.online</a></span></div>
       </div>
-      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.81 &middot; 2026-10-10 &middot; a sEpp-App</p>
+      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.82 &middot; 2026-10-10 &middot; a sEpp-App</p>
       <button onclick="document.getElementById('info-modal').remove()" style="width:100%;margin-top:16px;padding:12px;background:none;border:1.5px solid var(--border2);border-radius:12px;font-size:14px;color:var(--text2);cursor:pointer">Schlie&szlig;en</button>
     </div>`;
   document.body.appendChild(m);
