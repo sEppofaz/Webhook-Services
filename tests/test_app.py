@@ -1106,7 +1106,7 @@ def test_mailtexte():
         pruefe("<strong>FF &lt;Echt&gt;</strong>" in gesendet[-1][2] and "<li>zwei" in gesendet[-1][2],
                "echte Willkommens-Mail nutzt Josefs Fassung (Name escapt)")
         r = cl.post("/api/admin/mailtexte/welcome/test", headers=ADMIN).get_json()
-        pruefe(r["ok"] and gesendet[-1][0] == "Vereinskalender@icloud.com" and gesendet[-1][1].startswith("[Test]"),
+        pruefe(r["ok"] and gesendet[-1][0] == "info@vereinskalender.online" and gesendet[-1][1].startswith("[Test]"),
                "Testmail an das Vereinskalender-Postfach", gesendet[-1][:2])
     finally:
         vk_mail._send = alt_send

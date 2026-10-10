@@ -470,7 +470,7 @@ def register():
                     error = (f'Ein Verein mit ähnlichem Namen ist bereits registriert: '
                              f'„{html.escape(ex["verein_name"])}". '
                              f'Falls du bereits einen Account hast, bitte einloggen. '
-                             f'Bei Problemen: <a href="mailto:Vereinskalender@icloud.com">Vereinskalender@icloud.com</a>')
+                             f'Bei Problemen: <a href="mailto:info@vereinskalender.online">info@vereinskalender.online</a>')
                     break
 
         if not error:

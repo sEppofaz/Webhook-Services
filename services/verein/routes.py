@@ -1077,7 +1077,7 @@ def datenschutz():
 <p style="color:#aeaeb2;font-size:.85rem">Stand: {_STAND}</p>
 <div class="card">
 <h2 style="font-size:1rem;margin-top:0">1. Verantwortlicher</h2>
-<p>Josef Fischer, Hölskofen 13, 84092 Bayerbach b. Ergoldsbach · <a href="mailto:Vereinskalender@icloud.com">Vereinskalender@icloud.com</a></p>
+<p>Josef Fischer, Hölskofen 13, 84092 Bayerbach b. Ergoldsbach · <a href="mailto:info@vereinskalender.online">info@vereinskalender.online</a></p>
 </div>
 <div class="card">
 <h2 style="font-size:1rem;margin-top:0">2. Erhobene Daten</h2>
@@ -1093,7 +1093,7 @@ def datenschutz():
 </div>
 <div class="card">
 <h2 style="font-size:1rem;margin-top:0">4. Speicherdauer</h2>
-<p>Accounts werden auf Anfrage gelöscht. Schreib dazu an <a href="mailto:Vereinskalender@icloud.com">Vereinskalender@icloud.com</a>. Eingetragene Termine werden nach Ende des jeweiligen Kalenderjahres bereinigt.</p>
+<p>Accounts werden auf Anfrage gelöscht. Schreib dazu an <a href="mailto:info@vereinskalender.online">info@vereinskalender.online</a>. Eingetragene Termine werden nach Ende des jeweiligen Kalenderjahres bereinigt.</p>
 </div>
 <div class="card">
 <h2 style="font-size:1rem;margin-top:0">5. E-Mail-Dienst</h2>
@@ -1113,7 +1113,7 @@ def datenschutz():
 </div>
 <div class="card">
 <h2 style="font-size:1rem;margin-top:0">6. Rechte</h2>
-<p>Auskunft, Berichtigung, Löschung deiner Daten: Schreib an <a href="mailto:Vereinskalender@icloud.com">Vereinskalender@icloud.com</a>. Beschwerderecht bei der zuständigen Datenschutz-Aufsichtsbehörde.</p>
+<p>Auskunft, Berichtigung, Löschung deiner Daten: Schreib an <a href="mailto:info@vereinskalender.online">info@vereinskalender.online</a>. Beschwerderecht bei der zuständigen Datenschutz-Aufsichtsbehörde.</p>
 </div>
 {_BACK_HISTORY}"""
     return _page("Datenschutzerklärung", body)

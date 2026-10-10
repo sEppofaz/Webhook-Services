@@ -87,7 +87,7 @@ def _send(to_email: str, subject: str, html_body: str) -> bool:
     msg["Subject"]      = subject
     msg["From"]         = f"{FROM_NAME} <{FROM_EMAIL}>"
     msg["To"]           = to_email
-    msg["Reply-To"]     = FROM_EMAIL
+    msg["Reply-To"]     = KONTAKT   # Antworten auf noreply@ landen bei info@ (Weiterleitung IONOS → iCloud)
     msg["Message-ID"]   = f"<{uuid.uuid4()}@vereinskalender.online>"
     msg["Date"]         = email_utils.formatdate(localtime=False)
     msg["MIME-Version"] = "1.0"
@@ -144,7 +144,7 @@ def _mit_gruss(body: str, gruss: str) -> str:
 MAIL_TEXTE_FILE = Path("/opt/rename-webhook/mail_texte.json")
 FELDER = {"betreff": 150, "ueberschrift": 120, "text": 4000, "knopf": 60, "hinweis": 1000}   # Feld → Höchstlänge
 VERLAUF_MAX = 20
-KONTAKT = "Vereinskalender@icloud.com"
+KONTAKT = "info@vereinskalender.online"   # IONOS-Weiterleitung an Vereinskalender@icloud.com (seit v1.80)
 
 # Platzhalter → Beschreibung (für die Admin-Oberfläche). Links werden als anklickbarer Link eingesetzt.
 PLATZHALTER = {

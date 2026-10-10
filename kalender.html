@@ -2155,7 +2155,7 @@ function render(){
     }
     else if(aktOrte.size===1)ctxMsg=`Keine Termine f&uuml;r <strong>${escHtml([...aktOrte][0])}</strong> gefunden.`;
     el.innerHTML=`<div class="ev-empty"><p style="display:flex;justify-content:center;color:var(--text3)">${icon("calendar",32)}</p><small>${ctxMsg}</small></div>`+
-      `<div class="cta-card" style="margin-top:12px"><strong>Termine fehlen?</strong>Jahresprogramm als PDF an <a href="mailto:Vereinskalender@icloud.com">Vereinskalender@icloud.com</a> &ndash; wir k&uuml;mmern uns zeitnah.</div>`;
+      `<div class="cta-card" style="margin-top:12px"><strong>Termine fehlen?</strong>Jahresprogramm als PDF an <a href="mailto:info@vereinskalender.online">info@vereinskalender.online</a> &ndash; wir k&uuml;mmern uns zeitnah.</div>`;
     return;
   }
   let _lastDatum=null;
@@ -2212,7 +2212,7 @@ function render(){
     </div>`;
   }).join("")+
   (nowIdx===-1?NOW_SEP:"")+
-  `<div class="cta-card" style="margin-top:8px">Hast du die gesuchten Termine gefunden? Falls Termine fehlen &ndash; <a href="mailto:Vereinskalender@icloud.com" style="color:var(--accent)">einfach schreiben</a> oder als Verantwortlicher <a href="/verein/register" style="color:var(--accent)">registrieren</a> und selbst aktualisieren.</div>`;
+  `<div class="cta-card" style="margin-top:8px">Hast du die gesuchten Termine gefunden? Falls Termine fehlen &ndash; <a href="mailto:info@vereinskalender.online" style="color:var(--accent)">einfach schreiben</a> oder als Verantwortlicher <a href="/verein/register" style="color:var(--accent)">registrieren</a> und selbst aktualisieren.</div>`;
   // Scroll zum ersten Datumsblock ab heute – nur beim ersten Laden / Refresh, nicht bei Filterwechseln
   if(doScroll)requestAnimationFrame(()=>{
     // läuft ein Termin von gestern noch (über Mitternacht), bei dessen Tag ansetzen
@@ -4352,7 +4352,7 @@ function showInfoModal(){
       </div>
       <div class="help-row" style="padding:8px 0 12px;border-bottom:1.5px solid var(--border);margin-bottom:4px">
         <span class="help-icon">${icon("mail",20)}</span>
-        <div><strong>Eure Termine eintragen lassen</strong><span>Jahresprogramm als PDF mit PLZ an <a href="mailto:Vereinskalender@icloud.com" style="color:var(--accent);text-decoration:none;font-weight:600">Vereinskalender@icloud.com</a> schicken &ndash; wir k&uuml;mmern uns zeitnah. Auch Pfarrbriefe m&ouml;glich.</span></div>
+        <div><strong>Eure Termine eintragen lassen</strong><span>Jahresprogramm als PDF mit PLZ an <a href="mailto:info@vereinskalender.online" style="color:var(--accent);text-decoration:none;font-weight:600">info@vereinskalender.online</a> schicken &ndash; wir k&uuml;mmern uns zeitnah. Auch Pfarrbriefe m&ouml;glich.</span></div>
       </div>
       <div class="help-row" style="padding:8px 0">
         <span class="help-icon">${icon("calendarPlus",20)}</span>
@@ -4424,9 +4424,9 @@ function showInfoModal(){
       </div>
       <div class="help-row" style="padding:8px 0;border-bottom:none">
         <span class="help-icon">${icon("scale",20)}</span>
-        <div><strong>Impressum</strong><span>Josef Fischer &middot; H&ouml;lskofen 13 &middot; 84092 Bayerbach b. Ergoldsbach<br><a href="mailto:Vereinskalender@icloud.com" style="color:var(--accent);text-decoration:none">Vereinskalender@icloud.com</a></span></div>
+        <div><strong>Impressum</strong><span>Josef Fischer &middot; H&ouml;lskofen 13 &middot; 84092 Bayerbach b. Ergoldsbach<br><a href="mailto:info@vereinskalender.online" style="color:var(--accent);text-decoration:none">info@vereinskalender.online</a></span></div>
       </div>
-      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.79 &middot; 2026-10-10 &middot; a sEpp-App</p>
+      <p class="version" style="margin-top:12px">Vereinskalender &middot; v1.80 &middot; 2026-10-10 &middot; a sEpp-App</p>
       <button onclick="document.getElementById('info-modal').remove()" style="width:100%;margin-top:16px;padding:12px;background:none;border:1.5px solid var(--border2);border-radius:12px;font-size:14px;color:var(--text2);cursor:pointer">Schlie&szlig;en</button>
     </div>`;
   document.body.appendChild(m);
